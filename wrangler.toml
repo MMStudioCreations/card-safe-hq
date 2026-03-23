@@ -1,6 +1,7 @@
 name = "card-vault-ai-backend"
 main = "src/index.ts"
 compatibility_date = "2025-01-01"
+assets = { directory = "docs" }
 
 # Keep these names aligned with Cloudflare dashboard bindings.
 # [[d1_databases]]

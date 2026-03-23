@@ -119,11 +119,17 @@ npx wrangler d1 execute <DB_NAME> --file seed/seed.sql
 4. Deploy from GitHub integration or `wrangler deploy`.
 5. Frontend/mobile app can call these JSON endpoints directly.
 
+### Worker deploy configuration (important)
+
+- Worker entry file: `src/index.ts` (configured via `main` in `wrangler.toml`).
+- Static asset directory for Worker deploys: `docs/` (configured via `assets.directory` in `wrangler.toml`).
+- Do **not** use repository root (`.`) as Worker assets, because it can accidentally upload non-public files (for example `node_modules`) and exceed Cloudflare's Worker asset limits.
+
 ## GitHub Pages frontend (no build required)
 
-- GitHub Pages entry file is root `index.html`.
+- GitHub Pages entry file is `docs/index.html`.
 - The page is plain HTML/CSS/JS and renders immediately without any framework build step.
-- Set Worker URL in `index.html` by assigning `window.WORKER_BASE_URL` (or by storing `CARD_VAULT_WORKER_URL` in `localStorage`).
+- Set Worker URL in `docs/index.html` by assigning `window.WORKER_BASE_URL` (or by storing `CARD_VAULT_WORKER_URL` in `localStorage`).
   - Example: `https://card-vault-ai-backend.<your-subdomain>.workers.dev`
 - Frontend buttons call:
   - `GET /api/health`
