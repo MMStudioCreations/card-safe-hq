@@ -3,36 +3,36 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-    <title>Card Vault AI • Scan, Grade, Collect</title>
+    <title>Card Vault AI • Mobile Collector Vault</title>
     <style>
       :root {
         color-scheme: dark;
+        --bg: #060916;
+        --bg-2: #0a1226;
+        --surface: rgba(14, 23, 44, 0.86);
+        --surface-strong: rgba(19, 29, 54, 0.96);
+        --border: rgba(133, 165, 255, 0.24);
+        --text: #eef3ff;
+        --muted: #9eafda;
+        --primary: #7a86ff;
+        --secondary: #3dd9ff;
+        --good: #6ef0bb;
+        --warn: #ffcf7c;
+        --danger: #ff8ba2;
+
+        --radius-sm: 0.8rem;
+        --radius-md: 1.05rem;
+        --radius-lg: 1.45rem;
+        --radius-xl: 1.9rem;
+
         --space-1: 0.4rem;
         --space-2: 0.7rem;
         --space-3: 1rem;
-        --space-4: 1.35rem;
+        --space-4: 1.3rem;
         --space-5: 1.8rem;
-        --radius-sm: 0.8rem;
-        --radius-md: 1rem;
-        --radius-lg: 1.35rem;
-        --radius-xl: 1.7rem;
 
-        --bg: #060a17;
-        --bg-soft: #0f1730;
-        --surface: linear-gradient(180deg, rgba(19, 29, 57, 0.95), rgba(11, 18, 36, 0.95));
-        --surface-strong: linear-gradient(160deg, rgba(24, 36, 70, 0.95), rgba(10, 18, 38, 0.95));
-        --surface-overlay: rgba(13, 20, 39, 0.82);
-        --border: rgba(144, 173, 255, 0.3);
-        --border-soft: rgba(125, 154, 240, 0.18);
-        --text: #eef3ff;
-        --muted: #b0bfdf;
-        --accent: #7488ff;
-        --accent-2: #45dfff;
-        --good: #6cf0b2;
-        --warn: #ffcf74;
-
-        --shadow-lg: 0 28px 72px rgba(3, 8, 24, 0.6);
-        --shadow-md: 0 16px 40px rgba(4, 10, 27, 0.45);
+        --shadow-1: 0 18px 42px rgba(2, 8, 24, 0.42);
+        --shadow-2: 0 26px 72px rgba(2, 7, 22, 0.56);
       }
 
       * {
@@ -48,108 +48,134 @@
       body {
         font-family: Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
         color: var(--text);
-        background: radial-gradient(circle at 20% -8%, rgba(88, 109, 217, 0.42) 0%, transparent 40%),
-          radial-gradient(circle at 93% -12%, rgba(41, 181, 225, 0.35) 0%, transparent 34%),
-          linear-gradient(180deg, #070b1a 0%, #070e21 48%, #050916 100%);
+        background:
+          radial-gradient(circle at 18% -10%, rgba(92, 118, 255, 0.5) 0%, transparent 36%),
+          radial-gradient(circle at 90% -10%, rgba(52, 220, 255, 0.34) 0%, transparent 32%),
+          linear-gradient(180deg, var(--bg) 0%, var(--bg-2) 45%, #050812 100%);
       }
 
-      a,
-      button {
-        color: inherit;
+      button,
+      input,
+      select,
+      textarea {
         font: inherit;
+        color: inherit;
       }
 
-      .app-shell {
-        max-width: 1160px;
+      .app {
+        max-width: 980px;
         margin: 0 auto;
         min-height: 100vh;
-        padding: calc(env(safe-area-inset-top, 0px) + var(--space-2)) var(--space-3)
-          calc(env(safe-area-inset-bottom, 0px) + 5.1rem);
-        display: flex;
-        flex-direction: column;
-        gap: var(--space-3);
+        padding: calc(env(safe-area-inset-top, 0px) + 0.7rem) 0.8rem calc(env(safe-area-inset-bottom, 0px) + 5.1rem);
+        display: grid;
+        gap: 0.9rem;
       }
 
-      .top-nav {
+      .topbar {
         position: sticky;
-        top: calc(env(safe-area-inset-top, 0px));
-        z-index: 20;
+        top: env(safe-area-inset-top, 0px);
+        z-index: 30;
+        border: 1px solid var(--border);
         border-radius: var(--radius-lg);
-        border: 1px solid var(--border-soft);
-        background: rgba(7, 13, 28, 0.82);
+        background: rgba(8, 14, 30, 0.78);
         backdrop-filter: blur(14px);
-        box-shadow: var(--shadow-md);
+        box-shadow: var(--shadow-1);
       }
 
-      .top-nav-inner {
+      .topbar-inner {
         padding: 0.75rem 0.85rem;
         display: flex;
-        align-items: center;
         justify-content: space-between;
-        gap: var(--space-2);
+        align-items: center;
+        gap: 0.55rem;
       }
 
       .brand {
         display: flex;
         align-items: center;
-        gap: 0.62rem;
+        gap: 0.6rem;
       }
 
       .brand-mark {
         width: 2.1rem;
-        height: 2.1rem;
-        border-radius: 0.7rem;
-        background: linear-gradient(140deg, var(--accent), var(--accent-2));
-        box-shadow: 0 8px 24px rgba(100, 128, 255, 0.56);
+        aspect-ratio: 1;
+        border-radius: 0.72rem;
+        background: linear-gradient(155deg, var(--primary), var(--secondary));
+        box-shadow: 0 10px 26px rgba(108, 139, 255, 0.42);
       }
 
-      .brand-title {
-        margin: 0;
+      .brand h1 {
         font-size: 0.98rem;
-        letter-spacing: 0.01em;
+        margin: 0;
       }
 
-      .muted {
+      .sub {
+        margin: 0;
+        color: var(--muted);
+        font-size: 0.76rem;
+      }
+
+      .app-btn,
+      .chip,
+      .tab {
+        border: 1px solid transparent;
+        border-radius: 999px;
+        cursor: pointer;
+        transition: 180ms ease;
+      }
+
+      .app-btn {
+        padding: 0.6rem 0.95rem;
+        font-weight: 700;
+        background: linear-gradient(150deg, #8c96ff 0%, #6d6eff 45%, #42d6ff 100%);
+        color: #f8fbff;
+      }
+
+      .app-btn.secondary {
+        background: rgba(124, 153, 255, 0.11);
+        border-color: var(--border);
+        color: #e8eeff;
+      }
+
+      .app-btn.ghost {
+        background: transparent;
+        border-color: rgba(131, 161, 255, 0.2);
         color: var(--muted);
       }
 
-      .nav-strip {
-        display: none;
-        gap: 0.35rem;
-        flex-wrap: wrap;
+      .app-btn:hover,
+      .app-btn:focus-visible,
+      .tab:hover {
+        transform: translateY(-1px);
       }
 
-      .app-content {
-        width: 100%;
+      .screen {
+        border: 1px solid var(--border);
+        border-radius: var(--radius-xl);
+        background: linear-gradient(180deg, rgba(18, 28, 54, 0.94), rgba(10, 17, 34, 0.96));
+        box-shadow: var(--shadow-2);
+        padding: var(--space-4);
         display: grid;
         gap: var(--space-3);
+        animation: reveal 220ms ease;
       }
 
-      .surface {
-        border: 1px solid var(--border);
-        border-radius: var(--radius-lg);
-        background: var(--surface);
-        box-shadow: var(--shadow-md);
-      }
-
-      .surface-strong {
-        background: var(--surface-strong);
-      }
-
-      .section {
-        padding: var(--space-4);
+      @keyframes reveal {
+        from {
+          opacity: 0;
+          transform: translateY(8px) scale(0.99);
+        }
       }
 
       .kicker {
-        margin: 0;
-        color: #cce9ff;
-        font-size: 0.76rem;
+        font-size: 0.74rem;
+        color: #cde6ff;
+        letter-spacing: 0.08em;
         text-transform: uppercase;
-        letter-spacing: 0.06em;
+        margin: 0;
         font-weight: 700;
       }
 
-      h1,
       h2,
       h3,
       h4,
@@ -157,68 +183,13 @@
         margin: 0;
       }
 
-      h1 {
-        font-size: clamp(1.95rem, 7vw, 3.45rem);
-        line-height: 1.05;
-      }
-
       h2 {
-        font-size: clamp(1.4rem, 5vw, 2.3rem);
+        font-size: clamp(1.45rem, 7vw, 2.45rem);
+        line-height: 1.08;
       }
 
-      h3 {
-        font-size: 1.06rem;
-      }
-
-      p {
-        line-height: 1.55;
-      }
-
-      .button,
-      .chip-btn {
-        border: 1px solid transparent;
-        border-radius: 999px;
-        padding: 0.62rem 0.95rem;
-        cursor: pointer;
-        transition: 180ms ease;
-      }
-
-      .button {
-        background: linear-gradient(140deg, #8a98ff 0%, #6a68ff 40%, #39d2f8 100%);
-        color: #f7f9ff;
-        font-weight: 700;
-      }
-
-      .button:hover,
-      .button:focus-visible {
-        transform: translateY(-1px);
-        box-shadow: 0 14px 22px rgba(58, 108, 255, 0.35);
-      }
-
-      .button.secondary {
-        background: rgba(137, 161, 255, 0.07);
-        border-color: var(--border);
-        color: #e8efff;
-      }
-
-      .button.ghost {
-        background: transparent;
-        border-color: var(--border-soft);
+      .muted {
         color: var(--muted);
-      }
-
-      .chip-btn {
-        border-color: var(--border-soft);
-        background: rgba(157, 178, 255, 0.08);
-        color: #dbe5ff;
-        font-size: 0.83rem;
-      }
-
-      .row {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        gap: 0.65rem;
       }
 
       .stack {
@@ -226,144 +197,125 @@
         gap: var(--space-2);
       }
 
-      .hero-layout,
-      .two-col,
-      .scan-layout,
-      .auth-layout,
-      .dashboard-layout,
-      .detail-layout {
-        display: grid;
-        gap: var(--space-3);
+      .row {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 0.6rem;
       }
 
       .cta-row,
       .toolbar {
         display: flex;
-        gap: 0.52rem;
+        gap: 0.5rem;
         flex-wrap: wrap;
+      }
+
+      .surface {
+        border: 1px solid rgba(135, 164, 255, 0.2);
+        border-radius: var(--radius-md);
+        background: var(--surface);
+        padding: var(--space-3);
+      }
+
+      .hero-preview {
+        border-radius: 1.35rem;
+        border: 1px solid rgba(142, 171, 255, 0.32);
+        background: linear-gradient(165deg, rgba(22, 34, 65, 0.96), rgba(10, 16, 31, 0.96));
+        padding: 0.8rem;
+      }
+
+      .hero-phone {
+        border-radius: 1rem;
+        border: 1px solid rgba(126, 161, 255, 0.32);
+        background: rgba(9, 15, 30, 0.9);
+        padding: 0.7rem;
+      }
+
+      .stat-grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 0.55rem;
+      }
+
+      .stat-value {
+        font-size: 1.35rem;
+        font-weight: 740;
       }
 
       .tile-grid {
         display: grid;
         grid-template-columns: repeat(2, minmax(0, 1fr));
-        gap: var(--space-2);
-      }
-
-      .tile,
-      .list-item {
-        border: 1px solid var(--border-soft);
-        background: rgba(15, 24, 47, 0.72);
-        border-radius: var(--radius-md);
+        gap: 0.55rem;
       }
 
       .tile {
-        padding: var(--space-3);
-        transition: 200ms ease;
-      }
-
-      .tile:hover {
-        border-color: rgba(79, 218, 255, 0.45);
-        transform: translateY(-2px);
-      }
-
-      .list-item {
-        padding: 0.86rem 0.95rem;
-      }
-
-      .pill {
-        display: inline-flex;
-        align-items: center;
-        border: 1px solid rgba(108, 240, 178, 0.32);
-        border-radius: 999px;
-        color: var(--good);
-        background: rgba(108, 240, 178, 0.11);
-        font-size: 0.72rem;
-        padding: 0.24rem 0.55rem;
-      }
-
-      .pill.warn {
-        color: var(--warn);
-        border-color: rgba(255, 207, 116, 0.37);
-        background: rgba(255, 207, 116, 0.1);
-      }
-
-      .phone-preview {
-        border-radius: 1.9rem;
-        border: 1px solid rgba(166, 184, 255, 0.35);
-        padding: 0.9rem;
-        background: linear-gradient(170deg, rgba(21, 33, 66, 0.95), rgba(9, 16, 35, 0.95));
-        box-shadow: inset 0 0 0 1px rgba(170, 188, 255, 0.12), var(--shadow-md);
-      }
-
-      .phone-notch {
-        width: 36%;
-        height: 0.36rem;
-        border-radius: 999px;
-        background: rgba(226, 236, 255, 0.25);
-        margin: 0 auto 0.95rem;
-      }
-
-      .preview-card {
-        border: 1px solid rgba(143, 174, 255, 0.23);
+        border: 1px solid rgba(129, 160, 255, 0.2);
         border-radius: var(--radius-md);
-        padding: 0.78rem;
-        background: rgba(10, 17, 35, 0.7);
+        background: rgba(12, 20, 38, 0.9);
+        padding: 0.8rem;
       }
 
-      .stat-value {
-        font-size: 1.55rem;
-        font-weight: 750;
+      .badge {
+        display: inline-flex;
+        padding: 0.22rem 0.55rem;
+        border-radius: 999px;
+        border: 1px solid rgba(111, 239, 188, 0.35);
+        background: rgba(111, 239, 188, 0.12);
+        color: var(--good);
+        font-size: 0.73rem;
+      }
+
+      .badge.warn {
+        color: var(--warn);
+        background: rgba(255, 207, 124, 0.12);
+        border-color: rgba(255, 207, 124, 0.35);
+      }
+
+      .field {
+        display: grid;
+        gap: 0.38rem;
+        font-size: 0.9rem;
       }
 
       .input,
-      select,
+      .select,
       textarea {
         width: 100%;
-        color: var(--text);
-        background: rgba(8, 14, 31, 0.85);
-        border: 1px solid var(--border);
         border-radius: var(--radius-sm);
-        padding: 0.7rem 0.8rem;
+        border: 1px solid var(--border);
+        background: rgba(9, 14, 28, 0.92);
+        padding: 0.68rem 0.75rem;
       }
 
-      .scan-stage {
-        border: 1px solid rgba(96, 215, 255, 0.45);
-        border-radius: 1.25rem;
-        padding: 1rem;
-        background: radial-gradient(circle at 60% -20%, rgba(48, 220, 255, 0.17), transparent 60%),
-          rgba(7, 13, 28, 0.86);
-      }
-
-      .camera-view {
-        min-height: 260px;
-        border-radius: 1.05rem;
-        border: 1px dashed rgba(102, 221, 255, 0.58);
-        background: linear-gradient(180deg, rgba(20, 31, 61, 0.5), rgba(8, 14, 30, 0.9));
+      .scan-frame {
+        border-radius: 1.1rem;
+        border: 2px dashed rgba(88, 220, 255, 0.58);
+        min-height: 170px;
+        background: radial-gradient(circle at 50% -30%, rgba(72, 222, 255, 0.2), transparent 56%), rgba(7, 12, 25, 0.82);
         display: grid;
         place-items: center;
         text-align: center;
         padding: 0.8rem;
       }
 
-      .guide-frame {
+      .scan-grid,
+      .detail-grid,
+      .home-grid,
+      .auth-grid,
+      .dashboard-grid {
+        display: grid;
+        gap: 0.7rem;
+      }
+
+      .card-image {
+        min-height: 180px;
         border-radius: 0.9rem;
-        border: 2px solid rgba(102, 221, 255, 0.62);
-        width: min(250px, 84%);
-        min-height: 170px;
-        display: grid;
-        place-items: center;
-        padding: 0.6rem;
-      }
-
-      .card-art {
-        min-height: 170px;
-        border-radius: 0.95rem;
-        background: linear-gradient(165deg, rgba(81, 126, 255, 0.42), rgba(44, 200, 245, 0.18) 45%, rgba(9, 15, 33, 0.9));
-        border: 1px solid rgba(156, 181, 255, 0.3);
+        border: 1px solid rgba(137, 169, 255, 0.24);
+        background: linear-gradient(165deg, rgba(88, 126, 255, 0.34), rgba(54, 220, 255, 0.2), rgba(8, 14, 28, 0.92));
         display: grid;
         place-items: center;
         text-align: center;
-        padding: 0.8rem;
       }
 
       .bottom-nav {
@@ -371,525 +323,465 @@
         bottom: calc(env(safe-area-inset-bottom, 0px) + 0.65rem);
         left: 50%;
         transform: translateX(-50%);
-        width: min(560px, calc(100vw - 1rem));
-        border: 1px solid var(--border-soft);
-        border-radius: 1.15rem;
-        background: rgba(8, 14, 31, 0.92);
+        z-index: 35;
+        width: min(620px, calc(100vw - 0.95rem));
+        border: 1px solid rgba(128, 159, 255, 0.22);
+        border-radius: 1.05rem;
+        background: rgba(7, 12, 26, 0.92);
         backdrop-filter: blur(14px);
-        box-shadow: var(--shadow-lg);
         display: flex;
-        gap: 0.28rem;
+        gap: 0.32rem;
         padding: 0.42rem;
-        z-index: 40;
+        box-shadow: var(--shadow-2);
       }
 
-      .tab-link {
+      .tab {
         flex: 1;
-        padding: 0.58rem 0.45rem;
-        border-radius: 0.85rem;
-        border: 1px solid transparent;
+        border-radius: 0.8rem;
+        padding: 0.56rem 0.38rem;
         background: transparent;
         color: var(--muted);
-        text-align: center;
-        font-size: 0.8rem;
+        border-color: transparent;
+        font-size: 0.78rem;
       }
 
-      .tab-link.active,
-      .tab-link:hover {
-        color: #f3f7ff;
-        border-color: rgba(138, 164, 255, 0.35);
-        background: rgba(112, 132, 255, 0.18);
+      .tab.active {
+        color: #f5f8ff;
+        border-color: rgba(131, 163, 255, 0.34);
+        background: rgba(113, 138, 255, 0.17);
       }
 
-      .footer-note {
-        text-align: center;
-        color: #90a4d3;
-        font-size: 0.84rem;
-        margin-top: auto;
+      .desktop-tabs {
+        display: none;
+        gap: 0.35rem;
+        flex-wrap: wrap;
+      }
+
+      .list {
+        display: grid;
+        gap: 0.5rem;
+      }
+
+      .list-item {
+        border: 1px solid rgba(133, 164, 255, 0.2);
+        border-radius: 0.92rem;
+        background: rgba(12, 19, 36, 0.86);
+        padding: 0.72rem 0.78rem;
       }
 
       @media (min-width: 860px) {
-        .app-shell {
-          padding-bottom: 1.2rem;
+        .app {
+          padding-bottom: 1rem;
         }
 
-        .nav-strip {
-          display: flex;
-        }
-
-        .top-nav-inner {
-          padding: 0.85rem 1rem;
-        }
-
-        .hero-layout {
-          grid-template-columns: 1.05fr 0.95fr;
+        .home-grid {
+          grid-template-columns: 1.08fr 0.92fr;
           align-items: center;
         }
 
-        .dashboard-layout,
-        .scan-layout,
-        .detail-layout,
-        .auth-layout {
-          grid-template-columns: 1.2fr 0.8fr;
+        .scan-grid,
+        .dashboard-grid,
+        .detail-grid,
+        .auth-grid {
+          grid-template-columns: 1.15fr 0.85fr;
         }
 
-        .two-col {
-          grid-template-columns: repeat(2, minmax(0, 1fr));
+        .desktop-tabs {
+          display: flex;
+        }
+
+        .bottom-nav {
+          display: none;
         }
 
         .tile-grid {
           grid-template-columns: repeat(4, minmax(0, 1fr));
         }
 
-        .bottom-nav {
-          display: none;
+        .stat-grid {
+          grid-template-columns: repeat(4, minmax(0, 1fr));
         }
       }
     </style>
   </head>
   <body>
-    <div class="app-shell">
-      <header class="top-nav">
-        <div class="top-nav-inner">
+    <div class="app">
+      <header class="topbar">
+        <div class="topbar-inner">
           <div class="brand">
             <div class="brand-mark" aria-hidden="true"></div>
             <div>
-              <h1 class="brand-title">Card Vault AI</h1>
-              <p class="muted" style="font-size: 0.75rem">Collector vault intelligence</p>
+              <h1>Card Vault AI</h1>
+              <p class="sub">Premium mobile collector vault</p>
             </div>
           </div>
-          <nav class="nav-strip" id="desktopLinks"></nav>
+          <nav id="desktopTabs" class="desktop-tabs"></nav>
           <div class="toolbar">
-            <button class="button ghost" id="toggleAuth"></button>
-            <button class="button" id="primaryNavAction">Scan</button>
+            <button id="authToggle" class="app-btn ghost">Sign in</button>
+            <button id="scanQuick" class="app-btn">Scan Card</button>
           </div>
         </div>
       </header>
 
-      <main id="app" class="app-content"></main>
-
-      <footer class="footer-note">Card Vault AI • Scan instantly • Estimate before grading • Track your vault value.</footer>
+      <main id="screen"></main>
     </div>
 
-    <nav class="bottom-nav" id="mobileNav"></nav>
+    <nav id="mobileTabs" class="bottom-nav"></nav>
 
     <script>
-      const CONFIG = {
-        DEFAULT_WORKER_BASE_URL: 'https://your-worker-name.your-subdomain.workers.dev',
-      };
-
       const state = {
-        signedIn: false,
         route: 'home',
-        workerUrl: (window.WORKER_BASE_URL || localStorage.getItem('CARD_VAULT_WORKER_URL') || CONFIG.DEFAULT_WORKER_BASE_URL).replace(/\/$/, ''),
+        signedIn: false,
+        scanReady: false,
+        scanBackReady: false,
+        scanAnalyzed: false,
+        collectionView: 'grid',
+        search: '',
+        gameFilter: 'All',
       };
 
       const mock = {
         stats: [
-          { label: 'Vault Value', value: '$18,460', trend: '+6.9% this month' },
-          { label: 'Cards Logged', value: '248', trend: '14 scanned this week' },
-          { label: 'PSA 9+ Potential', value: '72%', trend: 'from AI estimates' },
-          { label: 'Watchlist Releases', value: '5', trend: '2 in next 30 days' },
-        ],
-        releases: [
-          { game: 'Pokémon', name: 'Destined Rivals ETB', date: 'Apr 19', hype: 'High', focus: 'Chase trainer alts' },
-          { game: 'NBA', name: 'Prizm Basketball Hobby', date: 'May 07', hype: 'Very High', focus: 'Rookie silver chase' },
-          { game: 'One Piece', name: 'Royal Blood OP-11', date: 'May 24', hype: 'Rising', focus: 'Alt leader momentum' },
-          { game: 'MTG', name: 'Modern Horizons Set', date: 'Jun 13', hype: 'Steady', focus: 'Long-term staples' },
+          { label: 'Total Cards', value: '248', trend: '+14 this week' },
+          { label: 'Collection Value', value: '$18,460', trend: '+6.9% / 30d' },
+          { label: 'Recent Scans', value: '12', trend: '2 pending save' },
+          { label: 'Upcoming Drops', value: '5', trend: '2 this month' },
         ],
         cards: [
-          { id: 'cv-102', name: 'Charizard ex', set: 'Paldean Fates', num: '#054', value: '$192', grade: '9.1', note: 'Strong centering' },
-          { id: 'cv-337', name: 'LeBron James Silver', set: 'Prizm 2024', num: '#17', value: '$435', grade: '8.7', note: 'Edges need review' },
-          { id: 'cv-508', name: 'Monkey D. Luffy Alt Art', set: 'OP-09', num: '#001', value: '$289', grade: '9.3', note: 'High upside comp spread' },
-          { id: 'cv-611', name: 'Jace, the Mind Sculptor', set: 'Masters', num: '#031', value: '$118', grade: '8.9', note: 'Surface light print line' },
+          { id: 'cv-102', game: 'Pokémon', name: 'Charizard ex', set: 'Paldean Fates', value: 192, grade: 9.1 },
+          { id: 'cv-337', game: 'NBA', name: 'LeBron James Silver', set: 'Prizm 2024', value: 435, grade: 8.7 },
+          { id: 'cv-508', game: 'One Piece', name: 'Monkey D. Luffy Alt Art', set: 'OP-09', value: 289, grade: 9.3 },
+          { id: 'cv-611', game: 'MTG', name: 'Jace, the Mind Sculptor', set: 'Masters', value: 118, grade: 8.9 },
+          { id: 'cv-712', game: 'Pokémon', name: 'Mew ex SIR', set: '151', value: 129, grade: 9.0 },
+          { id: 'cv-714', game: 'NBA', name: 'Wembanyama RC', set: 'Prizm Draft', value: 267, grade: 8.8 },
+        ],
+        releases: [
+          { game: 'Pokémon', type: 'ETB', name: 'Destined Rivals ETB', date: 'Apr 19, 2026', hype: 'High' },
+          { game: 'NBA', type: 'Hobby', name: 'Prizm Basketball Hobby', date: 'May 07, 2026', hype: 'Very High' },
+          { game: 'One Piece', type: 'Booster', name: 'Royal Blood OP-11', date: 'May 24, 2026', hype: 'Rising' },
+          { game: 'MTG', type: 'Set', name: 'Modern Horizons', date: 'Jun 13, 2026', hype: 'Steady' },
         ],
         comps: [
-          { source: 'eBay', price: '$205', when: '2 days ago' },
-          { source: 'eBay', price: '$198', when: '5 days ago' },
-          { source: 'PWCC', price: '$224', when: '1 week ago' },
+          { source: 'eBay', price: '$205', date: '2d ago' },
+          { source: 'eBay', price: '$198', date: '5d ago' },
+          { source: 'PWCC', price: '$224', date: '1w ago' },
         ],
       };
 
       const routes = {
-        signedOut: ['home', 'scan', 'releases', 'auth'],
-        signedIn: ['dashboard', 'scan', 'collection', 'releases', 'card'],
+        guest: ['home', 'scan', 'collection', 'releases', 'auth'],
+        member: ['dashboard', 'scan', 'collection', 'releases', 'card'],
       };
 
-      function navLabel(route) {
-        return {
-          home: 'Home',
-          scan: 'Scan',
-          releases: 'Releases',
-          auth: 'Account',
-          dashboard: 'Dashboard',
-          collection: 'Collection',
-          card: 'Card',
-        }[route] || route;
-      }
+      const routeLabel = {
+        home: 'Home',
+        scan: 'Scan',
+        collection: 'Collection',
+        releases: 'Releases',
+        auth: 'Account',
+        dashboard: 'Dashboard',
+        card: 'Card',
+      };
 
-      function displayRoute(route) {
-        const available = state.signedIn ? routes.signedIn : routes.signedOut;
-        return available.includes(route) ? route : available[0];
-      }
+      const visibleRoute = (r) => (activeRoutes().includes(r) ? r : activeRoutes()[0]);
+      const activeRoutes = () => (state.signedIn ? routes.member : routes.guest);
 
-      function statusText() {
-        if (!state.workerUrl || state.workerUrl.includes('your-worker-name.your-subdomain')) {
-          return 'Worker API not configured — displaying premium mock flow for demo mode.';
-        }
-        return `Worker API configured: ${state.workerUrl}`;
-      }
-
-      async function getJson(path) {
-        if (!state.workerUrl || state.workerUrl.includes('your-worker-name.your-subdomain')) return null;
-        const response = await fetch(`${state.workerUrl}${path}`);
-        const payload = await response.json();
-        if (!response.ok || payload?.ok === false) {
-          throw new Error(payload?.error || `Request failed (${response.status})`);
-        }
-        return payload;
-      }
-
-      function homePage() {
+      function renderHome() {
         return `
-          <section class="surface section hero-layout">
-            <div class="stack" style="gap: var(--space-3)">
-              <p class="kicker">Mobile-first collector vault</p>
-              <h1>Scan cards in seconds. Build a premium vault that tracks value in real time.</h1>
-              <p class="muted">Card Vault AI helps collectors scan, identify, value, estimate grade, and organize cards in one cohesive experience that feels like a real app, not a spreadsheet.</p>
-              <div class="cta-row">
-                <button class="button" data-route="scan">Start Guest Scan</button>
-                <button class="button secondary" data-route="auth">Create Free Account</button>
-              </div>
-              <div class="list-item row">
-                <span class="muted">System status</span>
-                <span style="font-size:0.84rem">${statusText()}</span>
-              </div>
-            </div>
-            <div class="phone-preview stack">
-              <div class="phone-notch"></div>
-              <div class="preview-card stack">
-                <div class="row"><strong>Scan Result</strong><span class="pill">AI 9.1</span></div>
-                <div class="card-art"><strong>Charizard ex #054</strong><p class="muted">Paldean Fates • Est. $192</p></div>
-                <div class="row"><span class="muted">7-day comp trend</span><strong style="color:var(--good)">+8.2%</strong></div>
-              </div>
-              <div class="preview-card row">
-                <div>
-                  <p class="muted" style="font-size:0.82rem">Next drop</p>
-                  <strong>Destined Rivals ETB</strong>
+          <section class="screen stack">
+            <div class="home-grid">
+              <div class="stack">
+                <p class="kicker">Mobile-first collector app</p>
+                <h2>Scan, grade, and grow your card vault like a modern app.</h2>
+                <p class="muted">Card Vault AI gives collectors instant scan workflows, AI condition estimates, recent sold comps, and a premium vault dashboard that feels fast on iPhone Safari.</p>
+                <div class="cta-row">
+                  <button class="app-btn" data-route="scan">Scan a Card</button>
+                  <button class="app-btn secondary" data-route="collection">Explore the Vault</button>
                 </div>
-                <span class="pill warn">Apr 19</span>
               </div>
-            </div>
-          </section>
-
-          <section class="surface section">
-            <div class="row" style="margin-bottom: var(--space-2)">
-              <h2>Why collectors keep Card Vault open</h2>
-              <button class="chip-btn" data-route="scan">Try live scan flow</button>
+              <div class="hero-preview stack">
+                <div class="hero-phone stack">
+                  <div class="row"><strong>Scan Result</strong><span class="badge">AI 9.1</span></div>
+                  <div class="card-image"><div><strong>Charizard ex</strong><p class="muted">Paldean Fates • $192</p></div></div>
+                  <div class="row"><span class="muted">7-day trend</span><strong style="color:var(--good)">+8.2%</strong></div>
+                </div>
+              </div>
             </div>
             <div class="tile-grid">
-              <article class="tile"><h3>Scan instantly</h3><p class="muted">Front/back guidance and confidence scoring built for mobile camera sessions.</p></article>
-              <article class="tile"><h3>Estimate before grading</h3><p class="muted">Get AI condition signals for corners, edges, surface, and centering before submission.</p></article>
-              <article class="tile"><h3>Track market comps</h3><p class="muted">Monitor recent sold listings, trend direction, and value confidence bands.</p></article>
-              <article class="tile"><h3>Organize your vault</h3><p class="muted">Save scans, group by game/set, and see collection value with return-ready context.</p></article>
+              <article class="tile"><h4>Scan-first workflow</h4><p class="muted">Front/back capture, fast analyze flow, instant confidence score.</p></article>
+              <article class="tile"><h4>AI Estimated Grade</h4><p class="muted">Corners, edges, surface, and centering rolled into one estimate.</p></article>
+              <article class="tile"><h4>Recent Sold Comps</h4><p class="muted">Quick comps to price intelligently before buying or grading.</p></article>
+              <article class="tile"><h4>Vault Dashboard</h4><p class="muted">Track value, additions, releases, and scanning momentum daily.</p></article>
             </div>
-          </section>
-
-          <section class="two-col">
-            <article class="surface section stack">
-              <h2>Built to convert visitors into active collectors</h2>
-              <p class="muted">Guest mode removes friction. Account creation appears when collectors are ready to save scans, sync vault activity, and unlock value tracking dashboards.</p>
-              <div class="cta-row">
-                <button class="button" data-route="scan">Scan as Guest</button>
-                <button class="button secondary" data-route="dashboard">Preview Dashboard</button>
-              </div>
-            </article>
-            <article class="surface section stack">
-              <div class="row"><h3>Upcoming releases</h3><button class="chip-btn" data-route="releases">Full calendar</button></div>
-              ${mock.releases
-                .slice(0, 3)
-                .map(
-                  (r) => `<div class="list-item"><div class="row"><strong>${r.name}</strong><span class="pill warn">${r.date}</span></div><p class="muted">${r.game} • ${r.focus}</p></div>`,
-                )
-                .join('')}
-            </article>
-          </section>
-        `;
+          </section>`;
       }
 
-      function scanPage() {
+      function renderScan() {
+        const canAnalyze = state.scanReady && state.scanBackReady;
         return `
-          <section class="scan-layout">
-            <article class="surface surface-strong section stack">
-              <p class="kicker">Core workflow</p>
-              <h2>Scan front and back with camera-grade guidance</h2>
-              <p class="muted">Guest scanning is fully enabled. Save to your vault when you are ready—no forced login wall before results.</p>
-              <div class="scan-stage stack">
-                <div class="row"><strong>Front Capture</strong><span class="pill">Live guide</span></div>
-                <div class="camera-view"><div class="guide-frame"><div><strong>Align front of card</strong><p class="muted">Keep borders inside frame for best AI estimate</p></div></div></div>
-                <div class="cta-row"><button class="button">Open Camera</button><button class="button secondary">Upload Front</button></div>
+          <section class="screen scan-grid">
+            <article class="stack">
+              <p class="kicker">Scan studio</p>
+              <h3>Camera-first card analysis</h3>
+              <p class="muted">Upload front and back photos to identify cards and get AI Estimated Grade + sold price comps. Guest scan works immediately.</p>
+
+              <div class="surface stack">
+                <div class="row"><strong>Front image</strong><span class="badge ${state.scanReady ? '' : 'warn'}">${state.scanReady ? 'Ready' : 'Required'}</span></div>
+                <div class="scan-frame"><div><strong>Align card front inside frame</strong><p class="muted">Keep borders visible for stronger identification.</p></div></div>
+                <div class="cta-row">
+                  <button class="app-btn secondary" id="frontUpload">Upload Front</button>
+                </div>
               </div>
-              <div class="scan-stage stack">
-                <div class="row"><strong>Back Capture</strong><span class="pill">Required</span></div>
-                <div class="camera-view"><div class="guide-frame"><div><strong>Capture back surface</strong><p class="muted">Reduce glare and include all four corners</p></div></div></div>
-                <div class="cta-row"><button class="button secondary">Upload Back</button><button class="button">Analyze Card</button></div>
+
+              <div class="surface stack">
+                <div class="row"><strong>Back image</strong><span class="badge ${state.scanBackReady ? '' : 'warn'}">${state.scanBackReady ? 'Ready' : 'Required'}</span></div>
+                <div class="scan-frame"><div><strong>Capture card back & corners</strong><p class="muted">Avoid glare and include the full card.</p></div></div>
+                <div class="cta-row">
+                  <button class="app-btn secondary" id="backUpload">Upload Back</button>
+                  <button class="app-btn ${canAnalyze ? '' : 'ghost'}" id="analyzeBtn" ${canAnalyze ? '' : 'disabled'}>Analyze Card</button>
+                </div>
               </div>
             </article>
 
             <aside class="stack">
-              <article class="surface section stack">
-                <div class="row"><h3>Analysis result</h3><span class="pill">Confidence 94%</span></div>
-                <div class="card-art"><strong>Charizard ex • Paldean Fates #054</strong></div>
-                <div class="list-item row"><span>AI Estimated Grade</span><strong>9.1</strong></div>
-                <div class="list-item row"><span>Est. Market Value</span><strong>$192</strong></div>
-                <div class="list-item row"><span>Grade Opportunity</span><strong style="color:var(--good)">Strong PSA 9 candidate</strong></div>
-                <div class="cta-row"><button class="button" data-route="auth">Save to Vault</button><button class="button secondary" data-route="collection">View Vault</button></div>
-                <p class="muted" style="font-size:0.84rem">Save prompts account creation elegantly after value and grade insights are revealed.</p>
-              </article>
-              <article class="surface section stack">
-                <h3>Recent sold comps</h3>
-                ${mock.comps.map((c) => `<div class="list-item row"><span>${c.source}</span><strong>${c.price}</strong><span class="muted">${c.when}</span></div>`).join('')}
+              <article class="surface stack">
+                <div class="row"><h4>Analysis Result</h4><span class="badge">Confidence 94%</span></div>
+                <div class="card-image"><div><strong>${state.scanAnalyzed ? 'Charizard ex' : 'Awaiting scan'}</strong><p class="muted">${state.scanAnalyzed ? 'Paldean Fates #054' : 'Upload both sides to analyze'}</p></div></div>
+                <div class="list">
+                  <div class="list-item row"><span>Detected card</span><strong>${state.scanAnalyzed ? 'Charizard ex' : '—'}</strong></div>
+                  <div class="list-item row"><span>Set name</span><strong>${state.scanAnalyzed ? 'Paldean Fates' : '—'}</strong></div>
+                  <div class="list-item row"><span>AI Estimated Grade</span><strong>${state.scanAnalyzed ? '9.1' : '—'}</strong></div>
+                  <div class="list-item row"><span>Recent sold prices</span><strong>${state.scanAnalyzed ? '$198–$224' : '—'}</strong></div>
+                </div>
+                <button class="app-btn" data-route="auth">Save to Collection</button>
               </article>
             </aside>
-          </section>
-        `;
+          </section>`;
       }
 
-      function dashboardPage() {
+      function renderDashboard() {
         return `
-          <section class="tile-grid">
-            ${mock.stats
-              .map(
-                (s) => `<article class="tile"><p class="kicker">${s.label}</p><p class="stat-value">${s.value}</p><p class="muted">${s.trend}</p></article>`,
-              )
-              .join('')}
-          </section>
-
-          <section class="dashboard-layout">
-            <article class="surface section stack">
-              <div class="row"><h2>Vault activity</h2><button class="button" data-route="scan">Quick Scan</button></div>
-              ${mock.cards
-                .map(
-                  (c) => `<div class="list-item row"><div><strong>${c.name}</strong><p class="muted">${c.set} • ${c.num} • ${c.note}</p></div><div style="text-align:right"><strong>${c.value}</strong><p class="muted">AI ${c.grade}</p></div></div>`,
-                )
+          <section class="screen stack">
+            <div class="row"><h3>Collector Dashboard</h3><button class="app-btn" data-route="scan">Quick Scan</button></div>
+            <div class="stat-grid">
+              ${mock.stats
+                .map((s) => `<article class="tile"><p class="kicker">${s.label}</p><p class="stat-value">${s.value}</p><p class="muted">${s.trend}</p></article>`)
                 .join('')}
-            </article>
-            <aside class="stack">
-              <article class="surface section stack">
-                <h3>Quick actions</h3>
-                <button class="button" data-route="scan">Scan New Card</button>
-                <button class="button secondary" data-route="collection">Open Vault Collection</button>
-                <button class="button secondary" data-route="releases">Track Releases</button>
+            </div>
+            <div class="dashboard-grid">
+              <article class="surface stack">
+                <div class="row"><strong>Recent additions</strong><span class="muted">Today</span></div>
+                <div class="list">
+                  ${mock.cards
+                    .slice(0, 4)
+                    .map((c) => `<div class="list-item row"><div><strong>${c.name}</strong><p class="muted">${c.set}</p></div><div style="text-align:right"><strong>$${c.value}</strong><p class="muted">AI ${c.grade}</p></div></div>`)
+                    .join('')}
+                </div>
               </article>
-              <article class="surface section stack">
-                <h3>Comps pulse</h3>
-                ${mock.comps.map((comp) => `<div class="list-item row"><span>${comp.source}</span><strong>${comp.price}</strong><span class="muted">${comp.when}</span></div>`).join('')}
-              </article>
-            </aside>
-          </section>
-        `;
+              <aside class="stack">
+                <article class="surface stack">
+                  <strong>Upcoming releases</strong>
+                  ${mock.releases.slice(0, 3).map((r) => `<div class="list-item row"><span>${r.name}</span><span class="badge warn">${r.date}</span></div>`).join('')}
+                </article>
+              </aside>
+            </div>
+          </section>`;
       }
 
-      function collectionPage() {
+      function filteredCards() {
+        return mock.cards.filter((c) => {
+          const gameOk = state.gameFilter === 'All' || c.game === state.gameFilter;
+          const q = state.search.trim().toLowerCase();
+          const searchOk = !q || `${c.name} ${c.set} ${c.game}`.toLowerCase().includes(q);
+          return gameOk && searchOk;
+        });
+      }
+
+      function renderCollection() {
+        const cards = filteredCards();
         return `
-          <section class="surface section stack">
-            <div class="row" style="flex-wrap:wrap">
-              <h2>Your Card Vault</h2>
-              <div class="toolbar">
-                <button class="chip-btn">Grid</button>
-                <button class="chip-btn">List</button>
-              </div>
-            </div>
+          <section class="screen stack">
+            <div class="row" style="flex-wrap:wrap"><h3>Your Collection</h3><div class="toolbar"><button id="gridMode" class="chip tab ${state.collectionView === 'grid' ? 'active' : ''}">Grid</button><button id="listMode" class="chip tab ${state.collectionView === 'list' ? 'active' : ''}">List</button></div></div>
             <div class="toolbar">
-              <input class="input" style="max-width:340px" placeholder="Search cards, sets, players" />
-              <select><option>All Games</option><option>Pokémon</option><option>NBA</option><option>One Piece</option></select>
-              <select><option>Sort: Value</option><option>Sort: Grade</option><option>Sort: Recently Added</option></select>
+              <input id="searchInput" class="input" placeholder="Search cards, sets, games" value="${state.search}" />
+              <button class="chip tab ${state.gameFilter === 'All' ? 'active' : ''}" data-game="All">All</button>
+              <button class="chip tab ${state.gameFilter === 'Pokémon' ? 'active' : ''}" data-game="Pokémon">Pokémon</button>
+              <button class="chip tab ${state.gameFilter === 'NBA' ? 'active' : ''}" data-game="NBA">NBA</button>
+              <button class="chip tab ${state.gameFilter === 'One Piece' ? 'active' : ''}" data-game="One Piece">One Piece</button>
             </div>
-            <section class="tile-grid">
-              ${mock.cards
+            <div class="${state.collectionView === 'grid' ? 'tile-grid' : 'list'}">
+              ${cards
                 .map(
-                  (c) => `<article class="tile stack"><div class="card-art"><strong>${c.name}</strong><p class="muted">${c.set}</p></div><div><strong>${c.name}</strong><p class="muted">${c.set} • ${c.num}</p></div><div class="row"><span>Est. value</span><strong>${c.value}</strong></div><div class="row"><span>AI grade</span><strong>${c.grade}</strong></div><button class="button secondary" data-route="card">Open Detail</button></article>`,
+                  (c) => `<article class="${state.collectionView === 'grid' ? 'tile' : 'list-item'} stack"><div class="card-image"><strong>${c.name}</strong></div><div class="row"><div><strong>${c.name}</strong><p class="muted">${c.set}</p></div><div style="text-align:right"><strong>$${c.value}</strong><p class="muted">AI ${c.grade}</p></div></div><button class="app-btn secondary" data-route="card">Open Detail</button></article>`,
                 )
                 .join('')}
-            </section>
-          </section>
-
-          <section class="surface section stack">
-            <h3>Empty state quality check</h3>
-            <div class="list-item" style="text-align:center; padding:1.1rem"><strong>No cards match this filter.</strong><p class="muted">Try another set, clear filters, or run a new scan to keep the vault growing.</p><button class="button" data-route="scan">Scan next card</button></div>
-          </section>
-        `;
+            </div>
+            ${cards.length === 0 ? '<div class="surface"><strong>No cards found.</strong><p class="muted">Try clearing search/filters or scan another card.</p></div>' : ''}
+          </section>`;
       }
 
-      function cardDetailPage() {
+      function renderCard() {
         const c = mock.cards[0];
         return `
-          <section class="detail-layout">
-            <article class="surface section stack">
-              <div class="row"><h2>${c.name}</h2><span class="pill">${c.set}</span></div>
-              <p class="muted">Card ${c.num} • Updated 2h ago • Vault ID ${c.id}</p>
-              <div class="two-col">
-                <div class="card-art">Front image</div>
-                <div class="card-art">Back image</div>
-              </div>
-              <div class="cta-row"><button class="button secondary">Replace Front</button><button class="button secondary">Replace Back</button></div>
-              <article class="tile stack">
-                <h3>Collector notes</h3>
-                <textarea rows="4" placeholder="Centering looks strong. Slight whitening top-right back corner."></textarea>
+          <section class="screen detail-grid">
+            <article class="stack">
+              <div class="row"><h3>${c.name}</h3><span class="badge">${c.set}</span></div>
+              <div class="card-image"><strong>Card front image</strong></div>
+              <div class="card-image"><strong>Card back image</strong></div>
+              <article class="surface stack">
+                <strong>Notes</strong>
+                <textarea rows="4" placeholder="Strong centering. Tiny whitening top-right on back edge."></textarea>
               </article>
             </article>
             <aside class="stack">
-              <article class="surface section stack">
-                <h3>AI Grade Module</h3>
+              <article class="surface stack">
+                <strong>AI Estimated Grade</strong>
                 <p class="stat-value">${c.grade}</p>
-                <p class="muted">Confidence 88% • Likely PSA 9 range if surface stays clean.</p>
                 <div class="list-item row"><span>Corners</span><strong>8.8</strong></div>
                 <div class="list-item row"><span>Edges</span><strong>9.0</strong></div>
                 <div class="list-item row"><span>Surface</span><strong>9.3</strong></div>
                 <div class="list-item row"><span>Centering</span><strong>9.2</strong></div>
               </article>
-              <article class="surface section stack">
-                <h3>Comps & market</h3>
-                ${mock.comps.map((comp) => `<div class="list-item row"><span>${comp.source}</span><strong>${comp.price}</strong><span class="muted">${comp.when}</span></div>`).join('')}
+              <article class="surface stack">
+                <strong>Recent sold comps</strong>
+                ${mock.comps.map((r) => `<div class="list-item row"><span>${r.source}</span><strong>${r.price}</strong><span class="muted">${r.date}</span></div>`).join('')}
               </article>
-              <article class="surface section stack">
-                <button class="button">Update Vault Entry</button>
-                <button class="button secondary">Mark for Grading Submission</button>
+              <article class="surface stack">
+                <button class="app-btn">Update Collection Entry</button>
+                <button class="app-btn secondary">Mark for Grading</button>
               </article>
             </aside>
-          </section>
-        `;
+          </section>`;
       }
 
-      function authPage() {
+      function renderAuth() {
         return `
-          <section class="auth-layout">
-            <article class="surface surface-strong section stack">
-              <p class="kicker">Collector access</p>
-              <h2>Sign in and keep every scan in your vault</h2>
-              <p class="muted">Create an account to sync scans, value history, notes, and release tracking across sessions.</p>
-              <div class="stack">
-                <label>Email<input class="input" type="email" placeholder="collector@email.com" /></label>
-                <label>Password<input class="input" type="password" placeholder="••••••••" /></label>
-              </div>
+          <section class="screen auth-grid">
+            <article class="stack">
+              <p class="kicker">Account</p>
+              <h3>Sign in to sync your vault</h3>
+              <p class="muted">Save scans, track card value over time, and keep your collection available across devices.</p>
+              <label class="field">Email<input class="input" type="email" placeholder="collector@email.com" /></label>
+              <label class="field">Password<input class="input" type="password" placeholder="••••••••" /></label>
               <div class="cta-row">
-                <button class="button" id="loginBtn">Sign In</button>
-                <button class="button secondary" id="signupBtn">Create Account</button>
-                <button class="button ghost" data-route="scan">Continue as Guest</button>
+                <button id="loginBtn" class="app-btn">Login</button>
+                <button id="signupBtn" class="app-btn secondary">Create Account</button>
+                <button class="app-btn ghost" data-route="scan">Continue as Guest</button>
               </div>
             </article>
-            <article class="surface section stack">
-              <h3>What unlocks with an account</h3>
-              <div class="tile"><strong>Persistent vault</strong><p class="muted">Every scan and note saved, organized, and searchable.</p></div>
-              <div class="tile"><strong>Market follow tools</strong><p class="muted">Track comp moves and spot price momentum faster.</p></div>
-              <div class="tile"><strong>Release watchlist</strong><p class="muted">Follow upcoming drops that fit your collector strategy.</p></div>
+            <article class="surface stack">
+              <strong>Member benefits</strong>
+              <div class="tile"><strong>Persistent collection</strong><p class="muted">Every scan saved to your vault profile.</p></div>
+              <div class="tile"><strong>Market tracking</strong><p class="muted">Stay on top of comp changes and trends.</p></div>
+              <div class="tile"><strong>Release watchlist</strong><p class="muted">Track upcoming product launches.</p></div>
             </article>
-          </section>
-        `;
+          </section>`;
       }
 
-      function releasesPage() {
+      function renderReleases() {
         return `
-          <section class="surface section stack">
-            <div class="row" style="flex-wrap:wrap">
-              <h2>Release Calendar</h2>
-              <div class="toolbar">
-                <select><option>All Games</option><option>Pokémon</option><option>NBA</option><option>One Piece</option><option>MTG</option></select>
-                <select><option>All Types</option><option>ETB</option><option>Booster Box</option><option>Hobby</option></select>
-              </div>
-            </div>
-            <p class="muted">Stay ahead of high-interest drops and align scan + buy strategy with market timing.</p>
-            <div class="two-col">
+          <section class="screen stack">
+            <div class="row" style="flex-wrap:wrap"><h3>Upcoming Releases</h3><div class="toolbar"><select class="select"><option>All Games</option><option>Pokémon</option><option>NBA</option><option>One Piece</option><option>MTG</option></select><select class="select"><option>All Types</option><option>ETB</option><option>Hobby</option><option>Booster</option><option>Set</option></select></div></div>
+            <div class="list">
               ${mock.releases
                 .map(
-                  (r) => `<article class="tile stack"><div class="row"><p class="kicker">${r.game}</p><span class="pill warn">${r.hype}</span></div><h3>${r.name}</h3><p class="muted">Release ${r.date}</p><p>${r.focus}</p><button class="button secondary">Add to Watchlist</button></article>`,
+                  (r) => `<article class="list-item"><div class="row"><strong>${r.name}</strong><span class="badge warn">${r.hype}</span></div><p class="muted">${r.game} • ${r.type}</p><div class="row"><span>Release date</span><strong>${r.date}</strong></div><button class="app-btn secondary" style="margin-top:.5rem">Add to Watchlist</button></article>`,
                 )
                 .join('')}
             </div>
-          </section>
-        `;
+          </section>`;
       }
 
-      const renderers = {
-        home: homePage,
-        scan: scanPage,
-        dashboard: dashboardPage,
-        collection: collectionPage,
-        card: cardDetailPage,
-        auth: authPage,
-        releases: releasesPage,
-      };
+      const screens = { home: renderHome, scan: renderScan, dashboard: renderDashboard, collection: renderCollection, card: renderCard, auth: renderAuth, releases: renderReleases };
 
-      function bindEvents() {
-        document.querySelectorAll('[data-route]').forEach((el) => {
+      function navButton(route) {
+        return `<button class="tab ${state.route === route ? 'active' : ''}" data-route="${route}">${routeLabel[route] || route}</button>`;
+      }
+
+      function bindSharedEvents() {
+        document.querySelectorAll('[data-route]').forEach((el) =>
           el.addEventListener('click', () => {
-            state.route = displayRoute(el.dataset.route);
+            state.route = visibleRoute(el.dataset.route);
             render();
-          });
-        });
+          }),
+        );
 
         const loginBtn = document.getElementById('loginBtn');
         const signupBtn = document.getElementById('signupBtn');
-        if (loginBtn) loginBtn.addEventListener('click', () => toggleSignedIn(true));
-        if (signupBtn) signupBtn.addEventListener('click', () => toggleSignedIn(true));
+        if (loginBtn) loginBtn.onclick = () => setSignedIn(true);
+        if (signupBtn) signupBtn.onclick = () => setSignedIn(true);
+
+        const frontUpload = document.getElementById('frontUpload');
+        const backUpload = document.getElementById('backUpload');
+        const analyzeBtn = document.getElementById('analyzeBtn');
+        if (frontUpload) frontUpload.onclick = () => {
+          state.scanReady = true;
+          render();
+        };
+        if (backUpload) backUpload.onclick = () => {
+          state.scanBackReady = true;
+          render();
+        };
+        if (analyzeBtn)
+          analyzeBtn.onclick = () => {
+            if (state.scanReady && state.scanBackReady) {
+              state.scanAnalyzed = true;
+              render();
+            }
+          };
+
+        const gridMode = document.getElementById('gridMode');
+        const listMode = document.getElementById('listMode');
+        const searchInput = document.getElementById('searchInput');
+        if (gridMode) gridMode.onclick = () => {
+          state.collectionView = 'grid';
+          render();
+        };
+        if (listMode) listMode.onclick = () => {
+          state.collectionView = 'list';
+          render();
+        };
+        if (searchInput)
+          searchInput.oninput = (e) => {
+            state.search = e.target.value;
+            render();
+          };
+
+        document.querySelectorAll('[data-game]').forEach((el) => {
+          el.onclick = () => {
+            state.gameFilter = el.dataset.game;
+            render();
+          };
+        });
       }
 
-      function buildLinkMarkup(route) {
-        return `<button class="tab-link ${state.route === route ? 'active' : ''}" data-route="${route}">${navLabel(route)}</button>`;
-      }
-
-      function buildNav() {
-        const available = state.signedIn ? routes.signedIn : routes.signedOut;
-        document.getElementById('desktopLinks').innerHTML = available.map(buildLinkMarkup).join('');
-        document.getElementById('mobileNav').innerHTML = available.map(buildLinkMarkup).join('');
-      }
-
-      function toggleSignedIn(force) {
-        state.signedIn = typeof force === 'boolean' ? force : !state.signedIn;
-        state.route = state.signedIn ? 'dashboard' : 'home';
+      function setSignedIn(v) {
+        state.signedIn = v;
+        state.route = v ? 'dashboard' : 'home';
         render();
       }
 
-      async function hydrateLiveData() {
-        try {
-          const [health, cards] = await Promise.all([getJson('/api/health'), getJson('/api/cards')]);
-          if (health?.ok) mock.stats[1].trend = 'Live API connected';
-          if (Array.isArray(cards?.cards) && cards.cards.length) {
-            mock.cards = cards.cards.slice(0, 4).map((card, idx) => ({
-              id: card.id || `live-${idx}`,
-              name: card.name || 'Unknown Card',
-              set: card.set_name || card.set || 'Unknown Set',
-              num: card.card_number ? `#${card.card_number}` : '#--',
-              value: card.estimated_value_usd ? `$${card.estimated_value_usd}` : '$--',
-              grade: card.ai_grade_estimate ? String(card.ai_grade_estimate) : '—',
-              note: 'Imported from Worker API',
-            }));
-          }
-        } catch {
-          /* demo mode */
-        }
-      }
-
       function render() {
-        state.route = displayRoute(state.route);
-        buildNav();
+        state.route = visibleRoute(state.route);
+        const tabs = activeRoutes();
+        document.getElementById('desktopTabs').innerHTML = tabs.map(navButton).join('');
+        document.getElementById('mobileTabs').innerHTML = tabs.map(navButton).join('');
+        document.getElementById('screen').innerHTML = screens[state.route]();
 
-        const toggleAuth = document.getElementById('toggleAuth');
-        toggleAuth.textContent = state.signedIn ? 'Sign out' : 'Sign in';
-        toggleAuth.onclick = () => toggleSignedIn();
+        const authToggle = document.getElementById('authToggle');
+        authToggle.textContent = state.signedIn ? 'Sign out' : 'Sign in';
+        authToggle.onclick = () => setSignedIn(!state.signedIn);
 
-        const primaryAction = document.getElementById('primaryNavAction');
-        primaryAction.textContent = state.signedIn ? 'Scan card' : 'Scan now';
-        primaryAction.onclick = () => {
+        const scanQuick = document.getElementById('scanQuick');
+        scanQuick.onclick = () => {
           state.route = 'scan';
           render();
         };
 
-        document.getElementById('app').innerHTML = renderers[state.route]();
-        bindEvents();
+        bindSharedEvents();
       }
 
-      hydrateLiveData().finally(render);
+      render();
     </script>
   </body>
 </html>
