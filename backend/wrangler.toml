@@ -1,24 +1,15 @@
 name = "card-vault-ai"
 main = "src/index.ts"
 compatibility_date = "2025-01-01"
-assets = { directory = "../frontend/dist" }
-
-# ── Bindings ──────────────────────────────────────────────────────────────────
-# Replace the placeholder IDs with your real values from the Cloudflare dashboard.
-# Run: wrangler d1 create card-vault-ai   →  copy the id below
-# Run: wrangler r2 bucket create card-vault-ai-images
 
 [[d1_databases]]
-binding      = "DB"
+binding = "DB"
 database_name = "card-vault-ai"
-database_id  = "00000000-0000-0000-0000-000000000000"
+database_id = "00000000-0000-0000-0000-000000000000"
 
 [[r2_buckets]]
-binding     = "BUCKET"
+binding = "BUCKET"
 bucket_name = "card-vault-ai-images"
 
-# ── Public vars (non-secret) ──────────────────────────────────────────────────
-# ANTHROPIC_API_KEY must be set as a secret, not here:
-#   wrangler secret put ANTHROPIC_API_KEY
 [vars]
 CORS_ORIGIN = "https://card-vault-ai.pages.dev"
