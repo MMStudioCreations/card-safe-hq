@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { ImagePlus, LoaderCircle } from 'lucide-react'
+import { ImagePlus, Loader2 } from 'lucide-react'
 
 type Props = {
   onFile: (file: File, side: 'front' | 'back') => void
@@ -91,7 +91,7 @@ export default function UploadDropzone({ onFile, loading }: Props) {
         />
         {loading ? (
           <div className="flex flex-col items-center gap-3">
-            <LoaderCircle className="h-8 w-8 animate-spin text-cv-secondary" />
+            <Loader2 className="h-8 w-8 animate-spin text-cv-secondary" />
             <p className="text-sm text-cv-muted">Uploading image...</p>
           </div>
         ) : preview ? (

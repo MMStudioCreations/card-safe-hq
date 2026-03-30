@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react'
 import { Navigate } from 'react-router-dom'
-import { LoaderCircle } from 'lucide-react'
+import { Loader2 } from 'lucide-react'
 import { useAuth } from '../lib/hooks'
 
 type Props = { children: ReactNode }
@@ -11,7 +11,7 @@ export default function ProtectedRoute({ children }: Props) {
   if (isLoading) {
     return (
       <div className="flex min-h-screen items-center justify-center">
-        <LoaderCircle className="h-8 w-8 animate-spin text-cv-secondary" />
+        <Loader2 className="h-8 w-8 animate-spin text-cv-secondary" />
       </div>
     )
   }
