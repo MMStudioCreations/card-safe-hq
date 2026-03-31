@@ -49,17 +49,12 @@ export default {
     const { pathname } = new URL(request.url);
     const method = request.method.toUpperCase();
 
-    try {
-      if (method === 'OPTIONS') {
-        return withCors(
-          new Response(JSON.stringify({ ok: true, data: { preflight: true } }), {
-            status: 200,
-            headers: { 'content-type': 'application/json; charset=utf-8' },
-          }),
-          request,
-          env,
-        );
-      }
+    const method = request.method.toUpperCase();
+
+try {
+  if (method === 'OPTIONS') {
+    return new Response(null, { status: 204 })
+  };
 
       if (method === 'GET' && pathname === '/api/health') {
         return withCors(
