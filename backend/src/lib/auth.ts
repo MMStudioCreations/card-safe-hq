@@ -4,7 +4,7 @@ import { unauthorized } from './json';
 
 const COOKIE_NAME = 'cv_session';
 const SESSION_DAYS = 30;
-const PBKDF2_ITERATIONS = 120_000;
+const PBKDF2_ITERATIONS = 100_000;
 
 interface UserRow extends User {
   password_hash: string;
