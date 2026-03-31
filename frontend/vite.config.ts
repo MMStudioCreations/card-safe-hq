@@ -2,7 +2,7 @@ import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 
 export default defineConfig({
-  base: '/card-vault-ai/',
+  base: '/',
   plugins: [react()],
   server: {
     proxy: {
