@@ -32,8 +32,6 @@ export interface SheetAnalysis {
   cards: SheetCard[];
 }
 
-// ── OpenAI API types ──────────────────────────────────────────────────────────
-
 interface OpenAIMessage {
   role: 'user' | 'system';
   content: string | Array
@@ -50,8 +48,6 @@ interface OpenAIResponse {
   }>;
   error?: { message: string };
 }
-
-// ── Helpers ───────────────────────────────────────────────────────────────────
 
 function stripJsonFences(text: string): string {
   return text.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '').trim();
@@ -119,8 +115,6 @@ async function callOpenAI(
     clearTimeout(timeoutId);
   }
 }
-
-// ── analyzeSheet ──────────────────────────────────────────────────────────────
 
 const SHEET_SYSTEM_PROMPT = `You are an expert trading card and sports card authenticator and grader. \
 You analyze scanned binder pages containing multiple cards arranged in a \
@@ -207,8 +201,6 @@ export async function analyzeSheet(
     );
   }
 }
-
-// ── identifySingleCard ────────────────────────────────────────────────────────
 
 const SINGLE_SYSTEM_PROMPT = `You are an expert sports and trading card authenticator with encyclopedic \
 knowledge of all major sports and trading card games. Identify the card shown \
