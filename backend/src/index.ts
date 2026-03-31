@@ -27,7 +27,7 @@ const ALLOWED_HEADERS = 'Content-Type, Authorization';
 function getAllowedOrigin(request: Request, env: Env): string {
   if (env.CORS_ORIGIN?.trim()) return env.CORS_ORIGIN.trim();
   const origin = request.headers.get('origin');
-  if (origin?.endsWith('.github.io')) return origin;
+  if (origin?.endsWith('.pages.dev')) return origin;
   return '*';
 }
 
@@ -49,17 +49,15 @@ export default {
     const { pathname } = new URL(request.url);
     const method = request.method.toUpperCase();
 
-    const method = request.method.toUpperCase();
-
-try {
-  if (method === 'OPTIONS') {
-    return new Response(null, { status: 204 })
-  };
+    try {
+      if (method === 'OPTIONS') {
+        return new Response(null, { status: 204 });
+      }
 
       if (method === 'GET' && pathname === '/api/health') {
         return withCors(
           new Response(JSON.stringify({ ok: true, data: { status: 'healthy' } }), {
-          headers: { 'content-type': 'application/json; charset=utf-8' },
+            headers: { 'content-type': 'application/json; charset=utf-8' },
           }),
           request,
           env,
