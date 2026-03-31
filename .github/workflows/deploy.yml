@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
 
 jobs:
-   deploy-worker:
+  deploy-worker:
     name: Deploy Cloudflare Worker
     runs-on: ubuntu-latest
     steps:
@@ -24,8 +24,8 @@ jobs:
         run: npm ci
 
       - name: Install backend dependencies
-        run: npm ci
         working-directory: backend
+        run: npm ci
 
       - name: Deploy Worker
         uses: cloudflare/wrangler-action@v3
