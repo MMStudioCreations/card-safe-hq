@@ -3,6 +3,7 @@ import { queryOne, run } from '../lib/db';
 import { badRequest, ok, serverError } from '../lib/json';
 import { analyzeSheet } from '../lib/anthropic';
 import { fetchEbayComps } from '../lib/ebay';
+import { cropCardFromSheet } from '../lib/crop';
 
 const ALLOWED_MIME_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp']);
 const MAX_FILE_SIZE = 20 * 1024 * 1024; // 20 MB
@@ -164,6 +165,22 @@ export async function handleSheetScan(env: Env, request: Request, user: User): P
       const avgGrade = gradeParts.length > 0 ? gradeParts.reduce((a, b) => a + b, 0) / gradeParts.length : 7;
       const estimatedValueCents = Math.round(avgGrade * 200); // rough placeholder
 
+      // Crop individual card image from sheet
+      let cardImageUrl = sheetUrl; // fallback to sheet URL
+      try {
+        const cropBuffer = await cropCardFromSheet(fileBuffer, file.type, cardData.bbox);
+        if (cropBuffer) {
+          const cropKey = `cards/${user.id}/${timestamp}-card-${cardData.position}.jpg`;
+          await env.BUCKET.put(cropKey, cropBuffer, {
+            httpMetadata: { contentType: 'image/jpeg' },
+          });
+          cardImageUrl = cropKey;
+        }
+      } catch (cropErr) {
+        console.error(`Failed to crop card ${cardData.position}:`, cropErr);
+        // fallback to sheet URL already set
+      }
+
       await run(
         env.DB,
         `INSERT INTO collection_items (user_id, card_id, quantity, condition_note, estimated_grade, estimated_value_cents, front_image_url)
@@ -174,7 +191,7 @@ export async function handleSheetScan(env: Env, request: Request, user: User): P
           ident.condition_notes || null,
           grading.estimated_grade_range,
           estimatedValueCents,
-          sheetUrl,
+          cardImageUrl,  // use crop URL not sheet URL
         ],
       );
 
