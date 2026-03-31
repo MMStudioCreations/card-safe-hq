@@ -27,7 +27,7 @@ const ALLOWED_HEADERS = 'Content-Type, Authorization';
 function getAllowedOrigin(request: Request, env: Env): string {
   if (env.CORS_ORIGIN?.trim()) return env.CORS_ORIGIN.trim();
   const origin = request.headers.get('origin');
-  if (origin?.endsWith('.pages.dev')) return origin;
+  if (origin === 'https://card-vault-ai.pages.dev') return origin;
   return '*';
 }
 
@@ -50,17 +50,17 @@ export default {
     const method = request.method.toUpperCase();
 
     try {
-     if (method === 'OPTIONS') {
-  return new Response(null, {
-    status: 204,
-    headers: {
-      'Access-Control-Allow-Origin': 'https://card-vault-ai.pages.dev',
-      'Access-Control-Allow-Methods': 'GET, POST, PATCH, DELETE, OPTIONS',
-      'Access-Control-Allow-Headers': 'Content-Type, Authorization',
-      'Access-Control-Max-Age': '86400',
-    },
-  });
-}
+      if (method === 'OPTIONS') {
+        return new Response(null, {
+          status: 204,
+          headers: {
+            'Access-Control-Allow-Origin': 'https://card-vault-ai.pages.dev',
+            'Access-Control-Allow-Methods': 'GET, POST, PATCH, DELETE, OPTIONS',
+            'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+            'Access-Control-Max-Age': '86400',
+          },
+        });
+      }
 
       if (method === 'GET' && pathname === '/api/health') {
         return withCors(
