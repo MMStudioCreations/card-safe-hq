@@ -1,0 +1,5 @@
+ALTER TABLE cards ADD COLUMN sport TEXT;
+ALTER TABLE cards ADD COLUMN player_name TEXT;
+ALTER TABLE cards ADD COLUMN year INTEGER;
+ALTER TABLE cards ADD COLUMN variation TEXT;
+ALTER TABLE cards ADD COLUMN manufacturer TEXT;
