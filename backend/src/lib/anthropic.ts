@@ -34,7 +34,7 @@ export interface SheetAnalysis {
 
 interface OpenAIMessage {
   role: 'user' | 'system';
-  content: string | Array
+  content: string | Array<
     | { type: 'text'; text: string }
     | { type: 'image_url'; image_url: { url: string; detail: 'high' } }
   >;
