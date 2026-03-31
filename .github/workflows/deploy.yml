@@ -1,17 +1,10 @@
-name: Deploy frontend to GitHub Pages
+name: Deploy to Cloudflare Pages
 
 on:
   push:
     branches:
       - main
   workflow_dispatch:
-
-permissions:
-  contents: write
-
-concurrency:
-  group: pages-${{ github.ref }}
-  cancel-in-progress: true
 
 jobs:
   deploy:
@@ -33,13 +26,12 @@ jobs:
       - name: Build frontend
         run: npm run build --workspace=frontend
 
-      - name: Verify deployment entrypoint exists
+      - name: Verify build output
         run: test -f frontend/dist/index.html
 
-      - name: Deploy frontend/dist to gh-pages
-        uses: peaceiris/actions-gh-pages@v4
+      - name: Deploy to Cloudflare Pages
+        uses: cloudflare/wrangler-action@v3
         with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          publish_dir: frontend/dist
-          publish_branch: gh-pages
-          force_orphan: true
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ba8de8decc22986f0cc7a0541902bc94
+          command: pages deploy frontend/dist --project-name=card-vault-ai --commit-dirty=true
