@@ -95,12 +95,11 @@ function getSessionIdFromCookie(cookieHeader: string | null): string | null {
 }
 
 function makeSessionCookie(sessionId: string, expiresAt: string): string {
-  // Future OAuth/social login sessions can reuse this session storage model.
-  return `${COOKIE_NAME}=${encodeURIComponent(sessionId)}; Path=/; HttpOnly; Secure; SameSite=Lax; Expires=${new Date(expiresAt).toUTCString()}`;
+  return `${COOKIE_NAME}=${encodeURIComponent(sessionId)}; Path=/; HttpOnly; Secure; SameSite=None; Expires=${new Date(expiresAt).toUTCString()}`;
 }
 
 function clearSessionCookie(): string {
-  return `${COOKIE_NAME}=; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=0`;
+  return `${COOKIE_NAME}=; Path=/; HttpOnly; Secure; SameSite=None; Max-Age=0`;
 }
 
 async function hashPassword(password: string): Promise<string> {
