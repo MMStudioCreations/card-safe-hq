@@ -13,3 +13,10 @@ bucket_name = "varimg"
 
 [vars]
 CORS_ORIGIN = "https://card-vault-ai.pages.dev"
+
+[observability]
+enabled = true
+
+[observability.logs]
+enabled = true
+invocation_logs = true
