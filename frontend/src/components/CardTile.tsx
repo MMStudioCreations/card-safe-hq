@@ -21,12 +21,16 @@ export default function CardTile({ collectionItem }: Props) {
 
   const initials = useMemo(() => player.split(' ').map((part) => part[0]).join('').slice(0, 2), [player])
 
+  const imageUrl = collectionItem.front_image_url
+    ? `${import.meta.env.VITE_API_URL}/api/images/${encodeURIComponent(collectionItem.front_image_url)}`
+    : null;
+
   return (
     <button className="glass text-left p-3" onClick={() => navigate(`/card/${collectionItem.id}`)} type="button">
-      {collectionItem.front_image_url ? (
+      {imageUrl ? (
         <img
           className="h-36 w-full rounded-[var(--radius-md)] object-cover"
-          src={collectionItem.front_image_url}
+          src={imageUrl}
           alt={player}
         />
       ) : (

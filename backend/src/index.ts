@@ -175,6 +175,21 @@ export default {
         return withCors(await confirmIdentification(env, request, user, id), request, env);
       }
 
+      if (method === 'GET' && pathname.startsWith('/api/images/')) {
+        const key = decodeURIComponent(pathname.replace('/api/images/', ''));
+        if (!key || key.includes('..')) return withCors(badRequest('Invalid key'), request, env);
+
+        const object = await env.BUCKET.get(key);
+        if (!object) return withCors(notFound('Image not found'), request, env);
+
+        const headers = new Headers();
+        headers.set('Content-Type', object.httpMetadata?.contentType || 'image/jpeg');
+        headers.set('Cache-Control', 'public, max-age=31536000, immutable');
+        headers.set('Access-Control-Allow-Origin', 'https://card-vault-ai.pages.dev');
+
+        return new Response(object.body, { headers });
+      }
+
       return withCors(notFound('Route not found'), request, env);
     } catch (err) {
       console.error('Unhandled worker error', err);
