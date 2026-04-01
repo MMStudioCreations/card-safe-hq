@@ -1,9 +1,9 @@
 import type { ReactNode } from 'react'
 import { NavLink, useNavigate } from 'react-router-dom'
-import { Camera, FolderKanban, Images, LogOut, ScanSearch } from 'lucide-react'
+import { Camera, FolderKanban, Images, Layers, LogOut } from 'lucide-react'
 import { useQueryClient } from '@tanstack/react-query'
 import { api } from '../lib/api'
-import { useAuth } from '../lib/hooks'
+import { useAuth, useCollection } from '../lib/hooks'
 
 type Props = { children: ReactNode }
 
@@ -11,13 +11,14 @@ const links = [
   { to: '/', label: 'Collection', icon: FolderKanban },
   { to: '/scan', label: 'Scan', icon: Camera },
   { to: '/upload', label: 'Upload', icon: Images },
-  { to: '/review', label: 'Review Queue', icon: ScanSearch },
+  { to: '/deck', label: 'Deck Builder', icon: Layers },
 ]
 
 export default function Layout({ children }: Props) {
   const { data: user } = useAuth()
   const navigate = useNavigate()
   const queryClient = useQueryClient()
+  const { data: collection = [] } = useCollection(true)
 
   async function handleLogout() {
     await api.logout()
@@ -41,11 +42,17 @@ export default function Layout({ children }: Props) {
               <NavLink
                 key={link.to}
                 to={link.to}
+                end={link.to === '/'}
                 className={({ isActive }) =>
-                  `rounded-full px-3 py-2 text-sm ${isActive ? 'bg-cv-surfaceStrong text-cv-text' : 'text-cv-muted'}`
+                  `relative rounded-full px-3 py-2 text-sm ${isActive ? 'bg-cv-surfaceStrong text-cv-text' : 'text-cv-muted'}`
                 }
               >
                 {link.label}
+                {link.to === '/' && collection.length > 0 && (
+                  <span className="ml-1.5 rounded-full bg-[var(--primary)]/20 px-1.5 py-0.5 text-xs text-[var(--primary)]">
+                    {collection.length}
+                  </span>
+                )}
               </NavLink>
             ))}
             <span className="rounded-full bg-cv-surface px-3 py-2 text-xs text-cv-muted">
@@ -67,12 +74,13 @@ export default function Layout({ children }: Props) {
             <NavLink
               key={link.to}
               to={link.to}
+              end={link.to === '/'}
               className={({ isActive }) =>
                 `flex flex-col items-center rounded-[var(--radius-md)] px-2 py-2 text-xs ${isActive ? 'bg-cv-surfaceStrong text-cv-text' : 'text-cv-muted'}`
               }
             >
               <Icon className="mb-1 h-4 w-4" />
-              {link.label}
+              {link.label === 'Deck Builder' ? 'Deck' : link.label}
             </NavLink>
           )
         })}

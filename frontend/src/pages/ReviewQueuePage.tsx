@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { useQueryClient } from '@tanstack/react-query'
+import CardCrop from '../components/CardCrop'
 import PriceRangeBar from '../components/PriceRangeBar'
 import { api, type CollectionItem, type VisionConfirmPayload } from '../lib/api'
 import { queryKeys, useCollection } from '../lib/hooks'
@@ -61,11 +62,27 @@ export default function ReviewQueuePage() {
           return (
             <article key={item.id} className="glass grid gap-4 p-4 md:grid-cols-[220px,1fr]">
               <div>
-                {item.front_image_url ? (
-                  <img className="h-80 w-full rounded-[var(--radius-md)] object-cover" src={item.front_image_url} alt={current.player_name} />
-                ) : (
-                  <div className="h-80 rounded-[var(--radius-md)] bg-[linear-gradient(135deg,var(--primary),var(--secondary))]" />
-                )}
+                {(() => {
+                  const apiBase = import.meta.env.VITE_API_URL ?? ''
+                  const imageUrl = item.front_image_url
+                    ? `${apiBase}/api/images/${encodeURIComponent(item.front_image_url)}`
+                    : null
+                  const hasBbox = item.bbox_x != null && item.bbox_y != null
+                  const bbox = hasBbox
+                    ? { x: item.bbox_x!, y: item.bbox_y!, width: item.bbox_width!, height: item.bbox_height! }
+                    : null
+                  if (imageUrl && bbox) {
+                    return (
+                      <div className="h-80 w-full overflow-hidden rounded-[var(--radius-md)]">
+                        <CardCrop sheetUrl={imageUrl} bbox={bbox} className="h-full w-full object-cover" />
+                      </div>
+                    )
+                  }
+                  if (imageUrl) {
+                    return <img className="h-80 w-full rounded-[var(--radius-md)] object-cover" src={imageUrl} alt={current.player_name} />
+                  }
+                  return <div className="h-80 rounded-[var(--radius-md)] bg-[linear-gradient(135deg,var(--primary),var(--secondary))]" />
+                })()}
               </div>
               <div className="space-y-3">
                 <div className="grid gap-3 sm:grid-cols-2">

@@ -49,6 +49,8 @@ export type CollectionItem = {
   bbox_y?: number | null
   bbox_width?: number | null
   bbox_height?: number | null
+  // latest eBay sold price (from sales_comps join)
+  latest_sold_price_cents?: number | null
   // card fields joined from cards table
   card_name?: string | null
   set_name?: string | null
@@ -218,6 +220,17 @@ export const api = {
       headers: { 'Content-Type': 'multipart/form-data' },
     });
   },
+
+  generateDeck: (payload: { game: string; format: string; strategy?: string; must_include?: number[] }) =>
+    http.post<never, {
+      deck: Array<{ collection_item_id: number; card_name: string; copies: number }>;
+      cards_available?: number;
+      deck_size?: number;
+      target_size?: number;
+      total_value_cents?: number;
+      message: string;
+      stats?: null;
+    }>('/api/deck/generate', payload),
 
   listReleases: () => http.get<never, Release[]>('/api/releases'),
   createRelease: (payload: Omit<Release, 'id' | 'created_at'>) =>

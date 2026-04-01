@@ -50,7 +50,14 @@ export async function listCollection(env: Env, user: User, request: Request): Pr
     `SELECT ci.*,
             ci.bbox_x, ci.bbox_y, ci.bbox_width, ci.bbox_height,
             c.game, c.set_name, c.card_name, c.card_number, c.rarity,
-            c.sport, c.player_name, c.year, c.variation, c.manufacturer
+            c.sport, c.player_name, c.year, c.variation, c.manufacturer,
+            (
+              SELECT sold_price_cents
+              FROM sales_comps
+              WHERE card_id = ci.card_id AND source = 'ebay_sold'
+              ORDER BY sold_date DESC
+              LIMIT 1
+            ) as latest_sold_price_cents
      FROM collection_items ci
      LEFT JOIN cards c ON ci.card_id = c.id
      WHERE ci.user_id = ?

@@ -3,6 +3,7 @@ import Layout from './components/Layout'
 import ProtectedRoute from './components/ProtectedRoute'
 import CardDetailPage from './pages/CardDetailPage'
 import DashboardPage from './pages/DashboardPage'
+import DeckBuilderPage from './pages/DeckBuilderPage'
 import LoginPage from './pages/LoginPage'
 import RegisterPage from './pages/RegisterPage'
 import ReviewQueuePage from './pages/ReviewQueuePage'
@@ -50,6 +51,16 @@ export default function App() {
           <ProtectedRoute>
             <Layout>
               <ReviewQueuePage />
+            </Layout>
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/deck"
+        element={
+          <ProtectedRoute>
+            <Layout>
+              <DeckBuilderPage />
             </Layout>
           </ProtectedRoute>
         }

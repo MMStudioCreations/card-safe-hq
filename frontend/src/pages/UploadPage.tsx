@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
+import { Camera, Upload } from 'lucide-react'
 import UploadDropzone from '../components/UploadDropzone'
 import { api } from '../lib/api'
 
@@ -41,9 +42,45 @@ export default function UploadPage() {
 
   return (
     <div className="space-y-4">
+      <div className="glass mb-6 rounded-[var(--radius-lg)] p-5">
+        <div className="grid grid-cols-2 gap-4">
+          <div className="rounded-[var(--radius-md)] border border-[var(--primary)]/30 p-4">
+            <div className="mb-2 flex items-center gap-2">
+              <Camera className="h-5 w-5 text-[var(--primary)]" />
+              <span className="font-semibold">AI Scan</span>
+              <span className="rounded-full bg-[var(--primary)]/20 px-2 py-0.5 text-xs text-[var(--primary)]">
+                Recommended
+              </span>
+            </div>
+            <p className="text-xs text-cv-muted">
+              Upload a 9-pocket binder page. AI identifies all 9 cards automatically,
+              grades them, and adds them to your collection instantly.
+            </p>
+            <Link to="/scan" className="btn-primary mt-3 block text-center text-xs">
+              Go to Scan →
+            </Link>
+          </div>
+          <div className="rounded-[var(--radius-md)] border border-cv-border p-4">
+            <div className="mb-2 flex items-center gap-2">
+              <Upload className="h-5 w-5 text-cv-muted" />
+              <span className="font-semibold">Manual Upload</span>
+            </div>
+            <p className="text-xs text-cv-muted">
+              Upload a single card photo and enter all details manually.
+              Use this for cards you want full control over.
+            </p>
+          </div>
+        </div>
+      </div>
+
       <section className="glass p-5">
         <h2 className="mb-2 text-xl font-bold">Upload card</h2>
-        <p className="mb-4 text-sm text-cv-muted">Step 1: Select image then continue to AI analysis.</p>
+        <p className="mb-4 text-sm text-cv-muted">
+          Step 1: Select image then continue to AI analysis.{' '}
+          <Link to="/review" className="text-[var(--primary)] underline-offset-2 hover:underline">
+            View review queue
+          </Link>
+        </p>
         <UploadDropzone
           loading={stage !== 'idle' && stage !== 'error'}
           onFile={(selectedFile, selectedSide) => {
