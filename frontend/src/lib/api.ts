@@ -186,7 +186,10 @@ export const api = {
     return http.post<never, {
       sheet_url: string;
       cards_detected: number;
-      collection_items: CollectionItem[];
+      collection_items: Array<CollectionItem & {
+        sheet_url?: string;
+        bbox?: { x: number; y: number; width: number; height: number };
+      }>;
     }>('/api/scan/sheet', formData, {
       headers: { 'Content-Type': 'multipart/form-data' },
     });

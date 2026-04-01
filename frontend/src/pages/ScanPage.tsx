@@ -1,10 +1,20 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useQueryClient } from '@tanstack/react-query'
-import { api, type CollectionItem } from '../lib/api'
-import CardTile from '../components/CardTile'
+import { api } from '../lib/api'
+import CardCrop from '../components/CardCrop'
 
 type State = 'idle' | 'processing' | 'done' | 'error'
+
+interface ScanResultItem {
+  id: number
+  card_name?: string
+  set_name?: string
+  estimated_grade?: string
+  estimated_value_cents?: number
+  sheet_url?: string
+  bbox?: { x: number; y: number; width: number; height: number }
+}
 
 const STATUS_MESSAGES = [
   'Uploading scan...',
@@ -25,7 +35,7 @@ export default function ScanPage() {
   const [selectedFile, setSelectedFile] = useState<File | null>(null)
   const [dragOver, setDragOver] = useState(false)
   const [statusIndex, setStatusIndex] = useState(0)
-  const [result, setResult] = useState<{ cards_detected: number; collection_items: CollectionItem[] } | null>(null)
+  const [result, setResult] = useState<{ cards_detected: number; collection_items: ScanResultItem[] } | null>(null)
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
 
   useEffect(() => {
@@ -202,8 +212,29 @@ export default function ScanPage() {
 
           {result.collection_items.length > 0 && (
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-              {result.collection_items.map((item) => (
-                <CardTile key={item.id} collectionItem={item} />
+              {result.collection_items.map((item: ScanResultItem) => (
+                <div key={item.id} className="glass rounded-[var(--radius-lg)] overflow-hidden">
+                  {item.sheet_url && item.bbox ? (
+                    <CardCrop
+                      sheetUrl={`${import.meta.env.VITE_API_URL}/api/images/${encodeURIComponent(item.sheet_url)}`}
+                      bbox={item.bbox}
+                      className="w-full object-cover"
+                    />
+                  ) : (
+                    <div className="flex h-40 items-center justify-center bg-cv-surface text-cv-muted text-sm">
+                      No image
+                    </div>
+                  )}
+                  <div className="p-3">
+                    <p className="font-semibold text-sm truncate">
+                      {item.card_name || 'Unknown Card'}
+                    </p>
+                    <p className="text-xs text-cv-muted truncate">{item.set_name || 'Unknown set'}</p>
+                    {item.estimated_grade && (
+                      <p className="text-xs mt-1">Grade: {item.estimated_grade}</p>
+                    )}
+                  </div>
+                </div>
               ))}
             </div>
           )}
