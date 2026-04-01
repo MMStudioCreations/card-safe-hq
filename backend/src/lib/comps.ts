@@ -1,9 +1,7 @@
-import type { Card } from '../types';
-
-// ── Public interfaces ─────────────────────────────────────────────────────────
+import type { Card, Env } from '../types';
 
 export interface NormalizedComp {
-  source: string;       // 'ebay_sold' | 'ebay_active'
+  source: string;
   title: string;
   sold_price_cents: number;
   sold_date: string;
@@ -14,15 +12,9 @@ export interface NormalizedComp {
 
 export interface SalesCompProvider {
   name: string;
-  fetchRecentSales(card: Card): Promise<NormalizedComp[]>;
+  fetchRecentSales(card: Card, env: Env): Promise<NormalizedComp[]>;
+  fetchActiveListings(card: Card, env: Env): Promise<NormalizedComp[]>;
 }
-
-// ── Search query builder ──────────────────────────────────────────────────────
-// Slots: player_name · year · set_name · card_number · variation
-// Card.card_name  ≈ player_name
-// Card.set_name   ≈ year + set_name (year is typically embedded, e.g. "2023 Topps Chrome")
-// Card.card_number ≈ card_number
-// Card.rarity      ≈ variation
 
 function buildSearchQuery(card: Card & {
   player_name?: string | null;
@@ -45,178 +37,146 @@ function buildSearchQuery(card: Card & {
   return query.length > 100 ? query.slice(0, 100).trimEnd() : query;
 }
 
-// ── HTML parsing helpers ──────────────────────────────────────────────────────
+async function getEbayToken(clientId: string, clientSecret: string): Promise<string> {
+  const credentials = btoa(`${clientId}:${clientSecret}`);
+  const response = await fetch('https://api.ebay.com/identity/v1/oauth2/token', {
+    method: 'POST',
+    headers: {
+      Authorization: `Basic ${credentials}`,
+      'Content-Type': 'application/x-www-form-urlencoded',
+    },
+    body: 'grant_type=client_credentials&scope=https%3A%2F%2Fapi.ebay.com%2Foauth%2Fapi_scope',
+  });
 
-function stripTags(html: string): string {
-  return html
-    .replace(/<[^>]+>/g, ' ')
-    .replace(/&amp;/g, '&')
-    .replace(/&nbsp;/g, ' ')
-    .replace(/&#\d+;/g, '')
-    .replace(/&[a-z]+;/g, '')
-    .replace(/\s+/g, ' ')
-    .trim();
+  if (!response.ok) {
+    const err = await response.text();
+    throw new Error(`eBay token error ${response.status}: ${err}`);
+  }
+
+  const data = await response.json() as { access_token: string };
+  return data.access_token;
 }
 
-function parsePriceCents(raw: string): number | null {
-  // Strip currency labels then symbols: "US $1,234.56", "C $10.00", "$5.00 to $9.00"
-  const clean = raw
-    .replace(/\b(US|CA|AU|C)\s*\$/gi, '')
-    .replace(/[$£€,\s]/g, '')
-    .replace(/\bUSD\b/gi, '')
-    .trim();
-
-  // Ranges ("10.00to20.00") — take the lower (first) value
-  const first = clean.split(/to/i)[0].trim();
-  const num = parseFloat(first);
-  if (!isFinite(num) || num <= 0) return null;
-  return Math.round(num * 100);
+interface EbayItemSummary {
+  title?: string;
+  price?: { value?: string; currency?: string };
+  itemEndDate?: string;
+  itemWebUrl?: string;
+  condition?: string;
+  buyingOptions?: string[];
 }
 
-function parseDateToISO(raw: string): string {
-  const clean = raw
-    .replace(/\bsold\b/gi, '')
-    .replace(/\bended\b/gi, '')
-    .trim();
-  const d = new Date(clean);
-  return isNaN(d.getTime()) ? new Date().toISOString() : d.toISOString();
+interface EbaySearchResponse {
+  itemSummaries?: EbayItemSummary[];
 }
 
-interface RawItem {
-  title: string;
-  price_cents: number;
-  date: string;
-  url: string;
-  condition: string;
-}
-
-// Each `chunk` is the HTML starting at one `s-item__info` marker up to the next.
-function parseItemChunk(chunk: string): RawItem | null {
-  // ── Title ─────────────────────────────────────────────────────────────────
-  const titleM =
-    chunk.match(/class="s-item__title[^"]*"[^>]*>([\s\S]*?)<\/h3>/i) ??
-    chunk.match(/class="s-item__title[^"]*"[^>]*>([\s\S]*?)<\/span>/i);
-
-  const title = titleM ? stripTags(titleM[1]).replace(/\bshop on ebay\b/gi, '').trim() : null;
-  if (!title || title.length < 4) return null;
-
-  // ── URL ───────────────────────────────────────────────────────────────────
-  const urlM = chunk.match(/href="(https:\/\/www\.ebay\.com\/itm\/[^"?]+)/i);
-  if (!urlM) return null;
-
-  // ── Price ─────────────────────────────────────────────────────────────────
-  const priceM = chunk.match(/class="s-item__price[^"]*"[^>]*>([\s\S]*?)<\/span>/i);
-  const price_cents = priceM ? parsePriceCents(stripTags(priceM[1])) : null;
-  if (!price_cents) return null;
-
-  // ── End / sold date ───────────────────────────────────────────────────────
-  // Try dedicated endedDate span first, then the text that follows a "Sold" POSITIVE span
-  const dateM =
-    chunk.match(/class="s-item__endedDate[^"]*"[^>]*>([\s\S]*?)<\/span>/i) ??
-    chunk.match(/class="POSITIVE[^"]*"[^>]*>Sold[\s\S]*?<span[^>]*>([\s\S]*?)<\/span>/i);
-  const date = dateM ? parseDateToISO(stripTags(dateM[1])) : new Date().toISOString();
-
-  // ── Condition ─────────────────────────────────────────────────────────────
-  const condM =
-    chunk.match(/class="SECONDARY_INFO[^"]*"[^>]*>([\s\S]*?)<\/span>/i) ??
-    chunk.match(/class="s-item__subtitle[^"]*"[^>]*>([\s\S]*?)<\/span>/i);
-  const condition = condM ? stripTags(condM[1]) : '';
-
-  return { title, price_cents, date, url: urlM[1], condition };
-}
-
-// ── eBay fetch + parse ────────────────────────────────────────────────────────
-
-const USER_AGENT = 'Mozilla/5.0 (compatible; CardVaultBot/1.0)';
-const EBAY_BASE  = 'https://www.ebay.com/sch/i.html';
-// Each s-item__info section is typically 2–5 KB; cap the last chunk at 8 KB
-// to avoid parsing footer noise when there are no more listings.
-const MAX_LAST_CHUNK = 8_192;
-
-async function fetchEbayListings(
+async function searchEbayAPI(
+  token: string,
   query: string,
-  isSold: boolean,
-  maxResults: number,
+  sold: boolean,
+  limit = 10,
 ): Promise<NormalizedComp[]> {
+  const source = sold ? 'ebay_sold' : 'ebay_active';
+
+  const params = new URLSearchParams({
+    q: query,
+    limit: String(limit),
+    sort: sold ? 'endDate' : 'price',
+  });
+
+  if (sold) {
+    params.set('filter', 'buyingOptions:{FIXED_PRICE},conditions:{USED|VERY_GOOD|GOOD|ACCEPTABLE}');
+  } else {
+    params.set('filter', 'buyingOptions:{FIXED_PRICE}');
+  }
+
   const controller = new AbortController();
-  const timeoutId  = setTimeout(() => controller.abort(), 15_000);
+  const timeoutId = setTimeout(() => controller.abort(), 15_000);
 
-  let html: string;
   try {
-    const params = new URLSearchParams({ _nkw: query, _sop: '13' });
-    if (isSold) {
-      params.set('LH_Complete', '1');
-      params.set('LH_Sold', '1');
-    }
+    const response = await fetch(
+      `https://api.ebay.com/buy/browse/v1/item_summary/search?${params.toString()}`,
+      {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
+          'X-EBAY-C-MARKETPLACE-ID': 'EBAY_US',
+          'X-EBAY-C-ENDUSERCTX': 'affiliateCampaignId=<ePNCampaignId>,affiliateReferenceId=<referenceId>',
+        },
+        signal: controller.signal,
+      },
+    );
 
-    const res = await fetch(`${EBAY_BASE}?${params.toString()}`, {
-      headers: { 'User-Agent': USER_AGENT },
-      signal: controller.signal,
-    });
-
-    if (!res.ok) {
-      console.error(`EbayCompsProvider: HTTP ${res.status} for query="${query}"`);
+    if (!response.ok) {
+      const err = await response.text();
+      console.error(`eBay Browse API error ${response.status}: ${err}`);
       return [];
     }
 
-    html = await res.text();
+    const data = await response.json() as EbaySearchResponse;
+    const items = data.itemSummaries ?? [];
+
+    return items
+      .map((item): NormalizedComp | null => {
+        const priceStr = item.price?.value;
+        if (!priceStr || !item.title || !item.itemWebUrl) return null;
+        const priceNum = parseFloat(priceStr);
+        if (!isFinite(priceNum) || priceNum <= 0) return null;
+        return {
+          source,
+          title: item.title,
+          sold_price_cents: Math.round(priceNum * 100),
+          sold_date: item.itemEndDate ?? new Date().toISOString(),
+          sold_platform: 'eBay',
+          listing_url: item.itemWebUrl,
+          condition_text: item.condition ?? '',
+        };
+      })
+      .filter((item): item is NormalizedComp => item !== null);
   } catch (err) {
     if (err instanceof Error && err.name === 'AbortError') {
-      console.error('EbayCompsProvider: fetch timed out after 15 s');
+      console.error('eBay Browse API: fetch timed out');
     } else {
-      console.error('EbayCompsProvider: fetch error', err);
+      console.error('eBay Browse API: fetch error', err);
     }
     return [];
   } finally {
     clearTimeout(timeoutId);
   }
-
-  const source  = isSold ? 'ebay_sold' : 'ebay_active';
-  const results : NormalizedComp[] = [];
-  const marker  = 's-item__info';
-
-  let pos = html.indexOf(marker);
-  while (pos !== -1 && results.length < maxResults) {
-    const nextPos = html.indexOf(marker, pos + marker.length);
-    const end     = nextPos === -1 ? Math.min(pos + MAX_LAST_CHUNK, html.length) : nextPos;
-    const chunk   = html.slice(pos, end);
-
-    const item = parseItemChunk(chunk);
-    if (item) {
-      results.push({
-        source,
-        title:            item.title,
-        sold_price_cents: item.price_cents,
-        sold_date:        item.date,
-        sold_platform:    'eBay',
-        listing_url:      item.url,
-        condition_text:   item.condition,
-      });
-    }
-
-    pos = nextPos;
-  }
-
-  return results;
 }
-
-// ── EbayCompsProvider ─────────────────────────────────────────────────────────
 
 export class EbayCompsProvider implements SalesCompProvider {
   name = 'ebay';
 
-  /** Completed / sold listings — up to 10, sorted most-recent first (eBay _sop=13). */
-  fetchRecentSales(card: Card): Promise<NormalizedComp[]> {
-    return fetchEbayListings(buildSearchQuery(card), true, 10);
+  async fetchRecentSales(card: Card, env: Env): Promise<NormalizedComp[]> {
+    if (!env.EBAY_CLIENT_ID || !env.EBAY_CLIENT_SECRET) {
+      console.warn('eBay credentials not set — skipping comps fetch');
+      return [];
+    }
+    try {
+      const token = await getEbayToken(env.EBAY_CLIENT_ID, env.EBAY_CLIENT_SECRET);
+      const query = buildSearchQuery(card);
+      if (!query) return [];
+      return await searchEbayAPI(token, query, true, 10);
+    } catch (err) {
+      console.error('fetchRecentSales failed:', err);
+      return [];
+    }
   }
 
-  /** Active (current asking price) listings — up to 5. */
-  fetchActiveListings(card: Card): Promise<NormalizedComp[]> {
-    return fetchEbayListings(buildSearchQuery(card), false, 5);
+  async fetchActiveListings(card: Card, env: Env): Promise<NormalizedComp[]> {
+    if (!env.EBAY_CLIENT_ID || !env.EBAY_CLIENT_SECRET) return [];
+    try {
+      const token = await getEbayToken(env.EBAY_CLIENT_ID, env.EBAY_CLIENT_SECRET);
+      const query = buildSearchQuery(card);
+      if (!query) return [];
+      return await searchEbayAPI(token, query, false, 5);
+    } catch (err) {
+      console.error('fetchActiveListings failed:', err);
+      return [];
+    }
   }
 }
-
-// ── Utilities ─────────────────────────────────────────────────────────────────
 
 export function summarizeComps(prices: number[]) {
   if (!prices.length) {
@@ -224,6 +184,6 @@ export function summarizeComps(prices: number[]) {
   }
   const low = Math.min(...prices);
   const high = Math.max(...prices);
-  const avg  = Math.round(prices.reduce((a, b) => a + b, 0) / prices.length);
+  const avg = Math.round(prices.reduce((a, b) => a + b, 0) / prices.length);
   return { low_price_cents: low, average_price_cents: avg, high_price_cents: high, count: prices.length };
 }
