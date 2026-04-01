@@ -63,7 +63,13 @@ export async function getCompsHistory(env: Env, cardId: number): Promise<Respons
 // ── GET /api/comps/:cardId ────────────────────────────────────────────────────
 
 export async function getComps(env: Env, cardId: number): Promise<Response> {
-  const card = await queryOne<Card>(env.DB, 'SELECT * FROM cards WHERE id = ?', [cardId]);
+  const card = await queryOne<Card & {
+    player_name?: string;
+    year?: number;
+    sport?: string;
+    variation?: string;
+    manufacturer?: string;
+  }>(env.DB, 'SELECT * FROM cards WHERE id = ?', [cardId]);
   if (!card) return notFound('Card not found');
 
   // A "fresh" cache is any row for this card inserted within the last 24 hours.
@@ -80,8 +86,8 @@ export async function getComps(env: Env, cardId: number): Promise<Response> {
   if (!isCached) {
     // Fetch sold and active listings in parallel
     const [soldComps, activeComps] = await Promise.all([
-      provider.fetchRecentSales(card),
-      provider.fetchActiveListings(card),
+      provider.fetchRecentSales(card, env),
+      provider.fetchActiveListings(card, env),
     ]);
     const all = [...soldComps, ...activeComps];
 
@@ -133,8 +139,8 @@ export async function searchComps(env: Env, request: Request): Promise<Response>
   };
 
   const [soldComps, activeComps] = await Promise.all([
-    provider.fetchRecentSales(virtualCard),
-    provider.fetchActiveListings(virtualCard),
+    provider.fetchRecentSales(virtualCard, env),
+    provider.fetchActiveListings(virtualCard, env),
   ]);
 
   const summary = summarizeComps(soldComps.map((c) => c.sold_price_cents));
@@ -155,8 +161,8 @@ export async function refreshComps(env: Env, cardId: number): Promise<Response> 
   if (!card) return notFound('Card not found');
 
   const [soldComps, activeComps] = await Promise.all([
-    provider.fetchRecentSales(card),
-    provider.fetchActiveListings(card),
+    provider.fetchRecentSales(card, env),
+    provider.fetchActiveListings(card, env),
   ]);
   const all = [...soldComps, ...activeComps];
 
