@@ -2,9 +2,75 @@ import { useMemo, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { ExternalLink } from 'lucide-react'
-import PriceRangeBar from '../components/PriceRangeBar'
 import { api } from '../lib/api'
-import { queryKeys, useCollectionItem, useComps, useGrade } from '../lib/hooks'
+import { queryKeys, useCollectionItem, useComps, useGrade, useCompsHistory } from '../lib/hooks'
+import CardCrop from '../components/CardCrop'
+
+// ── SVG Price Chart ───────────────────────────────────────────────────────────
+
+const PriceChart = ({
+  history,
+  days,
+}: {
+  history: Array<{ date: string; avg_price_cents: number }>
+  days: 30 | 60 | 90
+}) => {
+  const cutoff = new Date()
+  cutoff.setDate(cutoff.getDate() - days)
+  const filtered = history.filter((h) => new Date(h.date) >= cutoff)
+
+  if (filtered.length < 2) {
+    return (
+      <div className="flex h-32 items-center justify-center text-cv-muted text-sm">
+        Not enough data for chart
+      </div>
+    )
+  }
+
+  const prices = filtered.map((h) => h.avg_price_cents)
+  const minP = Math.min(...prices)
+  const maxP = Math.max(...prices)
+  const range = maxP - minP || 1
+
+  const W = 600
+  const H = 120
+  const PAD = 10
+  const points = filtered
+    .map((h, i) => {
+      const x = PAD + (i / (filtered.length - 1)) * (W - PAD * 2)
+      const y = H - PAD - ((h.avg_price_cents - minP) / range) * (H - PAD * 2)
+      return `${x},${y}`
+    })
+    .join(' ')
+
+  const avg = Math.round(prices.reduce((a, b) => a + b, 0) / prices.length)
+
+  return (
+    <div>
+      <svg viewBox={`0 0 ${W} ${H}`} className="w-full" preserveAspectRatio="none">
+        <defs>
+          <linearGradient id="grad" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor="var(--primary)" stopOpacity="0.3" />
+            <stop offset="100%" stopColor="var(--primary)" stopOpacity="0" />
+          </linearGradient>
+        </defs>
+        <polyline
+          fill="url(#grad)"
+          stroke="none"
+          points={`${PAD},${H} ${points} ${W - PAD},${H}`}
+        />
+        <polyline fill="none" stroke="var(--primary)" strokeWidth="2" points={points} />
+      </svg>
+      <div className="mt-2 flex justify-between text-xs text-cv-muted">
+        <span>Low ${(minP / 100).toFixed(2)}</span>
+        <span>Avg ${(avg / 100).toFixed(2)}</span>
+        <span>High ${(maxP / 100).toFixed(2)}</span>
+      </div>
+    </div>
+  )
+}
+
+// ── Main Page ─────────────────────────────────────────────────────────────────
 
 export default function CardDetailPage() {
   const { id } = useParams()
@@ -13,16 +79,45 @@ export default function CardDetailPage() {
   const { data: item, isLoading } = useCollectionItem(id)
   const cardId = item?.card_id ?? undefined
   const { data: comps } = useComps(cardId)
+  const { data: historyData } = useCompsHistory(cardId)
   const { data: grade, refetch: refetchGrade } = useGrade(item?.id)
   const [showFront, setShowFront] = useState(true)
   const [editing, setEditing] = useState(false)
+  const [chartDays, setChartDays] = useState<30 | 60 | 90>(30)
+  const [compsTab, setCompsTab] = useState<'sold' | 'active'>('sold')
   const [draft, setDraft] = useState({
     quantity: item?.quantity || 1,
     condition_note: item?.condition_note || '',
     estimated_value_cents: item?.estimated_value_cents || 0,
   })
 
-  const image = useMemo(() => (showFront ? item?.front_image_url : item?.back_image_url) || item?.front_image_url, [item, showFront])
+  const image = useMemo(
+    () => (showFront ? item?.front_image_url : item?.back_image_url) || item?.front_image_url,
+    [item, showFront],
+  )
+
+  // Determine if we should use CardCrop (scanned sheet card with bbox)
+  const hasBbox =
+    item?.bbox_x != null &&
+    item?.bbox_y != null &&
+    item?.bbox_width != null &&
+    item?.bbox_height != null
+
+  const sheetImageUrl = image
+    ? `${import.meta.env.VITE_API_URL}/api/images/${encodeURIComponent(image)}`
+    : null
+
+  // Price trend: compare current estimated_value_cents vs 7-day avg from history
+  const trend = useMemo(() => {
+    if (!historyData?.history?.length || !item?.estimated_value_cents) return null
+    const cutoff7 = new Date()
+    cutoff7.setDate(cutoff7.getDate() - 7)
+    const recent = historyData.history.filter((h) => new Date(h.date) >= cutoff7)
+    if (!recent.length) return null
+    const avg7 = recent.reduce((a, b) => a + b.avg_price_cents, 0) / recent.length
+    const pct = ((item.estimated_value_cents - avg7) / avg7) * 100
+    return { pct, up: pct >= 0 }
+  }, [historyData, item])
 
   const gradingMutation = useMutation({
     mutationFn: async () => {
@@ -56,107 +151,344 @@ export default function CardDetailPage() {
 
   if (isLoading || !item) return <div className="glass p-6">Loading card details...</div>
 
+  const avgPrice = comps?.summary?.average_price_cents
+  const soldListings = comps?.sold ?? []
+  const activeListings = comps?.active ?? []
+
   return (
     <div className="grid gap-4 lg:grid-cols-[340px,1fr]">
+      {/* ── Card Image ── */}
       <section className="glass p-4">
         <div className="mb-3 flex gap-2">
-          <button className={showFront ? 'btn-primary text-sm' : 'btn-secondary text-sm'} onClick={() => setShowFront(true)} type="button">Front</button>
-          <button className={!showFront ? 'btn-primary text-sm' : 'btn-secondary text-sm'} onClick={() => setShowFront(false)} type="button" disabled={!item.back_image_url}>Back</button>
+          <button
+            className={showFront ? 'btn-primary text-sm' : 'btn-secondary text-sm'}
+            onClick={() => setShowFront(true)}
+            type="button"
+          >
+            Front
+          </button>
+          <button
+            className={!showFront ? 'btn-primary text-sm' : 'btn-secondary text-sm'}
+            onClick={() => setShowFront(false)}
+            type="button"
+            disabled={!item.back_image_url}
+          >
+            Back
+          </button>
         </div>
-        {image ? <img className="w-full rounded-[var(--radius-md)]" src={image} alt={item.card?.card_name || 'Card'} /> : <div className="h-[420px] rounded-[var(--radius-md)] bg-[linear-gradient(135deg,var(--primary),var(--secondary))]" />}
+        {sheetImageUrl ? (
+          hasBbox ? (
+            <CardCrop
+              sheetUrl={sheetImageUrl}
+              bbox={{
+                x: item.bbox_x!,
+                y: item.bbox_y!,
+                width: item.bbox_width!,
+                height: item.bbox_height!,
+              }}
+              className="w-full rounded-[var(--radius-md)]"
+            />
+          ) : (
+            <img
+              className="w-full rounded-[var(--radius-md)]"
+              src={sheetImageUrl}
+              alt={item.card_name || item.player_name || 'Card'}
+            />
+          )
+        ) : (
+          <div className="h-[420px] rounded-[var(--radius-md)] bg-[linear-gradient(135deg,var(--primary),var(--secondary))]" />
+        )}
       </section>
 
       <section className="space-y-4">
+        {/* ── Card Info ── */}
         <article className="glass p-4">
-          <h1 className="text-2xl font-bold">{item.card?.player_name || item.card?.card_name || 'Unidentified Card'}</h1>
-          <p className="text-sm text-cv-muted">{[item.card?.year, item.card?.set_name].filter(Boolean).join(' · ')}</p>
-          <div className="mt-3 flex flex-wrap gap-2 text-xs">
-            <span className="badge">#{item.card?.card_number || 'N/A'}</span>
-            <span className="badge">{item.card?.sport || item.card?.game || 'Other'}</span>
-            <span className="badge">{item.card?.variation || 'Base'}</span>
-            <span className="badge">{item.card?.manufacturer || 'Unknown'}</span>
+          <div className="flex items-start justify-between gap-4">
+            <div className="min-w-0">
+              <h1 className="text-2xl font-bold">
+                {item.player_name || item.card_name || item.card?.player_name || item.card?.card_name || 'Unidentified Card'}
+              </h1>
+              <p className="text-sm text-cv-muted">
+                {[
+                  item.year ?? item.card?.year,
+                  item.set_name ?? item.card?.set_name,
+                  item.card_number ?? item.card?.card_number
+                    ? `#${item.card_number ?? item.card?.card_number}`
+                    : null,
+                ]
+                  .filter(Boolean)
+                  .join(' · ')}
+              </p>
+              <div className="mt-2 flex flex-wrap gap-2 text-xs">
+                <span className="badge">{item.sport ?? item.card?.sport ?? item.game ?? item.card?.game ?? 'Other'}</span>
+                <span className="badge">{item.variation ?? item.card?.variation ?? 'Base'}</span>
+                <span className="badge">{item.manufacturer ?? item.card?.manufacturer ?? 'Unknown'}</span>
+                {item.condition_note && <span className="badge">{item.condition_note}</span>}
+              </div>
+            </div>
+            <div className="shrink-0 text-right">
+              <p className="text-3xl font-bold">
+                ${((item.estimated_value_cents || 0) / 100).toFixed(2)}
+              </p>
+              {trend && (
+                <p className={`text-sm font-medium ${trend.up ? 'text-green-400' : 'text-red-400'}`}>
+                  {trend.up ? '▲' : '▼'} {Math.abs(trend.pct).toFixed(1)}% vs 7d avg
+                </p>
+              )}
+            </div>
           </div>
-          <p className="mt-3 text-sm text-cv-muted">{item.condition_note || 'No condition notes'}</p>
-          <p className="mt-1 text-sm">Quantity: {item.quantity || 1}</p>
-          <p className="mt-4 text-3xl font-bold">${((item.estimated_value_cents || 0) / 100).toFixed(2)}</p>
+
+          <p className="mt-2 text-sm text-cv-muted">Qty: {item.quantity || 1}</p>
 
           {editing ? (
             <div className="mt-4 space-y-2">
-              <input className="input" type="number" value={draft.quantity} onChange={(e) => setDraft((old) => ({ ...old, quantity: Number(e.target.value) }))} placeholder="Quantity" />
-              <input className="input" value={draft.condition_note} onChange={(e) => setDraft((old) => ({ ...old, condition_note: e.target.value }))} placeholder="Condition note" />
-              <input className="input" type="number" value={draft.estimated_value_cents} onChange={(e) => setDraft((old) => ({ ...old, estimated_value_cents: Number(e.target.value) }))} placeholder="Estimated value cents" />
+              <input
+                className="input"
+                type="number"
+                value={draft.quantity}
+                onChange={(e) => setDraft((old) => ({ ...old, quantity: Number(e.target.value) }))}
+                placeholder="Quantity"
+              />
+              <input
+                className="input"
+                value={draft.condition_note}
+                onChange={(e) => setDraft((old) => ({ ...old, condition_note: e.target.value }))}
+                placeholder="Condition note"
+              />
+              <input
+                className="input"
+                type="number"
+                value={draft.estimated_value_cents}
+                onChange={(e) =>
+                  setDraft((old) => ({ ...old, estimated_value_cents: Number(e.target.value) }))
+                }
+                placeholder="Estimated value cents"
+              />
               <div className="flex gap-2">
-                <button className="btn-primary" onClick={() => void saveEdit()} type="button">Save</button>
-                <button className="btn-ghost" onClick={() => setEditing(false)} type="button">Cancel</button>
+                <button className="btn-primary" onClick={() => void saveEdit()} type="button">
+                  Save
+                </button>
+                <button className="btn-ghost" onClick={() => setEditing(false)} type="button">
+                  Cancel
+                </button>
               </div>
             </div>
           ) : (
             <div className="mt-4 flex gap-2">
-              <button className="btn-secondary" onClick={() => setEditing(true)} type="button">Edit</button>
-              <button className="btn-ghost border-cv-danger/60 text-cv-danger" onClick={() => void removeItem()} type="button">Delete</button>
+              <button className="btn-secondary" onClick={() => setEditing(true)} type="button">
+                Edit
+              </button>
+              <button
+                className="btn-ghost border-cv-danger/60 text-cv-danger"
+                onClick={() => void removeItem()}
+                type="button"
+              >
+                Delete
+              </button>
             </div>
           )}
         </article>
 
+        {/* ── Price History Chart ── */}
         <article className="glass p-4">
           <div className="mb-3 flex items-center justify-between">
-            <h2 className="text-lg font-semibold">AI Grading</h2>
-            <button className="btn-primary" onClick={() => gradingMutation.mutate()} type="button">Get AI Grade Estimate</button>
-          </div>
-          {grade ? (
-            <div className="space-y-2 text-sm">
-              <span className="badge">{grade.estimated_grade_range}</span>
-              {[
-                ['Centering', grade.centering_score],
-                ['Corners', grade.corners_score],
-                ['Edges', grade.edges_score],
-                ['Surface', grade.surface_score],
-              ].map(([name, score]) => (
-                <div key={name as string}>
-                  <p className="mb-1 text-cv-muted">{name}</p>
-                  <div className="h-2 rounded-full bg-cv-bg2">
-                    <div className="h-2 rounded-full bg-cv-secondary" style={{ width: `${Number(score)}%` }} />
-                  </div>
-                </div>
+            <h2 className="text-lg font-semibold">Price History</h2>
+            <div className="flex gap-1">
+              {([30, 60, 90] as const).map((d) => (
+                <button
+                  key={d}
+                  className={d === chartDays ? 'btn-primary text-xs' : 'btn-secondary text-xs'}
+                  onClick={() => setChartDays(d)}
+                  type="button"
+                >
+                  {d}d
+                </button>
               ))}
-              <p>Confidence: {grade.confidence_score}%</p>
-              <p className="text-cv-muted">{grade.explanation}</p>
             </div>
+          </div>
+          {historyData?.history?.length ? (
+            <PriceChart history={historyData.history} days={chartDays} />
           ) : (
-            <p className="text-sm text-cv-muted">No grading estimate yet.</p>
+            <div className="flex h-32 items-center justify-center text-cv-muted text-sm">
+              No price history yet. Refresh comps to populate.
+            </div>
           )}
         </article>
 
+        {/* ── eBay Market ── */}
         <article className="glass p-4">
           <div className="mb-3 flex items-center justify-between">
-            <h2 className="text-lg font-semibold">eBay Comps</h2>
-            <button className="btn-secondary" onClick={() => refreshComps.mutate()} type="button">Refresh Comps</button>
+            <div className="flex gap-2">
+              <h2 className="text-lg font-semibold">eBay Market</h2>
+              <div className="flex gap-1">
+                <button
+                  className={compsTab === 'sold' ? 'btn-primary text-xs' : 'btn-secondary text-xs'}
+                  onClick={() => setCompsTab('sold')}
+                  type="button"
+                >
+                  Sold ({soldListings.length})
+                </button>
+                <button
+                  className={
+                    compsTab === 'active' ? 'btn-primary text-xs' : 'btn-secondary text-xs'
+                  }
+                  onClick={() => setCompsTab('active')}
+                  type="button"
+                >
+                  Active ({activeListings.length})
+                </button>
+              </div>
+            </div>
+            <button
+              className="btn-secondary text-xs"
+              onClick={() => refreshComps.mutate()}
+              type="button"
+            >
+              Refresh
+            </button>
           </div>
+
           {comps ? (
-            <div className="space-y-3">
-              <PriceRangeBar low={comps.low} avg={comps.avg} high={comps.high} count={comps.count} lastSynced={comps.lastSynced} />
-              <p className="text-xs text-cv-muted">Active listings: {comps.activeCount || 0} (${((comps.activeLow || 0) / 100).toFixed(2)}-${((comps.activeHigh || 0) / 100).toFixed(2)})</p>
-              <div className="space-y-2">
-                {(comps.sold || []).map((sale) => (
-                  <div key={sale.id} className="flex items-center justify-between rounded-[var(--radius-md)] border border-cv-border p-2 text-xs">
-                    <div>
-                      <p className="max-w-[360px] truncate font-medium">{sale.title}</p>
-                      <p className="text-cv-muted">{sale.sold_date} · {sale.sold_platform || 'eBay'}</p>
+            <div className="space-y-2">
+              {comps.summary.count > 0 && (
+                <div className="flex gap-4 text-xs text-cv-muted mb-3">
+                  <span>Low ${((comps.summary.low_price_cents ?? 0) / 100).toFixed(2)}</span>
+                  <span>Avg ${((comps.summary.average_price_cents ?? 0) / 100).toFixed(2)}</span>
+                  <span>High ${((comps.summary.high_price_cents ?? 0) / 100).toFixed(2)}</span>
+                  <span>{comps.summary.count} sold</span>
+                  {comps.last_synced && (
+                    <span>Synced {new Date(comps.last_synced).toLocaleDateString()}</span>
+                  )}
+                </div>
+              )}
+
+              {compsTab === 'sold' ? (
+                soldListings.length ? (
+                  soldListings.map((sale, i) => {
+                    const isAboveAvg = avgPrice != null && sale.sold_price_cents >= avgPrice
+                    const isBelowAvg = avgPrice != null && sale.sold_price_cents < avgPrice
+                    return (
+                      <div
+                        key={sale.id ?? i}
+                        className="flex items-center justify-between rounded-[var(--radius-md)] border border-cv-border p-2 text-xs"
+                      >
+                        <div className="min-w-0 flex-1">
+                          <p className="max-w-[320px] truncate font-medium">{sale.title}</p>
+                          <p className="text-cv-muted">
+                            {sale.condition_text && `${sale.condition_text} · `}
+                            {sale.sold_date
+                              ? new Date(sale.sold_date).toLocaleDateString()
+                              : ''}
+                          </p>
+                        </div>
+                        <div className="flex items-center gap-2 shrink-0">
+                          <span
+                            className={
+                              isAboveAvg
+                                ? 'font-semibold text-green-400'
+                                : isBelowAvg
+                                  ? 'font-semibold text-red-400'
+                                  : ''
+                            }
+                          >
+                            ${(sale.sold_price_cents / 100).toFixed(2)}
+                          </span>
+                          {sale.listing_url && (
+                            <a href={sale.listing_url} target="_blank" rel="noreferrer">
+                              <ExternalLink className="h-4 w-4 text-cv-secondary" />
+                            </a>
+                          )}
+                        </div>
+                      </div>
+                    )
+                  })
+                ) : (
+                  <p className="text-sm text-cv-muted">No sold comps yet.</p>
+                )
+              ) : activeListings.length ? (
+                activeListings.map((listing, i) => (
+                  <div
+                    key={listing.id ?? i}
+                    className="flex items-center justify-between rounded-[var(--radius-md)] border border-cv-border p-2 text-xs"
+                  >
+                    <div className="min-w-0 flex-1">
+                      <p className="max-w-[320px] truncate font-medium">{listing.title}</p>
+                      <p className="text-cv-muted">{listing.condition_text || 'No condition info'}</p>
                     </div>
-                    <div className="flex items-center gap-2">
-                      <span>${(sale.sold_price_cents / 100).toFixed(2)}</span>
-                      {sale.listing_url && <a href={sale.listing_url} target="_blank" rel="noreferrer"><ExternalLink className="h-4 w-4 text-cv-secondary" /></a>}
+                    <div className="flex items-center gap-2 shrink-0">
+                      <span>${(listing.sold_price_cents / 100).toFixed(2)}</span>
+                      {listing.listing_url && (
+                        <a href={listing.listing_url} target="_blank" rel="noreferrer">
+                          <ExternalLink className="h-4 w-4 text-cv-secondary" />
+                        </a>
+                      )}
                     </div>
                   </div>
-                ))}
-              </div>
+                ))
+              ) : (
+                <p className="text-sm text-cv-muted">No active listings found.</p>
+              )}
             </div>
           ) : (
             <p className="text-sm text-cv-muted">No comps yet. Try refresh.</p>
           )}
         </article>
 
-        <Link className="btn-ghost" to="/review">Back to review queue</Link>
+        {/* ── AI Grading ── */}
+        <article className="glass p-4">
+          <div className="mb-3 flex items-center justify-between">
+            <h2 className="text-lg font-semibold">AI Grading</h2>
+            <button
+              className="btn-primary"
+              onClick={() => gradingMutation.mutate()}
+              type="button"
+            >
+              Get AI Grade Estimate
+            </button>
+          </div>
+          {grade ? (
+            <div className="space-y-3">
+              <div className="flex items-center gap-3">
+                <span className="rounded-lg bg-cv-secondary/20 px-4 py-2 text-2xl font-bold text-cv-secondary">
+                  {grade.estimated_grade_range}
+                </span>
+                <span className="text-sm text-cv-muted">
+                  Confidence: {grade.confidence_score}%
+                </span>
+              </div>
+              {(
+                [
+                  ['Centering', grade.centering_score],
+                  ['Corners', grade.corners_score],
+                  ['Edges', grade.edges_score],
+                  ['Surface', grade.surface_score],
+                ] as [string, number][]
+              ).map(([name, score]) => (
+                <div key={name}>
+                  <div className="mb-1 flex justify-between text-xs">
+                    <span className="text-cv-muted">{name}</span>
+                    <span className="font-medium">{score}/10</span>
+                  </div>
+                  <div className="h-2 rounded-full bg-cv-bg2">
+                    <div
+                      className="h-2 rounded-full bg-cv-secondary"
+                      style={{ width: `${score * 10}%` }}
+                    />
+                  </div>
+                </div>
+              ))}
+              {grade.explanation && (
+                <p className="text-xs text-cv-muted">{grade.explanation}</p>
+              )}
+            </div>
+          ) : (
+            <p className="text-sm text-cv-muted">No grading estimate yet.</p>
+          )}
+        </article>
+
+        <Link className="btn-ghost" to="/review">
+          Back to review queue
+        </Link>
       </section>
     </div>
   )

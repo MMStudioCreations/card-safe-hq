@@ -24,8 +24,20 @@ export interface SalesCompProvider {
 // Card.card_number ≈ card_number
 // Card.rarity      ≈ variation
 
-function buildSearchQuery(card: Card): string {
-  const parts = [card.card_name, card.set_name, card.card_number, card.rarity]
+function buildSearchQuery(card: Card & {
+  player_name?: string | null;
+  year?: number | null;
+  sport?: string | null;
+  variation?: string | null;
+  manufacturer?: string | null;
+}): string {
+  const parts = [
+    card.player_name || card.card_name,
+    card.year ? String(card.year) : null,
+    card.set_name,
+    card.card_number,
+    card.variation || card.rarity,
+  ]
     .filter((v): v is string => v != null && v.trim().length > 0)
     .map((v) => v.trim());
 

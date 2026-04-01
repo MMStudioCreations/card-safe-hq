@@ -96,7 +96,8 @@ export async function getCollectionItem(env: Env, user: User, id: number): Promi
     `SELECT ci.*,
             ci.bbox_x, ci.bbox_y, ci.bbox_width, ci.bbox_height,
             c.game, c.set_name, c.card_name, c.card_number, c.rarity,
-            c.sport, c.player_name, c.year, c.variation, c.manufacturer
+            c.sport, c.player_name, c.year, c.variation, c.manufacturer,
+            c.image_url
      FROM collection_items ci
      LEFT JOIN cards c ON ci.card_id = c.id
      WHERE ci.id = ? AND ci.user_id = ?`,

@@ -23,6 +23,43 @@ function buildInserts(env: Env, cardId: number, comps: NormalizedComp[]) {
   );
 }
 
+// ── GET /api/comps/history/:cardId ───────────────────────────────────────────
+
+export async function getCompsHistory(env: Env, cardId: number): Promise<Response> {
+  const card = await queryOne<Card>(env.DB, 'SELECT * FROM cards WHERE id = ?', [cardId]);
+  if (!card) return notFound('Card not found');
+
+  const rows = await queryAll<{
+    sold_date: string;
+    sold_price_cents: number;
+    title: string;
+  }>(
+    env.DB,
+    `SELECT sold_date, sold_price_cents, title
+     FROM sales_comps
+     WHERE card_id = ? AND source = 'ebay_sold'
+     ORDER BY sold_date ASC`,
+    [cardId],
+  );
+
+  // Group by date (YYYY-MM-DD) and average price per day
+  const byDate = new Map<string, number[]>();
+  for (const row of rows) {
+    const date = row.sold_date ? row.sold_date.slice(0, 10) : null;
+    if (!date) continue;
+    if (!byDate.has(date)) byDate.set(date, []);
+    byDate.get(date)!.push(row.sold_price_cents);
+  }
+
+  const history = Array.from(byDate.entries()).map(([date, prices]) => ({
+    date,
+    avg_price_cents: Math.round(prices.reduce((a, b) => a + b, 0) / prices.length),
+    count: prices.length,
+  }));
+
+  return ok({ card_id: cardId, history });
+}
+
 // ── GET /api/comps/:cardId ────────────────────────────────────────────────────
 
 export async function getComps(env: Env, cardId: number): Promise<Response> {

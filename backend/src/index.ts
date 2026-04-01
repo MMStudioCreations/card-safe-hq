@@ -10,7 +10,7 @@ import {
   listCollection,
   updateCollectionItem,
 } from './routes/collection';
-import { getComps, refreshComps, searchComps } from './routes/comps';
+import { getComps, getCompsHistory, refreshComps, searchComps } from './routes/comps';
 import { estimateGrade, getLatestGrade } from './routes/grading';
 import { createRelease, getRelease, listReleases } from './routes/releases';
 import { uploadDirect } from './routes/uploads';
@@ -127,6 +127,12 @@ export default {
 
       if (method === 'GET' && pathname === '/api/comps/search') {
         return withCors(await searchComps(env, request), request, env);
+      }
+
+      if (pathname.startsWith('/api/comps/history/')) {
+        const id = parseId(pathname);
+        if (!id) return withCors(badRequest('Invalid card id'), request, env);
+        if (method === 'GET') return withCors(await getCompsHistory(env, id), request, env);
       }
 
       if (pathname.startsWith('/api/comps/refresh/')) {

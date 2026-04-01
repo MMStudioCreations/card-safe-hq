@@ -58,3 +58,11 @@ export function useGrade(collectionItemId?: number | string) {
     retry: false,
   })
 }
+
+export function useCompsHistory(cardId: number | undefined) {
+  return useQuery({
+    queryKey: ['comps-history', cardId],
+    queryFn: () => api.getCompsHistory(cardId!),
+    enabled: cardId != null,
+  })
+}

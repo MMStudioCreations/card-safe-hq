@@ -62,7 +62,7 @@ export type CollectionItem = {
 }
 
 export type SalesComp = {
-  id: number
+  id?: number
   source?: string
   title: string
   sold_price_cents: number
@@ -73,16 +73,16 @@ export type SalesComp = {
 }
 
 export type CompsResponse = {
-  cardId?: number
-  low: number
-  avg: number
-  high: number
-  count: number
-  lastSynced?: string
-  activeCount?: number
-  activeLow?: number
-  activeHigh?: number
-  sold?: SalesComp[]
+  sold: SalesComp[]
+  active: SalesComp[]
+  summary: {
+    low_price_cents: number | null
+    average_price_cents: number | null
+    high_price_cents: number | null
+    count: number
+  }
+  cached: boolean
+  last_synced: string
 }
 
 export type GradingEstimate = {
@@ -189,6 +189,15 @@ export const api = {
   getComps: (cardId: number | string) => http.get<never, CompsResponse>(`/api/comps/${cardId}`),
   refreshComps: (cardId: number | string) =>
     http.post<never, CompsResponse>(`/api/comps/refresh/${cardId}`),
+  getCompsHistory: (cardId: number | string) =>
+    http.get<never, {
+      card_id: number;
+      history: Array<{
+        date: string;
+        avg_price_cents: number;
+        count: number;
+      }>;
+    }>(`/api/comps/history/${cardId}`),
 
   estimateGrade: (collectionItemId: number) =>
     http.post<never, GradingEstimate>('/api/grading/estimate', { collectionItemId }),
