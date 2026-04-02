@@ -32,7 +32,7 @@ const ALLOWED_HEADERS = 'Content-Type, Authorization';
 function getAllowedOrigin(request: Request, env: Env): string {
   if (env.CORS_ORIGIN?.trim()) return env.CORS_ORIGIN.trim();
   const origin = request.headers.get('origin');
-  if (origin === 'https://card-vault-ai.pages.dev') return origin;
+  if (origin === 'https://cardsafehq.com') return origin;
   return '*';
 }
 
@@ -60,7 +60,7 @@ export default {
         return new Response(null, {
           status: 204,
           headers: {
-            'Access-Control-Allow-Origin': 'https://card-vault-ai.pages.dev',
+            'Access-Control-Allow-Origin': 'https://cardsafehq.com',
             'Access-Control-Allow-Methods': 'GET, POST, PATCH, DELETE, OPTIONS',
             'Access-Control-Allow-Headers': 'Content-Type, Authorization',
             'Access-Control-Allow-Credentials': 'true',
@@ -201,7 +201,7 @@ export default {
         const headers = new Headers();
         headers.set('Content-Type', object.httpMetadata?.contentType || 'image/jpeg');
         headers.set('Cache-Control', 'public, max-age=31536000, immutable');
-        headers.set('Access-Control-Allow-Origin', 'https://card-vault-ai.pages.dev');
+        headers.set('Access-Control-Allow-Origin', 'https://cardsafehq.com');
 
         return new Response(object.body, { headers });
       }

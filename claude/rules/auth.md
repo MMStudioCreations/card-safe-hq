@@ -6,7 +6,7 @@ paths:
   - "apps/web/src/pages/auth/**"
 ---
 
-# Auth Rules — CardVault AI
+# Auth Rules — Card Safe HQ
 
 ## Token Strategy
 - Access tokens: short-lived JWTs (15 min expiry) stored in memory (React state) only
@@ -46,6 +46,6 @@ const userId = body.user_id // user-supplied — cannot trust
 
 ## OAuth (if added later)
 - Validate `state` parameter on callback to prevent CSRF
-- Verify `aud` claim matches CardVault client ID
+- Verify `aud` claim matches Card Safe HQ client ID
 - Never store OAuth access tokens in DB — exchange for internal session immediately
 **

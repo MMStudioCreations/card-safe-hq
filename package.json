@@ -1,5 +1,6 @@
 {
-  "name": "card-vault-ai",
+  "name": "cardsafehq",
+  "description": "Card Safe HQ — The command center for card collectors",
   "version": "1.0.0",
   "private": true,
   "workspaces": [

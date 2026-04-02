@@ -123,7 +123,7 @@ export type VisionConfirmPayload = {
 }
 
 const http = axios.create({
-  baseURL: import.meta.env.VITE_API_URL ?? 'https://card-vault-ai.michaelamarino16.workers.dev',
+  baseURL: import.meta.env.VITE_API_URL ?? 'https://cardsafehq-api.michaelamarino16.workers.dev',
   withCredentials: true,
 });
 

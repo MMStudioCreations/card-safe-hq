@@ -1,9 +1,9 @@
-# CardVault AI — Project Memory
+# Card Safe HQ — Project Memory
 
 ## Project Identity
-CardVault AI is a production SaaS application for sports/trading card collection management.
+Card Safe HQ is a production SaaS application for sports/trading card collection management.
 Stack: Cloudflare Pages + Workers + D1 (SQLite) + R2 | React 19 / Vite / Tailwind | Claude Vision API | eBay comps API.
-Domain candidate: slabvault.io
+Domain candidate: cardsafehq.com
 
 ## Core Directive: Security-First
 **Before writing any function, think like an attacker.**

@@ -234,6 +234,9 @@ export default function CardDetailPage() {
               </div>
             </div>
             <div className="shrink-0 text-right">
+              <p className="text-xs text-cv-muted mb-1">
+                {(item as any).latest_sold_price_cents ? 'Last eBay Sale' : 'Estimated Value'}
+              </p>
               <p className="text-3xl font-bold">
                 ${(((item as any).latest_sold_price_cents || item.estimated_value_cents || 0) / 100).toFixed(2)}
               </p>
@@ -378,7 +381,7 @@ export default function CardDetailPage() {
 
             {/* eBay Summary */}
             <div className="rounded-[var(--radius-md)] bg-cv-surface p-3">
-              <p className="text-xs text-cv-muted mb-1">eBay Avg</p>
+              <p className="text-xs text-cv-muted mb-1">eBay Avg · 30d</p>
               <p className="text-lg font-bold">
                 {comps?.summary?.average_price_cents
                   ? `$${(comps.summary.average_price_cents / 100).toFixed(2)}`
@@ -529,23 +532,42 @@ export default function CardDetailPage() {
           <div className="mb-3 flex items-center justify-between">
             <h2 className="text-lg font-semibold">AI Grading</h2>
             <button
-              className="btn-primary"
+              className={grade ? 'btn-secondary' : 'btn-primary'}
               onClick={() => gradingMutation.mutate()}
               type="button"
             >
-              Get AI Grade Estimate
+              {grade ? 'Re-analyze' : 'Get AI Grade Estimate'}
             </button>
           </div>
           {grade ? (
             <div className="space-y-3">
-              <div className="flex items-center gap-3">
-                <span className="rounded-lg bg-cv-secondary/20 px-4 py-2 text-2xl font-bold text-cv-secondary">
-                  {grade.estimated_grade_range}
-                </span>
-                <span className="text-sm text-cv-muted">
-                  Confidence: {grade.confidence_score}%
-                </span>
-              </div>
+              {(() => {
+                const CONFIDENCE_THRESHOLD = 70
+                const confidence = grade.confidence_score
+                const confidenceColor = confidence >= 90
+                  ? 'var(--color-green-positive)'
+                  : confidence >= 70
+                  ? 'var(--color-orange)'
+                  : 'var(--color-red-negative)'
+                return (
+                  <>
+                    <div className="flex items-center gap-3">
+                      <span className="rounded-lg bg-cv-secondary/20 px-4 py-2 text-2xl font-bold text-cv-secondary">
+                        {grade.estimated_grade_range}
+                      </span>
+                      <span className="text-sm font-medium" style={{ color: confidenceColor }}>
+                        Confidence: {confidence}%
+                      </span>
+                    </div>
+                    {confidence < CONFIDENCE_THRESHOLD && (
+                      <div className="rounded-[var(--radius-md)] border border-[var(--color-red-negative)]/40 bg-[var(--color-red-negative)]/10 p-3 text-xs" style={{ color: 'var(--color-red-negative)' }}>
+                        <p className="font-semibold">Low confidence — estimate unreliable below {CONFIDENCE_THRESHOLD}%</p>
+                        <p className="mt-1 text-cv-muted">Retake photo or submit for manual review</p>
+                      </div>
+                    )}
+                  </>
+                )
+              })()}
               {(
                 [
                   ['Centering', grade.centering_score],

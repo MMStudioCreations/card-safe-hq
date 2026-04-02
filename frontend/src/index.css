@@ -19,6 +19,32 @@
   --radius-md: 1.05rem;
   --radius-lg: 1.45rem;
   --radius-xl: 1.9rem;
+
+  /* Card Safe HQ Brand Tokens */
+  --color-obsidian: #0B0F14;
+  --color-graphite: #1A222C;
+  --color-graphite-light: #232E3A;
+  --color-graphite-mid: #2C3A48;
+  --color-steel: #5B6770;
+  --color-steel-light: #8A97A0;
+  --color-offwhite: #F5F7FA;
+  --color-orange: #FF6A1A;
+  --color-orange-dim: #CC5514;
+  --color-orange-glow: rgba(255, 106, 26, 0.15);
+  --color-orange-subtle: rgba(255, 106, 26, 0.08);
+  --color-green-positive: #4CAF82;
+  --color-red-negative: #E2574B;
+  --color-border-default: rgba(255, 255, 255, 0.06);
+  --color-border-mid: rgba(255, 255, 255, 0.10);
+  --color-border-strong: rgba(255, 255, 255, 0.18);
+  --color-text-primary: #F5F7FA;
+  --color-text-secondary: #8A97A0;
+  --color-text-dim: #5B6770;
+
+  /* Typography */
+  --font-display: 'Syne', sans-serif;
+  --font-body: 'DM Sans', sans-serif;
+  --font-mono: 'DM Mono', monospace;
 }
 
 * {

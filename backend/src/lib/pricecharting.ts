@@ -34,7 +34,7 @@ export async function fetchPriceChartingData(
     try {
       const res = await fetch(searchUrl, {
         headers: {
-          'User-Agent': 'Mozilla/5.0 (compatible; CardVaultBot/1.0)',
+          'User-Agent': 'Mozilla/5.0 (compatible; CardSafeHQBot/1.0)',
           'Accept': 'text/html',
         },
         signal: controller.signal,
@@ -59,7 +59,7 @@ export async function fetchPriceChartingData(
     try {
       const res2 = await fetch(productUrl, {
         headers: {
-          'User-Agent': 'Mozilla/5.0 (compatible; CardVaultBot/1.0)',
+          'User-Agent': 'Mozilla/5.0 (compatible; CardSafeHQBot/1.0)',
           'Accept': 'text/html',
         },
         signal: controller2.signal,

@@ -1,4 +1,4 @@
-name = "card-vault-ai"
+name = "cardsafehq-api"
 main = "src/index.ts"
 compatibility_date = "2025-01-01"
 
@@ -12,7 +12,7 @@ binding = "BUCKET"
 bucket_name = "varimg"
 
 [vars]
-CORS_ORIGIN = "https://card-vault-ai.pages.dev"
+CORS_ORIGIN = "https://cardsafehq.com"
 
 [observability]
 enabled = true

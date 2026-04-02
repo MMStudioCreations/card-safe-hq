@@ -5,7 +5,7 @@ paths:
   - "packages/shared/**"
 ---
 
-# Security Rules — CardVault AI
+# Security Rules — Card Safe HQ
 
 ## Mandatory Security Checklist
 Before completing any function, verify:
@@ -29,7 +29,7 @@ Before completing any function, verify:
 - On limit exceeded: return `429` with `Retry-After` header — never silently drop
 
 ## CORS
-- Enforce strict CORS: whitelist only `https://slabvault.io` and `http://localhost:5173` (dev)
+- Enforce strict CORS: whitelist only `https://cardsafehq.com` and `http://localhost:5173` (dev)
 - Reject all requests from unlisted origins — return `403`, not silent failure
 - Never use `Access-Control-Allow-Origin: *` on any authenticated route
 

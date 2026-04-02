@@ -5,7 +5,7 @@ paths:
   - "apps/api/src/routes/**"
 ---
 
-# Data Layer Rules — CardVault AI (D1 + R2)
+# Data Layer Rules — Card Safe HQ (D1 + R2)
 
 ## D1 (SQLite) Query Rules
 **Non-negotiable: parameterized queries always.**

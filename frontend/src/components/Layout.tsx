@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react'
 import { NavLink, useNavigate } from 'react-router-dom'
-import { Camera, FolderKanban, Images, Layers, LogOut } from 'lucide-react'
+import { Camera, FolderKanban, Images, LogOut } from 'lucide-react'
 import { useQueryClient } from '@tanstack/react-query'
 import { api } from '../lib/api'
 import { useAuth, useCollection } from '../lib/hooks'
@@ -11,7 +11,6 @@ const links = [
   { to: '/', label: 'Collection', icon: FolderKanban },
   { to: '/scan', label: 'Scan', icon: Camera },
   { to: '/upload', label: 'Upload', icon: Images },
-  { to: '/deck', label: 'Deck Builder', icon: Layers },
 ]
 
 export default function Layout({ children }: Props) {
@@ -33,8 +32,8 @@ export default function Layout({ children }: Props) {
           <div className="flex items-center gap-3">
             <div className="h-11 w-11 rounded-[var(--radius-md)] bg-[linear-gradient(135deg,var(--primary),var(--secondary))]" />
             <div>
-              <h1 className="text-lg font-bold">CardVault AI</h1>
-              <p className="text-xs text-cv-muted">Premium collector vault</p>
+              <h1 className="text-lg font-bold">Card Safe HQ</h1>
+              <p className="text-xs text-cv-muted">The command center for card collectors</p>
             </div>
           </div>
           <div className="hidden items-center gap-2 sm:flex">
@@ -67,7 +66,7 @@ export default function Layout({ children }: Props) {
 
       <main>{children}</main>
 
-      <nav className="glass fixed inset-x-3 bottom-3 z-30 mx-auto grid max-w-[980px] grid-cols-4 gap-2 p-2 sm:hidden">
+      <nav className="glass fixed inset-x-3 bottom-3 z-30 mx-auto grid max-w-[980px] grid-cols-3 gap-2 p-2 sm:hidden">
         {links.map((link) => {
           const Icon = link.icon
           return (
@@ -80,7 +79,7 @@ export default function Layout({ children }: Props) {
               }
             >
               <Icon className="mb-1 h-4 w-4" />
-              {link.label === 'Deck Builder' ? 'Deck' : link.label}
+              {link.label}
             </NavLink>
           )
         })}

@@ -1,4 +1,4 @@
-# Card Vault AI Backend MVP (Cloudflare Workers + D1 + R2)
+# Card Safe HQ Backend MVP (Cloudflare Workers + D1 + R2)
 
 Production-minded MVP backend foundation for a mobile-first trading card collector app.
 
@@ -130,7 +130,7 @@ npx wrangler d1 execute <DB_NAME> --file seed/seed.sql
 - GitHub Pages entry file is `docs/index.html`.
 - The page is plain HTML/CSS/JS and renders immediately without any framework build step.
 - Set Worker URL in `docs/index.html` by assigning `window.WORKER_BASE_URL` (or by storing `CARD_VAULT_WORKER_URL` in `localStorage`).
-  - Example: `https://card-vault-ai-backend.<your-subdomain>.workers.dev`
+  - Example: `https://cardsafehq-api.<your-subdomain>.workers.dev`
 - Frontend buttons call:
   - `GET /api/health`
   - `GET /api/cards`

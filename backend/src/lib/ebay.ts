@@ -78,6 +78,7 @@ export async function searchSoldListings(
 
   const data = (await response.json()) as EbaySearchResponse;
   const items = data.itemSummaries ?? [];
+  console.log('[eBay] raw titles:', items.map((i) => i.title));
 
   return items
     .map((item): EbaySoldListing | null => {
@@ -97,18 +98,19 @@ export async function searchSoldListings(
 }
 
 export function buildSearchQuery(identification: CardIdentification): string {
+  // Prioritize most specific identifiers first: card_number, player_name, year, set_name, variation
   const parts = [
+    identification.card_number,
     identification.player_name,
     identification.year,
     identification.set_name,
-    identification.card_number,
     identification.variation,
   ]
     .map((v) => (v ?? '').trim())
     .filter((v) => v.length > 0);
 
   const query = parts.join(' ');
-  return query.length > 100 ? query.slice(0, 100).trimEnd() : query;
+  return query.length > 200 ? query.slice(0, 200).trimEnd() : query;
 }
 
 export async function fetchEbayComps(

@@ -1,4 +1,4 @@
-# CardVault AI
+# Card Safe HQ
 
 A mobile-first sports and trading card collection manager. Upload card photos, let Claude Vision identify them, review AI suggestions, and track eBay market prices — all in one place.
 
@@ -10,8 +10,8 @@ A mobile-first sports and trading card collection manager. Upload card photos, l
 
 ### 1. Clone and install
 ```bash
-git clone https://github.com/your-org/card-vault-ai.git
-cd card-vault-ai
+git clone https://github.com/your-org/card-safe-hq.git
+cd card-safe-hq
 npm install        # installs all workspace dependencies
 ```
 
@@ -34,10 +34,10 @@ CORS_ORIGIN=http://localhost:5173
 ### 3. Apply database migrations
 ```bash
 cd backend
-npx wrangler d1 create card-vault-ai
+npx wrangler d1 create card-safe-hq
 # copy the database_id into backend/wrangler.toml
-npx wrangler d1 execute card-vault-ai --local --file=migrations/0001_init.sql
-npx wrangler d1 execute card-vault-ai --local --file=migrations/0002_vision.sql
+npx wrangler d1 execute card-safe-hq --local --file=migrations/0001_init.sql
+npx wrangler d1 execute card-safe-hq --local --file=migrations/0002_vision.sql
 ```
 
 ### 4. Run locally
@@ -58,10 +58,10 @@ Open http://localhost:5173 — register an account, upload a card, confirm the A
 ### One-time setup
 ```bash
 # Create D1 database
-npx wrangler d1 create card-vault-ai
+npx wrangler d1 create card-safe-hq
 
 # Create R2 bucket
-npx wrangler r2 bucket create card-vault-ai-images
+npx wrangler r2 bucket create card-safe-hq-images
 
 # Set API key secret
 npx wrangler secret put ANTHROPIC_API_KEY
@@ -75,7 +75,7 @@ cd backend && npx wrangler deploy
 
 # Deploy frontend
 cd frontend && npm run build
-npx wrangler pages deploy dist --project-name=card-vault-ai
+npx wrangler pages deploy dist --project-name=card-safe-hq
 ```
 
 ---
