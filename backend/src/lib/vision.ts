@@ -53,56 +53,23 @@ Return a JSON object with exactly these fields:
 
 Set any field to null if it cannot be determined. Do not guess; use null when uncertain.`;
 
-// ── Anthropic API types ───────────────────────────────────────────────────────
-
 type ImageMediaType = 'image/jpeg' | 'image/png' | 'image/webp' | 'image/gif';
 
-interface ImageSourceUrl {
-  type: 'url';
-  url: string;
+interface OpenAIMessage {
+  role: 'user' | 'system';
+  content: string | Array<{
+    type: 'text' | 'image_url';
+    text?: string;
+    image_url?: { url: string; detail: 'high' | 'low' | 'auto' };
+  }>;
 }
 
-interface ImageSourceBase64 {
-  type: 'base64';
-  media_type: ImageMediaType;
-  data: string;
-}
-
-interface AnthropicMessage {
-  role: 'user';
-  content: Array<
-    | { type: 'image'; source: ImageSourceUrl | ImageSourceBase64 }
-    | { type: 'text'; text: string }
-  >;
-}
-
-interface AnthropicResponse {
-  content: Array<{ type: string; text: string }>;
+interface OpenAIResponse {
+  choices: Array<{
+    message: { content: string };
+  }>;
   error?: { message: string };
 }
-
-// ── Image source helpers ──────────────────────────────────────────────────────
-
-function parseDataUrl(dataUrl: string): { mediaType: ImageMediaType; base64: string } | null {
-  // Format: data:<mediaType>;base64,<data>
-  const match = dataUrl.match(/^data:(image\/[a-z]+);base64,(.+)$/);
-  if (!match) return null;
-  const mediaType = match[1] as ImageMediaType;
-  if (!['image/jpeg', 'image/png', 'image/webp', 'image/gif'].includes(mediaType)) return null;
-  return { mediaType, base64: match[2] };
-}
-
-function buildImageSource(imageUrl: string): ImageSourceUrl | ImageSourceBase64 {
-  if (imageUrl.startsWith('data:')) {
-    const parsed = parseDataUrl(imageUrl);
-    if (parsed) {
-      return { type: 'base64', media_type: parsed.mediaType, data: parsed.base64 };
-    }
-  }
-  return { type: 'url', url: imageUrl };
-}
-
-// ── R2 key → base64 data URL ──────────────────────────────────────────────────
 
 export async function r2KeyToDataUrl(env: Env, key: string): Promise<string | null> {
   const obj = await env.BUCKET.get(key);
@@ -111,7 +78,6 @@ export async function r2KeyToDataUrl(env: Env, key: string): Promise<string | nu
   const bytes = await obj.arrayBuffer();
   const mediaType = (obj.httpMetadata?.contentType ?? 'image/jpeg') as ImageMediaType;
 
-  // ArrayBuffer → base64 in the Workers runtime
   const uint8 = new Uint8Array(bytes);
   let binary = '';
   for (let i = 0; i < uint8.length; i++) {
@@ -122,49 +88,48 @@ export async function r2KeyToDataUrl(env: Env, key: string): Promise<string | nu
   return `data:${mediaType};base64,${base64}`;
 }
 
-// ── Core identification function ──────────────────────────────────────────────
-
 export async function identifyCard(env: Env, imageUrl: string): Promise<CardIdentification> {
   const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 10_000);
+  const timeoutId = setTimeout(() => controller.abort(), 30_000);
 
   let rawText = '';
 
   try {
-    const message: AnthropicMessage = {
-      role: 'user',
-      content: [
-        { type: 'image', source: buildImageSource(imageUrl) },
-        { type: 'text', text: USER_PROMPT },
-      ],
-    };
+    const messages: OpenAIMessage[] = [
+      { role: 'system', content: SYSTEM_PROMPT },
+      {
+        role: 'user',
+        content: [
+          { type: 'image_url', image_url: { url: imageUrl, detail: 'high' } },
+          { type: 'text', text: USER_PROMPT },
+        ],
+      },
+    ];
 
-    const response = await fetch('https://api.anthropic.com/v1/messages', {
+    const response = await fetch('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
       headers: {
-        'x-api-key': env.ANTHROPIC_API_KEY,
-        'anthropic-version': '2023-06-01',
-        'content-type': 'application/json',
+        'Authorization': `Bearer ${env.OPENAI_API_KEY}`,
+        'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        model: 'claude-sonnet-4-5',
+        model: 'gpt-4o',
         max_tokens: 1024,
-        system: SYSTEM_PROMPT,
-        messages: [message],
+        messages,
+        response_format: { type: 'json_object' },
       }),
       signal: controller.signal,
     });
 
     if (!response.ok) {
       const errBody = await response.text();
-      console.error('Anthropic API error', response.status, errBody);
+      console.error('OpenAI API error', response.status, errBody);
       return { ...FAILED_IDENTIFICATION, raw_response: errBody };
     }
 
-    const data = (await response.json()) as AnthropicResponse;
-    rawText = data.content?.[0]?.text ?? '';
+    const data = (await response.json()) as OpenAIResponse;
+    rawText = data.choices?.[0]?.message?.content ?? '';
 
-    // Strip any accidental markdown fences before parsing
     const jsonText = rawText.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '').trim();
     const parsed = JSON.parse(jsonText) as Partial<CardIdentification>;
 
@@ -185,7 +150,7 @@ export async function identifyCard(env: Env, imageUrl: string): Promise<CardIden
     };
   } catch (err) {
     if (err instanceof Error && err.name === 'AbortError') {
-      console.error('identifyCard: Anthropic API timed out after 10s');
+      console.error('identifyCard: OpenAI API timed out after 30s');
     } else {
       console.error('identifyCard: failed to parse response', err, 'raw:', rawText);
     }
