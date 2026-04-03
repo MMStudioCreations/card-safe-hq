@@ -2,6 +2,7 @@ import { Navigate, Route, Routes } from 'react-router-dom'
 import Layout from './components/Layout'
 import ProtectedRoute from './components/ProtectedRoute'
 import CardDetailPage from './pages/CardDetailPage'
+import CollectionPage from './pages/CollectionPage'
 import DashboardPage from './pages/DashboardPage'
 import DeckBuilderPage from './pages/DeckBuilderPage'
 import LoginPage from './pages/LoginPage'
@@ -20,7 +21,7 @@ export default function App() {
         element={
           <ProtectedRoute>
             <Layout>
-              <DashboardPage />
+              <CollectionPage />
             </Layout>
           </ProtectedRoute>
         }

@@ -5,41 +5,31 @@ import { useCollection } from '../lib/hooks'
 
 const sortOptions = ['Value High→Low', 'Value Low→High', 'Year Newest', 'Date Added'] as const
 
+const PRODUCT_TYPE_MAP: Record<string, string> = {
+  'Single Card': 'single_card',
+  'Booster Pack': 'booster_pack',
+  'Booster Box': 'booster_box',
+  'Elite Trainer Box': 'etb',
+  'Tin': 'tin',
+  'Bundle': 'bundle',
+  'Promo Pack': 'promo_pack',
+  'Other Sealed': 'other_sealed',
+}
+
+const productTypeOptions = ['All Types', ...Object.keys(PRODUCT_TYPE_MAP)]
+
 export default function DashboardPage() {
   const { data = [], isLoading } = useCollection(true)
   const [search, setSearch] = useState('')
   const [sport, setSport] = useState('All Sports')
   const [sort, setSort] = useState<(typeof sortOptions)[number]>('Value High→Low')
-  const [productFilter, setProductFilter] = useState<string>('All Types')
+  const [productType, setProductType] = useState('All Types')
 
   const sports = useMemo(() => {
     const values = new Set<string>()
     data.forEach((item) => values.add(item.card?.sport || item.card?.game || item.sport || item.game || 'Other'))
     return ['All Sports', ...Array.from(values)]
   }, [data])
-
-  const productTypes = [
-    'All Types',
-    'Single Card',
-    'Booster Pack',
-    'Booster Box',
-    'Elite Trainer Box',
-    'Tin',
-    'Bundle',
-    'Promo Pack',
-    'Other Sealed',
-  ]
-
-  const PRODUCT_TYPE_MAP: Record<string, string> = {
-    'Single Card': 'single_card',
-    'Booster Pack': 'booster_pack',
-    'Booster Box': 'booster_box',
-    'Elite Trainer Box': 'etb',
-    'Tin': 'tin',
-    'Bundle': 'bundle',
-    'Promo Pack': 'promo_pack',
-    'Other Sealed': 'other_sealed',
-  }
 
   const totals = useMemo(() => {
     const totalValue = data.reduce((sum, item) => {
@@ -63,13 +53,13 @@ export default function DashboardPage() {
         return sport === 'All Sports' ? true : itemSport === sport
       })
       .filter((item) => {
-        if (productFilter === 'All Types') return true
-        const itemType = item.product_type ?? 'single_card'
-        return itemType === PRODUCT_TYPE_MAP[productFilter]
-      })
-      .filter((item) => {
         const target = `${item.card?.player_name || item.player_name || ''} ${item.card?.card_name || item.card_name || ''}`.toLowerCase()
         return target.includes(search.toLowerCase())
+      })
+      .filter((item) => {
+        if (productType === 'All Types') return true
+        const itemType = (item as any).product_type ?? 'single_card'
+        return itemType === PRODUCT_TYPE_MAP[productType]
       })
       .sort((a, b) => {
         const aVal = a.latest_sold_price_cents ?? a.estimated_value_cents ?? 0
@@ -79,7 +69,7 @@ export default function DashboardPage() {
         if (sort === 'Year Newest') return (b.card?.year || b.year || 0) - (a.card?.year || a.year || 0)
         return new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime()
       })
-  }, [data, search, sort, sport])
+  }, [data, search, sort, sport, productType])
 
   if (isLoading) return <div className="glass p-6">Loading vault...</div>
 
@@ -114,11 +104,17 @@ export default function DashboardPage() {
       </section>
 
       <section className="glass p-4">
-        <div className="grid gap-3 md:grid-cols-4">
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
           <input className="input" value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search player or card" />
-          <select className="input" value={sport} onChange={(e) => setSport(e.target.value)}>{sports.map((s) => <option key={s}>{s}</option>)}</select>
-          <select className="input" value={sort} onChange={(e) => setSort(e.target.value as (typeof sortOptions)[number])}>{sortOptions.map((s) => <option key={s}>{s}</option>)}</select>
-          <select className="input" value={productFilter} onChange={(e) => setProductFilter(e.target.value)}>{productTypes.map((t) => <option key={t}>{t}</option>)}</select>
+          <select className="input" value={sport} onChange={(e) => setSport(e.target.value)}>
+            {sports.map((s) => <option key={s}>{s}</option>)}
+          </select>
+          <select className="input" value={productType} onChange={(e) => setProductType(e.target.value)}>
+            {productTypeOptions.map((t) => <option key={t}>{t}</option>)}
+          </select>
+          <select className="input" value={sort} onChange={(e) => setSort(e.target.value as (typeof sortOptions)[number])}>
+            {sortOptions.map((s) => <option key={s}>{s}</option>)}
+          </select>
         </div>
       </section>
 
