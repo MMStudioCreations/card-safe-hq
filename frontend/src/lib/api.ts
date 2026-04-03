@@ -114,6 +114,20 @@ export type Release = {
   created_at: string
 }
 
+export type WishlistItem = {
+  id: number
+  ptcg_id: string
+  name: string
+  set_name: string | null
+  set_series: string | null
+  card_number: string | null
+  rarity: string | null
+  image_url: string | null
+  tcgplayer_price_cents: number | null
+  tcgplayer_url: string | null
+  created_at: string
+}
+
 export type VisionConfirmPayload = {
   player_name: string
   year: number | null
@@ -310,10 +324,17 @@ export const api = {
       }>;
     }>(`/api/meta/${game}`),
 
-  analyzeDeck: (payload: { key_cards: string[]; game: string; deck_size: number }) =>
+  analyzeDeck: (payload: { key_cards: string[]; full_deck?: Array<{name:string;qty:number;category:string;search:string}> | null; game: string; deck_size: number }) =>
     http.post<never, {
       have: CollectionItem[];
-      need: string[];
+      need: Array<{
+        name: string;
+        qty: number;
+        category: string;
+        search: string;
+        ebay_url: string;
+        tcgplayer_url: string;
+      }>;
       completion_pct: number;
       have_count: number;
       need_count: number;
@@ -333,4 +354,19 @@ export const api = {
       cards_json: string;
       created_at: string;
     }>>('/api/decks'),
+
+  listWishlist: () => http.get<never, WishlistItem[]>('/api/wishlist'),
+  addWishlistItem: (payload: {
+    ptcg_id: string
+    name: string
+    set_name?: string | null
+    set_series?: string | null
+    card_number?: string | null
+    rarity?: string | null
+    image_url?: string | null
+    tcgplayer_price_cents?: number | null
+    tcgplayer_url?: string | null
+  }) => http.post<never, { added: boolean }>('/api/wishlist', payload),
+  removeWishlistItem: (ptcgId: string) =>
+    http.delete<never, { removed: boolean }>(`/api/wishlist/${encodeURIComponent(ptcgId)}`),
 }

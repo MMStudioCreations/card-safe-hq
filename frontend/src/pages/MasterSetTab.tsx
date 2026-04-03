@@ -1,10 +1,11 @@
 import { useMemo, useState } from 'react'
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { api } from '../lib/api'
 
 type ChecklistFilter = 'all' | 'owned' | 'missing'
 
 export default function MasterSetTab() {
+  const queryClient = useQueryClient()
   const [selectedSet, setSelectedSet] = useState('')
   const [showAllSets, setShowAllSets] = useState(false)
   const [checklistFilter, setChecklistFilter] = useState<ChecklistFilter>('all')
@@ -20,6 +21,27 @@ export default function MasterSetTab() {
     queryFn: () => api.getSetChecklist(selectedSet),
     enabled: !!selectedSet,
     staleTime: 1000 * 60 * 30,
+  })
+
+  const { data: wishlist = [] } = useQuery({
+    queryKey: ['wishlist'],
+    queryFn: () => api.listWishlist(),
+  })
+
+  const wishlistIds = useMemo(() => new Set(wishlist.map(w => w.ptcg_id)), [wishlist])
+
+  const addToWishlist = useMutation({
+    mutationFn: (card: NonNullable<typeof checklist>['cards'][0]) => api.addWishlistItem({
+      ptcg_id: card.id,
+      name: card.name,
+      set_name: setsData?.sets.find(s => s.id === selectedSet)?.name ?? null,
+      set_series: setsData?.sets.find(s => s.id === selectedSet)?.series ?? null,
+      card_number: card.number,
+      rarity: card.rarity ?? null,
+      image_url: card.image ?? null,
+      tcgplayer_price_cents: card.tcgplayer_price ? Math.round(card.tcgplayer_price * 100) : null,
+    }),
+    onSuccess: () => void queryClient.invalidateQueries({ queryKey: ['wishlist'] }),
   })
 
   const displayedCards = useMemo(() => {
@@ -148,6 +170,20 @@ export default function MasterSetTab() {
                     {card.rarity && <p className="text-[9px] text-cv-muted mt-0.5 truncate">{card.rarity}</p>}
                     {card.tcgplayer_price != null && (
                       <p className="text-[9px] text-cv-muted">${card.tcgplayer_price.toFixed(2)}</p>
+                    )}
+                    {!card.owned && (
+                      <button
+                        className={`mt-1 w-full rounded text-[9px] py-0.5 font-medium transition ${
+                          wishlistIds.has(card.id)
+                            ? 'bg-[var(--primary)]/20 text-[var(--primary)]'
+                            : 'bg-cv-surface text-cv-muted hover:bg-[var(--primary)]/10 hover:text-[var(--primary)]'
+                        }`}
+                        onClick={() => !wishlistIds.has(card.id) && addToWishlist.mutate(card)}
+                        disabled={wishlistIds.has(card.id) || addToWishlist.isPending}
+                        type="button"
+                      >
+                        {wishlistIds.has(card.id) ? '★ Wanted' : '+ Wishlist'}
+                      </button>
                     )}
                   </div>
                 </div>

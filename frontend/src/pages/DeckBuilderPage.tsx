@@ -21,7 +21,14 @@ interface MetaDeck {
 
 interface DeckAnalysis {
   have: CollectionItem[]
-  need: string[]
+  need: Array<{
+    name: string
+    qty: number
+    category: string
+    search: string
+    ebay_url: string
+    tcgplayer_url: string
+  }>
   completion_pct: number
   have_count: number
   need_count: number
@@ -230,6 +237,7 @@ export default function DeckBuilderPage() {
     try {
       const result = await api.analyzeDeck({
         key_cards: deck.key_cards,
+        full_deck: (deck as any).full_deck ?? null,
         game: selectedGame,
         deck_size: game.deckSize,
       })
@@ -364,21 +372,38 @@ export default function DeckBuilderPage() {
 
                 {deckAnalysis.need.length > 0 && (
                   <div>
-                    <p className="text-xs font-semibold text-red-400 mb-1 flex items-center gap-1">
+                    <p className="text-xs font-semibold text-red-400 mb-2 flex items-center gap-1">
                       <XCircle className="h-3 w-3" /> Need ({deckAnalysis.need_count})
                     </p>
-                    <div className="space-y-1">
-                      {deckAnalysis.need.map(name => (
-                        <div key={name} className="flex items-center justify-between text-xs">
-                          <span className="text-cv-muted">{name}</span>
-                          <a
-                            href={`https://www.ebay.com/sch/i.html?_nkw=${encodeURIComponent(name + ' pokemon card')}`}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="text-[var(--primary)] hover:underline shrink-0"
-                          >
-                            eBay →
-                          </a>
+                    <div className="space-y-1.5">
+                      {deckAnalysis.need.map(card => (
+                        <div key={card.name} className="rounded-[var(--radius-sm)] bg-cv-bg2 p-2">
+                          <div className="flex items-center justify-between mb-1">
+                            <span className="text-xs font-medium">{card.qty}× {card.name}</span>
+                            <span className={`text-[9px] rounded px-1 py-0.5 ${
+                              card.category === 'pokemon' ? 'bg-yellow-500/20 text-yellow-300' :
+                              card.category === 'trainer' ? 'bg-blue-500/20 text-blue-300' :
+                              'bg-green-500/20 text-green-300'
+                            }`}>{card.category}</span>
+                          </div>
+                          <div className="flex gap-2">
+                            <a
+                              href={card.ebay_url}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="text-[9px] text-[var(--primary)] hover:underline"
+                            >
+                              eBay →
+                            </a>
+                            <a
+                              href={card.tcgplayer_url}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="text-[9px] text-cv-muted hover:underline"
+                            >
+                              TCGPlayer →
+                            </a>
+                          </div>
                         </div>
                       ))}
                     </div>

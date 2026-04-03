@@ -183,3 +183,52 @@ export async function deleteCollectionItem(env: Env, user: User, id: number): Pr
   await run(env.DB, 'DELETE FROM collection_items WHERE id = ? AND user_id = ?', [id, user.id]);
   return ok({ deleted: true });
 }
+
+// ── Wishlist routes ──────────────────────────────────────────────────────────
+
+export async function listWishlist(env: Env, user: User): Promise<Response> {
+  const items = await queryAll(
+    env.DB,
+    'SELECT * FROM wishlist_items WHERE user_id = ? ORDER BY created_at DESC',
+    [user.id],
+  );
+  return ok(items);
+}
+
+export async function addWishlistItem(env: Env, request: Request, user: User): Promise<Response> {
+  const body = await parseJsonBody<Record<string, unknown>>(request);
+  if (body instanceof Response) return body;
+
+  try {
+    const ptcgId = asString(body.ptcg_id, 'ptcg_id', 100, true);
+    const name = asString(body.name, 'name', 200, true);
+    const setName = asString(body.set_name, 'set_name', 200);
+    const setSeries = asString(body.set_series, 'set_series', 200);
+    const cardNumber = asString(body.card_number, 'card_number', 50);
+    const rarity = asString(body.rarity, 'rarity', 100);
+    const imageUrl = asString(body.image_url, 'image_url', 500);
+    const tcgPrice = asInt(body.tcgplayer_price_cents, 'tcgplayer_price_cents', 0, 10_000_000);
+    const tcgUrl = asString(body.tcgplayer_url, 'tcgplayer_url', 500);
+
+    await run(
+      env.DB,
+      `INSERT OR IGNORE INTO wishlist_items
+         (user_id, ptcg_id, name, set_name, set_series, card_number, rarity, image_url, tcgplayer_price_cents, tcgplayer_url)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [user.id, ptcgId, name, setName, setSeries, cardNumber, rarity, imageUrl, tcgPrice, tcgUrl],
+    );
+
+    return ok({ added: true });
+  } catch (err) {
+    return badRequest(err instanceof Error ? err.message : 'Invalid wishlist item');
+  }
+}
+
+export async function removeWishlistItem(env: Env, user: User, ptcgId: string): Promise<Response> {
+  await run(
+    env.DB,
+    'DELETE FROM wishlist_items WHERE user_id = ? AND ptcg_id = ?',
+    [user.id, ptcgId],
+  );
+  return ok({ removed: true });
+}

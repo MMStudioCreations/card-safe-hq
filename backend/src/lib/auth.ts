@@ -41,6 +41,23 @@ export async function loginUser(env: Env, email: string, password: string) {
     return null;
   }
 
+  // Limit to 10 concurrent sessions per user — expire oldest if exceeded
+  const sessionCount = await queryOne<{ cnt: number }>(
+    env.DB,
+    'SELECT COUNT(*) as cnt FROM sessions WHERE user_id = ? AND expires_at > CURRENT_TIMESTAMP',
+    [user.id],
+  );
+  if ((sessionCount?.cnt ?? 0) >= 10) {
+    // Delete the oldest session for this user
+    await run(
+      env.DB,
+      `DELETE FROM sessions WHERE id = (
+         SELECT id FROM sessions WHERE user_id = ? ORDER BY created_at ASC LIMIT 1
+       )`,
+      [user.id],
+    );
+  }
+
   const sessionId = crypto.randomUUID();
   const expiresAt = new Date(Date.now() + SESSION_DAYS * 24 * 60 * 60 * 1000).toISOString();
 

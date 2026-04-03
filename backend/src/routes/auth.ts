@@ -9,10 +9,12 @@ export async function handleRegister(env: Env, request: Request): Promise<Respon
 
   try {
     const email = asEmail(body.email);
-    const password = asString(body.password, 'password', 128, true);
-    if (!password || password.length < 8) {
-      return badRequest('password must be at least 8 characters');
-    }
+    const passwordRaw = body.password;
+    if (typeof passwordRaw !== 'string') return badRequest('password is required');
+    if (passwordRaw.length < 8) return badRequest('Password must be at least 8 characters');
+    if (passwordRaw.length > 72) return badRequest('Password must be 72 characters or fewer');
+    // Note: bcrypt/PBKDF2 truncates at 72 bytes — cap here prevents DoS via hashing enormous inputs
+    const password = passwordRaw.trim();
     const username = asString(body.username, 'username', 50);
 
     const user = await registerUser(env, { email, password, username });
@@ -28,8 +30,10 @@ export async function handleLogin(env: Env, request: Request): Promise<Response>
 
   try {
     const email = asEmail(body.email);
-    const password = asString(body.password, 'password', 128, true);
-    if (!password) return badRequest('password is required');
+    const passwordRaw = body.password;
+    if (typeof passwordRaw !== 'string' || !passwordRaw) return badRequest('password is required');
+    if (passwordRaw.length > 72) return unauthorized('Invalid email or password');
+    const password = passwordRaw;
 
     const result = await loginUser(env, email, password);
     if (!result) {

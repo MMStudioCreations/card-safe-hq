@@ -2,6 +2,13 @@ import type { Env } from '../types';
 import { ok } from '../lib/json';
 import { queryAll } from '../lib/db';
 
+type FullDeckCard = {
+  name: string;
+  qty: number;
+  category: 'pokemon' | 'trainer' | 'energy';
+  search: string;
+};
+
 // Get curated meta deck templates per game
 const META_DECKS: Record<string, Array<{
   name: string;
@@ -12,6 +19,7 @@ const META_DECKS: Record<string, Array<{
   description: string;
   key_cards: string[];
   strategy: string;
+  full_deck?: FullDeckCard[];
 }>> = {
   pokemon: [
     {
@@ -23,16 +31,30 @@ const META_DECKS: Record<string, Array<{
       description: 'Use Pidgeot ex to search for any card each turn, powering up Charizard ex for massive damage.',
       key_cards: ['Charizard ex', 'Pidgeot ex', 'Charmander', 'Charmeleon', 'Pidgey', 'Pidgeot'],
       strategy: 'aggro',
-    },
-    {
-      name: 'Miraidon ex',
-      archetype: 'Miraidon ex',
-      game: 'pokemon',
-      format: 'Standard',
-      theme: 'Aggro',
-      description: 'Fast electric deck using Miraidon ex to bench Basic Pokémon and attack immediately.',
-      key_cards: ['Miraidon ex', 'Raichu V', 'Electric Generator', 'Flaaffy'],
-      strategy: 'aggro',
+      full_deck: [
+        { name: 'Charmander', qty: 4, category: 'pokemon', search: 'Charmander OBF 026 pokemon card' },
+        { name: 'Charmeleon', qty: 2, category: 'pokemon', search: 'Charmeleon OBF pokemon card' },
+        { name: 'Charizard ex', qty: 3, category: 'pokemon', search: 'Charizard ex OBF 125 pokemon card' },
+        { name: 'Pidgey', qty: 3, category: 'pokemon', search: 'Pidgey OBF pokemon card' },
+        { name: 'Pidgeotto', qty: 1, category: 'pokemon', search: 'Pidgeotto OBF pokemon card' },
+        { name: 'Pidgeot ex', qty: 3, category: 'pokemon', search: 'Pidgeot ex OBF 164 pokemon card' },
+        { name: 'Mew ex', qty: 2, category: 'pokemon', search: 'Mew ex MEW 232 pokemon card' },
+        { name: 'Lumineon V', qty: 1, category: 'pokemon', search: 'Lumineon V BRS 040 pokemon card' },
+        { name: 'Radiant Charizard', qty: 1, category: 'pokemon', search: 'Radiant Charizard PGO 011 pokemon card' },
+        { name: "Professor's Research", qty: 4, category: 'trainer', search: "Professor's Research pokemon trainer card" },
+        { name: 'Arven', qty: 4, category: 'trainer', search: 'Arven SVI pokemon trainer card' },
+        { name: "Boss's Orders", qty: 2, category: 'trainer', search: "Boss's Orders PAL pokemon trainer card" },
+        { name: 'Rare Candy', qty: 4, category: 'trainer', search: 'Rare Candy SVI pokemon trainer card' },
+        { name: 'Ultra Ball', qty: 4, category: 'trainer', search: 'Ultra Ball SVI pokemon trainer card' },
+        { name: 'Nest Ball', qty: 4, category: 'trainer', search: 'Nest Ball SVI pokemon trainer card' },
+        { name: 'Super Rod', qty: 2, category: 'trainer', search: 'Super Rod PAL pokemon trainer card' },
+        { name: 'Pal Pad', qty: 2, category: 'trainer', search: 'Pal Pad SVI pokemon trainer card' },
+        { name: 'Lost Vacuum', qty: 2, category: 'trainer', search: 'Lost Vacuum CRZ pokemon trainer card' },
+        { name: 'Counter Catcher', qty: 2, category: 'trainer', search: 'Counter Catcher PAR pokemon trainer card' },
+        { name: 'Pokégear 3.0', qty: 2, category: 'trainer', search: 'Pokegear 3.0 pokemon trainer card' },
+        { name: 'Magma Basin', qty: 3, category: 'trainer', search: 'Magma Basin BRS pokemon trainer card' },
+        { name: 'Fire Energy', qty: 11, category: 'energy', search: 'Fire Energy Basic pokemon energy card' },
+      ],
     },
     {
       name: 'Gardevoir ex',
@@ -43,6 +65,57 @@ const META_DECKS: Record<string, Array<{
       description: 'Accelerate Psychic energy from hand with Gardevoir ex ability for powerful attacks.',
       key_cards: ['Gardevoir ex', 'Ralts', 'Kirlia', 'Zacian V', 'Psychic Energy'],
       strategy: 'control',
+      full_deck: [
+        { name: 'Ralts', qty: 4, category: 'pokemon', search: 'Ralts SIT 067 pokemon card' },
+        { name: 'Kirlia', qty: 3, category: 'pokemon', search: 'Kirlia SIT 068 pokemon card' },
+        { name: 'Gardevoir ex', qty: 3, category: 'pokemon', search: 'Gardevoir ex SVI 086 pokemon card' },
+        { name: 'Zacian V', qty: 2, category: 'pokemon', search: 'Zacian V SHF 016 pokemon card' },
+        { name: 'Drifloon', qty: 2, category: 'pokemon', search: 'Drifloon SIT pokemon card' },
+        { name: 'Drifblim', qty: 1, category: 'pokemon', search: 'Drifblim SIT pokemon card' },
+        { name: 'Cresselia', qty: 2, category: 'pokemon', search: 'Cresselia LOR pokemon card' },
+        { name: 'Mew ex', qty: 1, category: 'pokemon', search: 'Mew ex MEW 232 pokemon card' },
+        { name: 'Lumineon V', qty: 1, category: 'pokemon', search: 'Lumineon V BRS 040 pokemon card' },
+        { name: "Professor's Research", qty: 4, category: 'trainer', search: "Professor's Research pokemon trainer" },
+        { name: 'Arven', qty: 3, category: 'trainer', search: 'Arven SVI pokemon trainer card' },
+        { name: "Boss's Orders", qty: 2, category: 'trainer', search: "Boss's Orders PAL pokemon trainer card" },
+        { name: 'Iono', qty: 3, category: 'trainer', search: 'Iono PAF pokemon trainer card' },
+        { name: 'Ultra Ball', qty: 4, category: 'trainer', search: 'Ultra Ball SVI pokemon trainer card' },
+        { name: 'Rare Candy', qty: 4, category: 'trainer', search: 'Rare Candy SVI pokemon trainer card' },
+        { name: 'Fog Crystal', qty: 3, category: 'trainer', search: 'Fog Crystal CRE pokemon trainer card' },
+        { name: 'Super Rod', qty: 2, category: 'trainer', search: 'Super Rod PAL pokemon trainer card' },
+        { name: 'Lost Vacuum', qty: 2, category: 'trainer', search: 'Lost Vacuum CRZ pokemon trainer card' },
+        { name: 'Technical Machine: Devolution', qty: 1, category: 'trainer', search: 'Technical Machine Devolution PAR pokemon card' },
+        { name: 'Psychic Energy', qty: 11, category: 'energy', search: 'Psychic Energy Basic pokemon energy card' },
+      ],
+    },
+    {
+      name: 'Miraidon ex',
+      archetype: 'Miraidon ex',
+      game: 'pokemon',
+      format: 'Standard',
+      theme: 'Aggro',
+      description: 'Fast electric deck using Miraidon ex to bench Basic Pokémon and attack immediately.',
+      key_cards: ['Miraidon ex', 'Raichu V', 'Electric Generator', 'Flaaffy'],
+      strategy: 'aggro',
+      full_deck: [
+        { name: 'Miraidon ex', qty: 4, category: 'pokemon', search: 'Miraidon ex SVI 81 pokemon card' },
+        { name: 'Raichu V', qty: 2, category: 'pokemon', search: 'Raichu V SIT 045 pokemon card' },
+        { name: 'Flaaffy', qty: 2, category: 'pokemon', search: 'Flaaffy EVS 055 pokemon card' },
+        { name: 'Regieleki V', qty: 2, category: 'pokemon', search: 'Regieleki V SIT pokemon card' },
+        { name: 'Raikou V', qty: 1, category: 'pokemon', search: 'Raikou V BRS pokemon card' },
+        { name: 'Lumineon V', qty: 1, category: 'pokemon', search: 'Lumineon V BRS 040 pokemon card' },
+        { name: 'Tapu Koko Prism Star', qty: 1, category: 'pokemon', search: 'Tapu Koko Prism Star TM pokemon card' },
+        { name: "Professor's Research", qty: 4, category: 'trainer', search: "Professor's Research pokemon trainer" },
+        { name: "Boss's Orders", qty: 2, category: 'trainer', search: "Boss's Orders PAL pokemon trainer card" },
+        { name: 'Iono', qty: 2, category: 'trainer', search: 'Iono PAF pokemon trainer card' },
+        { name: 'Ultra Ball', qty: 4, category: 'trainer', search: 'Ultra Ball SVI pokemon trainer card' },
+        { name: 'Nest Ball', qty: 4, category: 'trainer', search: 'Nest Ball SVI pokemon trainer card' },
+        { name: 'Electric Generator', qty: 4, category: 'trainer', search: 'Electric Generator SVI pokemon trainer card' },
+        { name: 'Energy Search', qty: 2, category: 'trainer', search: 'Energy Search pokemon trainer card' },
+        { name: 'Switch', qty: 3, category: 'trainer', search: 'Switch SVI pokemon trainer card' },
+        { name: 'Path to the Peak', qty: 3, category: 'trainer', search: 'Path to the Peak CRE pokemon trainer card' },
+        { name: 'Lightning Energy', qty: 15, category: 'energy', search: 'Lightning Energy Basic pokemon energy card' },
+      ],
     },
     {
       name: 'Lost Box',
@@ -53,6 +126,29 @@ const META_DECKS: Record<string, Array<{
       description: 'Use the Lost Zone mechanic to power up Cramorant and Sableye for free attacks.',
       key_cards: ['Cramorant', 'Sableye', 'Comfey', 'Mirage Gate', 'Colress Machine'],
       strategy: 'control',
+      full_deck: [
+        { name: 'Comfey', qty: 4, category: 'pokemon', search: 'Comfey LOR 079 pokemon card' },
+        { name: 'Cramorant', qty: 3, category: 'pokemon', search: 'Cramorant LOR 050 pokemon card' },
+        { name: 'Sableye', qty: 3, category: 'pokemon', search: 'Sableye LOR 070 pokemon card' },
+        { name: 'Radiant Greninja', qty: 1, category: 'pokemon', search: 'Radiant Greninja ASR pokemon card' },
+        { name: 'Rotom V', qty: 1, category: 'pokemon', search: 'Rotom V LOR pokemon card' },
+        { name: "Colress's Experiment", qty: 4, category: 'trainer', search: "Colress's Experiment LOR pokemon trainer card" },
+        { name: 'Mirage Gate', qty: 4, category: 'trainer', search: 'Mirage Gate LOR pokemon trainer card' },
+        { name: 'Colress Machine', qty: 4, category: 'trainer', search: 'Colress Machine LOR pokemon trainer card' },
+        { name: 'Switch Cart', qty: 4, category: 'trainer', search: 'Switch Cart ASR pokemon trainer card' },
+        { name: 'Escape Rope', qty: 2, category: 'trainer', search: 'Escape Rope BST pokemon trainer card' },
+        { name: 'Lost Vacuum', qty: 4, category: 'trainer', search: 'Lost Vacuum CRZ pokemon trainer card' },
+        { name: 'Battle VIP Pass', qty: 4, category: 'trainer', search: 'Battle VIP Pass FST pokemon trainer card' },
+        { name: 'Poker Face', qty: 2, category: 'trainer', search: 'Poker Face LOR pokemon trainer card' },
+        { name: 'Watchtower', qty: 1, category: 'trainer', search: 'Watchtower PAF pokemon trainer card' },
+        { name: 'Water Energy', qty: 4, category: 'energy', search: 'Water Energy Basic pokemon energy card' },
+        { name: 'Psychic Energy', qty: 4, category: 'energy', search: 'Psychic Energy Basic pokemon energy card' },
+        { name: 'Fire Energy', qty: 1, category: 'energy', search: 'Fire Energy Basic pokemon energy card' },
+        { name: 'Grass Energy', qty: 1, category: 'energy', search: 'Grass Energy Basic pokemon energy card' },
+        { name: 'Lightning Energy', qty: 1, category: 'energy', search: 'Lightning Energy Basic pokemon energy card' },
+        { name: 'Fighting Energy', qty: 1, category: 'energy', search: 'Fighting Energy Basic pokemon energy card' },
+        { name: 'Darkness Energy', qty: 1, category: 'energy', search: 'Darkness Energy Basic pokemon energy card' },
+      ],
     },
     {
       name: 'Iron Thorns ex',
@@ -170,6 +266,7 @@ export async function analyzeDeckAgainstCollection(
 ): Promise<Response> {
   const body = await request.json() as {
     key_cards: string[];
+    full_deck?: Array<{ name: string; qty: number; category: string; search: string }>;
     game: string;
     deck_size: number;
   };
@@ -200,25 +297,37 @@ export async function analyzeDeckAgainstCollection(
     [userId],
   );
 
-  const haveCards: typeof collection = [];
-  const needCards: string[] = [];
+  // Use full_deck if provided, otherwise fall back to key_cards
+  const cardList = body.full_deck
+    ? body.full_deck
+    : body.key_cards.map(name => ({ name, qty: 1, category: 'pokemon', search: `${name} pokemon card` }));
 
-  for (const keyCard of body.key_cards) {
+  const haveCards: Array<typeof collection[0] & { deck_qty: number; deck_category: string }> = [];
+  const needCards: Array<{ name: string; qty: number; category: string; search: string; ebay_url: string; tcgplayer_url: string }> = [];
+
+  for (const deckCard of cardList) {
     const found = collection.find(c => {
       const name = (c.player_name || c.card_name || '').toLowerCase();
-      return name.includes(keyCard.toLowerCase()) ||
-             keyCard.toLowerCase().includes(name);
+      return name.includes(deckCard.name.toLowerCase()) ||
+             deckCard.name.toLowerCase().includes(name);
     });
 
     if (found) {
-      haveCards.push(found);
+      haveCards.push({ ...found, deck_qty: deckCard.qty, deck_category: deckCard.category });
     } else {
-      needCards.push(keyCard);
+      needCards.push({
+        name: deckCard.name,
+        qty: deckCard.qty,
+        category: deckCard.category,
+        search: deckCard.search,
+        ebay_url: `https://www.ebay.com/sch/i.html?_nkw=${encodeURIComponent(deckCard.search)}`,
+        tcgplayer_url: `https://www.tcgplayer.com/search/pokemon/product?q=${encodeURIComponent(deckCard.name)}`,
+      });
     }
   }
 
-  const completionPct = body.key_cards.length > 0
-    ? Math.round((haveCards.length / body.key_cards.length) * 100)
+  const completionPct = cardList.length > 0
+    ? Math.round((haveCards.length / cardList.length) * 100)
     : 0;
 
   return ok({
@@ -227,6 +336,7 @@ export async function analyzeDeckAgainstCollection(
     completion_pct: completionPct,
     have_count: haveCards.length,
     need_count: needCards.length,
-    total_key_cards: body.key_cards.length,
+    total_key_cards: cardList.length,
+    full_deck: cardList,
   });
 }
