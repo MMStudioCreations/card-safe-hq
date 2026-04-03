@@ -34,9 +34,6 @@ export default function CardTile({ collectionItem }: Props) {
     || 'Other'
   ).toLowerCase()
 
-  const confidence = collectionItem.confidence ?? collectionItem.suggestions?.confidence ?? 0
-  const confidenceClass = confidence > 80 ? 'text-cv-good' : confidence >= 60 ? 'text-cv-warn' : 'text-cv-danger'
-
   const initials = useMemo(
     () => displayName.split(' ').map((part) => part[0]).join('').slice(0, 2),
     [displayName],
@@ -90,7 +87,19 @@ export default function CardTile({ collectionItem }: Props) {
             ${((((collectionItem as any).latest_sold_price_cents ?? collectionItem.estimated_value_cents ?? 0) / 100) || 0).toFixed(2)}
           </span>
           <span className="badge">{collectionItem.condition_note || 'Raw'}</span>
-          <span className={`badge ${confidenceClass}`}>AI {confidence}%</span>
+          {collectionItem.product_type && collectionItem.product_type !== 'single_card' && (
+            <span className="badge bg-amber-500/20 text-amber-200">
+              {{
+                booster_pack: 'Pack',
+                booster_box: 'Box',
+                etb: 'ETB',
+                tin: 'Tin',
+                bundle: 'Bundle',
+                promo_pack: 'Promo',
+                other_sealed: 'Sealed',
+              }[collectionItem.product_type] ?? 'Sealed'}
+            </span>
+          )}
         </div>
       </div>
     </button>

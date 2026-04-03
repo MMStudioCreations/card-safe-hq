@@ -454,7 +454,7 @@ export default function DeckBuilderPage() {
                 <p className="mt-1 text-xs text-cv-muted">Scan or upload cards to get started.</p>
               </div>
             ) : (
-              <div className="grid max-h-[600px] grid-cols-2 gap-2 overflow-y-auto pr-1">
+              <div className="grid grid-cols-2 gap-2 pr-1">
                 {filteredPool.map(item => {
                   const copies = getCopiesInDeck(item.id)
                   const atMax = copies >= game.maxCopies

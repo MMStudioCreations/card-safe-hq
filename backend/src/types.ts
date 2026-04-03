@@ -31,3 +31,24 @@ export interface Card {
   created_at: string;
   updated_at: string;
 }
+
+export type ProductType =
+  | 'single_card'
+  | 'booster_pack'
+  | 'booster_box'
+  | 'etb'
+  | 'tin'
+  | 'bundle'
+  | 'promo_pack'
+  | 'other_sealed'
+
+export const PRODUCT_TYPE_LABELS: Record<ProductType, string> = {
+  single_card: 'Single Card',
+  booster_pack: 'Booster Pack',
+  booster_box: 'Booster Box',
+  etb: 'Elite Trainer Box',
+  tin: 'Tin',
+  bundle: 'Bundle',
+  promo_pack: 'Promo Pack',
+  other_sealed: 'Other Sealed',
+}

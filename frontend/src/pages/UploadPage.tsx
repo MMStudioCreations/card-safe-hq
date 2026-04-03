@@ -12,6 +12,8 @@ export default function UploadPage() {
   const [side, setSide] = useState<'front' | 'back'>('front')
   const [stage, setStage] = useState<Stage>('idle')
   const [error, setError] = useState('')
+  const [productType, setProductType] = useState<string>('single_card')
+  const [productName, setProductName] = useState<string>('')
 
   const label = useMemo(() => {
     if (stage === 'creating') return 'Creating collection entry...'
@@ -26,7 +28,11 @@ export default function UploadPage() {
     setError('')
     try {
       setStage('creating')
-      const created = await api.createCollectionItem({ quantity: 1 })
+      const created = await api.createCollectionItem({
+        quantity: 1,
+        product_type: productType as any,
+        product_name: productType !== 'single_card' ? productName || undefined : undefined,
+      })
       setStage('uploading')
       await api.uploadDirect(created.id, side, file)
       setStage('analyzing')
@@ -88,6 +94,33 @@ export default function UploadPage() {
             setSide(selectedSide)
           }}
         />
+        <div className="mt-4 space-y-3">
+          <div className="flex flex-col gap-2">
+            <label className="text-sm font-medium">Product Type</label>
+            <select
+              className="input"
+              value={productType}
+              onChange={(e) => setProductType(e.target.value)}
+            >
+              <option value="single_card">Single Card</option>
+              <option value="booster_pack">Booster Pack</option>
+              <option value="booster_box">Booster Box</option>
+              <option value="etb">Elite Trainer Box</option>
+              <option value="tin">Tin</option>
+              <option value="bundle">Bundle</option>
+              <option value="promo_pack">Promo Pack</option>
+              <option value="other_sealed">Other Sealed</option>
+            </select>
+            {productType !== 'single_card' && (
+              <input
+                className="input"
+                placeholder="Product name (e.g. Scarlet &amp; Violet Booster Box)"
+                value={productName}
+                onChange={(e) => setProductName(e.target.value)}
+              />
+            )}
+          </div>
+        </div>
         <div className="mt-4 flex items-center gap-3">
           <button className="btn-primary" disabled={!file || stage === 'creating' || stage === 'uploading' || stage === 'analyzing' || stage === 'comps'} onClick={startUpload} type="button">
             Next

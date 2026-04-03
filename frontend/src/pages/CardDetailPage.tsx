@@ -83,6 +83,8 @@ export default function CardDetailPage() {
   const { data: grade, refetch: refetchGrade } = useGrade(item?.id)
   const [showFront, setShowFront] = useState(true)
   const [editing, setEditing] = useState(false)
+  const [editingName, setEditingName] = useState(false)
+  const [nameDraft, setNameDraft] = useState('')
   const [chartDays, setChartDays] = useState<30 | 60 | 90>(30)
   const [compsTab, setCompsTab] = useState<'sold' | 'active'>('sold')
   const [draft, setDraft] = useState({
@@ -153,6 +155,20 @@ export default function CardDetailPage() {
     setEditing(false)
   }
 
+  async function saveName() {
+    if (!item || !nameDraft.trim()) return
+    await api.updateCollectionItem(item.id, {
+      card_name: nameDraft.trim(),
+    } as any)
+    if (cardId) {
+      await api.refreshComps(cardId)
+      await queryClient.invalidateQueries({ queryKey: queryKeys.comps(cardId) })
+      await queryClient.invalidateQueries({ queryKey: ['comps-history', cardId] })
+    }
+    await queryClient.invalidateQueries({ queryKey: queryKeys.collectionItem(id) })
+    setEditingName(false)
+  }
+
   async function removeItem() {
     if (!item || !window.confirm('Delete this card permanently?')) return
     await api.deleteCollectionItem(item.id)
@@ -215,9 +231,36 @@ export default function CardDetailPage() {
         <article className="glass p-4">
           <div className="flex items-start justify-between gap-4">
             <div className="min-w-0">
-              <h1 className="text-2xl font-bold">
-                {item.player_name || item.card_name || item.card?.player_name || item.card?.card_name || 'Unidentified Card'}
-              </h1>
+              {editingName ? (
+                <div className="flex items-center gap-2 mb-1">
+                  <input
+                    className="input text-xl font-bold flex-1"
+                    value={nameDraft}
+                    onChange={e => setNameDraft(e.target.value)}
+                    onKeyDown={e => { if (e.key === 'Enter') void saveName(); if (e.key === 'Escape') setEditingName(false) }}
+                    autoFocus
+                  />
+                  <button className="btn-primary text-xs" onClick={() => void saveName()} type="button">Save</button>
+                  <button className="btn-ghost text-xs" onClick={() => setEditingName(false)} type="button">Cancel</button>
+                </div>
+              ) : (
+                <div className="flex items-center gap-2 mb-1">
+                  <h1 className="text-2xl font-bold">
+                    {item.player_name || item.card_name || item.card?.player_name || item.card?.card_name || 'Unidentified Card'}
+                  </h1>
+                  <button
+                    className="btn-ghost text-xs text-cv-muted"
+                    onClick={() => {
+                      setNameDraft(item.player_name || item.card_name || item.card?.player_name || item.card?.card_name || '')
+                      setEditingName(true)
+                    }}
+                    type="button"
+                    title="Edit card name"
+                  >
+                    ✎
+                  </button>
+                </div>
+              )}
               <p className="text-sm text-cv-muted">
                 {[
                   item.year ?? item.card?.year,
@@ -635,8 +678,8 @@ export default function CardDetailPage() {
           )}
         </article>
 
-        <Link className="btn-ghost" to="/review">
-          Back to review queue
+        <Link className="btn-ghost" to="/">
+          ← Back to collection
         </Link>
       </section>
     </div>

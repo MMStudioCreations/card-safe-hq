@@ -81,13 +81,15 @@ async function searchEbayAPI(
   const params = new URLSearchParams({
     q: query,
     limit: String(limit),
-    sort: sold ? 'endDate' : 'price',
+    sort: sold ? 'endDate' : 'newlyListed',
   });
 
   if (sold) {
-    params.set('filter', 'buyingOptions:{FIXED_PRICE},conditions:{USED|VERY_GOOD|GOOD|ACCEPTABLE}');
+    // Sold listings: filter to completed/sold items using itemEndDate range
+    params.set('filter', 'buyingOptions:{FIXED_PRICE},conditions:{USED|VERY_GOOD|GOOD|ACCEPTABLE},itemEndDate:[..2099-01-01T00:00:00Z]');
   } else {
-    params.set('filter', 'buyingOptions:{FIXED_PRICE}');
+    // Active listings: available to buy now, not ended
+    params.set('filter', 'buyingOptions:{FIXED_PRICE|BEST_OFFER}');
   }
 
   const controller = new AbortController();
@@ -126,10 +128,10 @@ async function searchEbayAPI(
           source,
           title: item.title,
           sold_price_cents: Math.round(priceNum * 100),
-          sold_date: item.itemEndDate ?? new Date().toISOString(),
+          sold_date: sold ? (item.itemEndDate ?? new Date().toISOString()) : new Date().toISOString(),
           sold_platform: 'eBay',
           listing_url: item.itemWebUrl,
-          condition_text: item.condition ?? '',
+          condition_text: item.condition ?? (sold ? 'Used' : 'Available'),
         };
       })
       .filter((item): item is NormalizedComp => item !== null);

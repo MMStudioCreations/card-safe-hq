@@ -1,7 +1,11 @@
-import type { Env, User } from '../types';
+import type { Env, User, ProductType } from '../types';
 import { queryAll, queryOne, run } from '../lib/db';
 import { badRequest, notFound, ok } from '../lib/json';
 import { asInt, asString, parseJsonBody } from '../lib/validation';
+
+const VALID_PRODUCT_TYPES = new Set<ProductType>([
+  'single_card', 'booster_pack', 'booster_box', 'etb', 'tin', 'bundle', 'promo_pack', 'other_sealed',
+]);
 
 interface CollectionItem {
   id: number;
@@ -13,6 +17,9 @@ interface CollectionItem {
   estimated_value_cents: number | null;
   front_image_url: string | null;
   back_image_url: string | null;
+  product_type: string | null;
+  product_name: string | null;
+  purchase_price_cents: number | null;
 }
 
 export async function listCollection(env: Env, user: User, request: Request): Promise<Response> {
@@ -77,6 +84,10 @@ export async function createCollectionItem(env: Env, request: Request, user: Use
     const conditionNote = asString(body.condition_note, 'condition_note', 500);
     const estimatedGrade = asString(body.estimated_grade, 'estimated_grade', 20);
     const estimatedValue = asInt(body.estimated_value_cents, 'estimated_value_cents', 0, 10_000_000);
+    const rawProductType = asString(body.product_type, 'product_type', 50) ?? 'single_card';
+    const productType = VALID_PRODUCT_TYPES.has(rawProductType as ProductType) ? rawProductType : 'single_card';
+    const productName = asString(body.product_name, 'product_name', 500);
+    const purchasePrice = asInt(body.purchase_price_cents, 'purchase_price_cents', 0, 100_000_000);
 
     if (cardId) {
       const card = await queryOne(env.DB, 'SELECT id FROM cards WHERE id = ?', [cardId]);
@@ -85,9 +96,9 @@ export async function createCollectionItem(env: Env, request: Request, user: Use
 
     await run(
       env.DB,
-      `INSERT INTO collection_items (user_id, card_id, quantity, condition_note, estimated_grade, estimated_value_cents)
-       VALUES (?, ?, ?, ?, ?, ?)`,
-      [user.id, cardId, quantity, conditionNote, estimatedGrade, estimatedValue],
+      `INSERT INTO collection_items (user_id, card_id, quantity, condition_note, estimated_grade, estimated_value_cents, product_type, product_name, purchase_price_cents)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [user.id, cardId, quantity, conditionNote, estimatedGrade, estimatedValue, productType, productName, purchasePrice],
     );
 
     const created = await queryOne(env.DB, 'SELECT * FROM collection_items WHERE id = last_insert_rowid()');
@@ -140,13 +151,22 @@ export async function updateCollectionItem(env: Env, request: Request, user: Use
     );
     const frontImageUrl = asString(body.front_image_url ?? existing.front_image_url, 'front_image_url', 500);
     const backImageUrl = asString(body.back_image_url ?? existing.back_image_url, 'back_image_url', 500);
+    const rawProductType = asString(body.product_type ?? existing.product_type, 'product_type', 50) ?? 'single_card';
+    const productType = VALID_PRODUCT_TYPES.has(rawProductType as ProductType) ? rawProductType : 'single_card';
+    const productName = asString(body.product_name ?? existing.product_name, 'product_name', 500);
+    const purchasePrice = asInt(
+      body.purchase_price_cents ?? existing.purchase_price_cents,
+      'purchase_price_cents',
+      0,
+      100_000_000,
+    );
 
     await run(
       env.DB,
       `UPDATE collection_items
-       SET quantity = ?, condition_note = ?, estimated_grade = ?, estimated_value_cents = ?, front_image_url = ?, back_image_url = ?, updated_at = CURRENT_TIMESTAMP
+       SET quantity = ?, condition_note = ?, estimated_grade = ?, estimated_value_cents = ?, front_image_url = ?, back_image_url = ?, product_type = ?, product_name = ?, purchase_price_cents = ?, updated_at = CURRENT_TIMESTAMP
        WHERE id = ? AND user_id = ?`,
-      [quantity, conditionNote, estimatedGrade, estimatedValue, frontImageUrl, backImageUrl, id, user.id],
+      [quantity, conditionNote, estimatedGrade, estimatedValue, frontImageUrl, backImageUrl, productType, productName, purchasePrice, id, user.id],
     );
 
     const updated = await queryOne(env.DB, 'SELECT * FROM collection_items WHERE id = ? AND user_id = ?', [id, user.id]);
