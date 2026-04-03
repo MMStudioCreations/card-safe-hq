@@ -7,7 +7,9 @@ export const queryKeys = {
   collectionItem: (id?: number | string) => ['collection-item', id] as const,
   card: (id?: number | string) => ['card', id] as const,
   comps: (cardId?: number | string) => ['comps', cardId] as const,
+  compsHistory: (cardId?: number | string) => ['comps-history', cardId] as const,
   grade: (collectionItemId?: number | string) => ['grade', collectionItemId] as const,
+  pricing: (cardId?: number | string) => ['pricing', cardId] as const,
 }
 
 export function useAuth() {

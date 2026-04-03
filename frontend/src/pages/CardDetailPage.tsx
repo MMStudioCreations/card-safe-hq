@@ -139,7 +139,10 @@ export default function CardDetailPage() {
       if (!cardId) throw new Error('No card linked yet')
       return api.refreshComps(cardId)
     },
-    onSuccess: () => void queryClient.invalidateQueries({ queryKey: queryKeys.comps(cardId) }),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: queryKeys.comps(cardId) })
+      void queryClient.invalidateQueries({ queryKey: ['comps-history', cardId] })
+    },
   })
 
   async function saveEdit() {
@@ -235,10 +238,16 @@ export default function CardDetailPage() {
             </div>
             <div className="shrink-0 text-right">
               <p className="text-xs text-cv-muted mb-1">
-                {(item as any).latest_sold_price_cents ? 'Last eBay Sale' : 'Estimated Value'}
+                {(item as any).latest_sold_price_cents
+                  ? 'Last eBay Sale'
+                  : item.estimated_value_cents
+                  ? 'My Cost / Est. Value'
+                  : 'No Value Set'}
               </p>
               <p className="text-3xl font-bold">
-                ${(((item as any).latest_sold_price_cents || item.estimated_value_cents || 0) / 100).toFixed(2)}
+                {((item as any).latest_sold_price_cents || item.estimated_value_cents)
+                  ? `$${(((item as any).latest_sold_price_cents || item.estimated_value_cents || 0) / 100).toFixed(2)}`
+                  : '—'}
               </p>
               {trend && (
                 <p className={`text-sm font-medium ${trend.up ? 'text-green-400' : 'text-red-400'}`}>
@@ -319,8 +328,20 @@ export default function CardDetailPage() {
           {historyData?.history?.length ? (
             <PriceChart history={historyData.history} days={chartDays} />
           ) : (
-            <div className="flex h-32 items-center justify-center text-cv-muted text-sm">
-              No price history yet. Refresh comps to populate.
+            <div className="flex h-32 flex-col items-center justify-center gap-2 text-cv-muted text-sm">
+              <p>No price history yet.</p>
+              {cardId ? (
+                <button
+                  className="btn-secondary text-xs"
+                  onClick={() => refreshComps.mutate()}
+                  type="button"
+                  disabled={refreshComps.isPending}
+                >
+                  {refreshComps.isPending ? 'Fetching...' : 'Fetch eBay Comps to Populate'}
+                </button>
+              ) : (
+                <p className="text-xs">Confirm card identity first to enable market data.</p>
+              )}
             </div>
           )}
         </article>
@@ -332,11 +353,19 @@ export default function CardDetailPage() {
             {/* TCGPlayer */}
             <div className="rounded-[var(--radius-md)] bg-cv-surface p-3">
               <p className="text-xs text-cv-muted mb-1">TCGPlayer Market</p>
-              <p className="text-lg font-bold">
-                {pricing?.tcgplayer?.market
-                  ? `$${(pricing.tcgplayer.market / 100).toFixed(2)}`
-                  : '—'}
-              </p>
+              {pricing === undefined ? (
+                <p className="text-lg font-bold text-cv-muted">Loading...</p>
+              ) : pricing?.tcgplayer?.market ? (
+                <p className="text-lg font-bold">
+                  ${(pricing.tcgplayer.market / 100).toFixed(2)}
+                </p>
+              ) : (
+                <p className="text-sm text-cv-muted">
+                  {cardId
+                    ? 'No TCGPlayer data — Pokémon cards only'
+                    : 'Confirm card identity first'}
+                </p>
+              )}
               {pricing?.tcgplayer?.low && (
                 <p className="text-xs text-cv-muted">
                   Low ${(pricing.tcgplayer.low / 100).toFixed(2)}
@@ -357,11 +386,17 @@ export default function CardDetailPage() {
             {/* PriceCharting */}
             <div className="rounded-[var(--radius-md)] bg-cv-surface p-3">
               <p className="text-xs text-cv-muted mb-1">PriceCharting</p>
-              <p className="text-lg font-bold">
-                {pricing?.pricecharting?.loose_price_cents
-                  ? `$${(pricing.pricecharting.loose_price_cents / 100).toFixed(2)}`
-                  : '—'}
-              </p>
+              {pricing === undefined ? (
+                <p className="text-lg font-bold text-cv-muted">Loading...</p>
+              ) : pricing?.pricecharting?.loose_price_cents ? (
+                <p className="text-lg font-bold">
+                  ${(pricing.pricecharting.loose_price_cents / 100).toFixed(2)}
+                </p>
+              ) : (
+                <p className="text-sm text-cv-muted">
+                  {cardId ? 'No match found' : 'Confirm card identity first'}
+                </p>
+              )}
               {pricing?.pricecharting?.psa_10_price_cents && (
                 <p className="text-xs text-cv-muted">
                   PSA 10: ${(pricing.pricecharting.psa_10_price_cents / 100).toFixed(2)}
