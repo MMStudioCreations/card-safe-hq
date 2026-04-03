@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react'
 import { NavLink, useNavigate } from 'react-router-dom'
-import { Camera, FolderKanban, Images, LogOut } from 'lucide-react'
+import { Camera, FolderKanban, Images, Layers, LogOut } from 'lucide-react'
 import { useQueryClient } from '@tanstack/react-query'
 import { api } from '../lib/api'
 import { useAuth, useCollection } from '../lib/hooks'
@@ -11,6 +11,7 @@ const links = [
   { to: '/', label: 'Collection', icon: FolderKanban },
   { to: '/scan', label: 'Scan', icon: Camera },
   { to: '/upload', label: 'Upload', icon: Images },
+  { to: '/deck', label: 'Deck Builder', icon: Layers },
 ]
 
 export default function Layout({ children }: Props) {
@@ -66,7 +67,7 @@ export default function Layout({ children }: Props) {
 
       <main>{children}</main>
 
-      <nav className="glass fixed inset-x-3 bottom-3 z-30 mx-auto grid max-w-[980px] grid-cols-3 gap-2 p-2 sm:hidden">
+      <nav className="glass fixed inset-x-3 bottom-3 z-30 mx-auto grid max-w-[980px] grid-cols-4 gap-2 p-2 sm:hidden">
         {links.map((link) => {
           const Icon = link.icon
           return (
