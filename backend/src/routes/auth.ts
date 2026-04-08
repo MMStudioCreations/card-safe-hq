@@ -40,7 +40,8 @@ export async function handleLogin(env: Env, request: Request): Promise<Response>
       return unauthorized('Invalid email or password');
     }
 
-    return ok(result.user, 200, { 'set-cookie': result.cookie });
+    // Return both the cookie (for browser) AND the token in the body (for PWA localStorage)
+    return ok({ ...result.user, token: result.token }, 200, { 'set-cookie': result.cookie });
   } catch (err) {
     return badRequest(err instanceof Error ? err.message : 'Unable to login');
   }

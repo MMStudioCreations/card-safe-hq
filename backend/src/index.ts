@@ -42,6 +42,7 @@ import {
   markAllNotificationsRead,
   markNotificationRead,
 } from './routes/trades';
+import { handleRecrop } from './routes/recrop';
 
 function parseId(pathname: string): number | null {
   const id = Number(pathname.split('/').pop());
@@ -384,6 +385,10 @@ export default {
         }
         if (method === 'GET' && pathname === '/api/admin/seed/pokemon/status') {
           return withCors(await getSeedStatus(env, user), request, env);
+        }
+        // Re-crop existing collection items that still show the full sheet
+        if (method === 'POST' && pathname === '/api/admin/recrop') {
+          return withCors(await handleRecrop(env, request, user), request, env);
         }
       }
 

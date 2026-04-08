@@ -65,12 +65,14 @@ export async function loginUser(env: Env, email: string, password: string) {
 
   return {
     user: { id: user.id, email: user.email, username: user.username, created_at: user.created_at },
+    // Return both the cookie (for browser) and the raw token (for PWA/localStorage)
     cookie: makeSessionCookie(sessionId, expiresAt),
+    token: sessionId,
   };
 }
 
 export async function logoutUser(env: Env, request: Request): Promise<string> {
-  const sessionId = getSessionIdFromCookie(request.headers.get('cookie'));
+  const sessionId = getSessionId(request);
   if (sessionId) {
     await run(env.DB, 'DELETE FROM sessions WHERE id = ?', [sessionId]);
   }
@@ -78,7 +80,7 @@ export async function logoutUser(env: Env, request: Request): Promise<string> {
 }
 
 export async function getCurrentUser(env: Env, request: Request): Promise<User | null> {
-  const sessionId = getSessionIdFromCookie(request.headers.get('cookie'));
+  const sessionId = getSessionId(request);
   if (!sessionId) {
     return null;
   }
@@ -101,6 +103,23 @@ export async function requireAuth(env: Env, request: Request): Promise<User | Re
     return unauthorized('You must be signed in');
   }
   return user;
+}
+
+/**
+ * Extract session ID from either:
+ * 1. Authorization: Bearer <token>  (PWA / localStorage — works everywhere including iOS standalone)
+ * 2. Cookie: cv_session=<token>     (legacy browser cookie — kept for backwards compat)
+ */
+function getSessionId(request: Request): string | null {
+  // 1. Prefer Authorization header — immune to ITP / third-party cookie blocking
+  const authHeader = request.headers.get('Authorization') ?? request.headers.get('authorization');
+  if (authHeader?.startsWith('Bearer ')) {
+    const token = authHeader.slice(7).trim();
+    if (token) return token;
+  }
+
+  // 2. Fall back to cookie (desktop browsers, existing sessions)
+  return getSessionIdFromCookie(request.headers.get('cookie'));
 }
 
 function getSessionIdFromCookie(cookieHeader: string | null): string | null {

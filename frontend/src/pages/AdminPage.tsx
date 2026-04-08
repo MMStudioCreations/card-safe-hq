@@ -470,6 +470,61 @@ function CatalogTab() {
           </table>
         </div>
       )}
+    {/* ── Re-crop Collection ── */}
+    <RecropSection />
+    </div>
+  )
+}
+
+function RecropSection() {
+  const [recropping, setRecropping] = useState(false)
+  const [recropResult, setRecropResult] = useState<{ total: number; processed: number; failed: number; message: string } | null>(null)
+  const [recropError, setRecropError] = useState<string | null>(null)
+
+  async function runRecrop() {
+    setRecropping(true)
+    setRecropResult(null)
+    setRecropError(null)
+    try {
+      const result = await adminFetch<{ total: number; processed: number; failed: number; message: string }>(
+        '/api/admin/recrop',
+        { method: 'POST' },
+      )
+      setRecropResult(result)
+    } catch (e) {
+      setRecropError(e instanceof Error ? e.message : 'Re-crop failed')
+    } finally {
+      setRecropping(false)
+    }
+  }
+
+  return (
+    <div className="rounded-[var(--radius-md)] bg-cv-surface p-5 space-y-4">
+      <div>
+        <h3 className="text-sm font-semibold text-cv-text">Re-crop Collection Images</h3>
+        <p className="text-xs text-cv-muted mt-1">
+          Finds all collection items whose image still points to the full binder sheet and crops each card individually.
+          Run this once to fix cards scanned before the crop pipeline was deployed.
+        </p>
+      </div>
+      <button
+        onClick={runRecrop}
+        disabled={recropping}
+        className="px-4 py-2 rounded-[var(--radius-sm)] bg-amber-600 text-white text-sm font-medium disabled:opacity-50 hover:opacity-90 transition flex items-center gap-2"
+        type="button"
+      >
+        {recropping && <Loader2 className="h-4 w-4 animate-spin" />}
+        {recropping ? 'Re-cropping...' : 'Re-crop All Sheet Images'}
+      </button>
+      {recropError && (
+        <div className="rounded-[var(--radius-sm)] bg-red-900/30 border border-red-700 text-red-300 text-sm p-3">{recropError}</div>
+      )}
+      {recropResult && (
+        <div className="rounded-[var(--radius-sm)] bg-green-900/20 border border-green-700 text-green-300 text-sm p-3 space-y-1">
+          <p className="font-medium">{recropResult.message}</p>
+          <p>Total found: {recropResult.total} · Processed: {recropResult.processed} · Failed: {recropResult.failed}</p>
+        </div>
+      )}
     </div>
   )
 }

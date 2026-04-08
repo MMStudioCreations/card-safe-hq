@@ -179,9 +179,35 @@ export type Notification = {
   created_at: string
 }
 
+// ── Token storage (localStorage) ─────────────────────────────────────────────
+// Using localStorage instead of relying on cookies fixes iOS PWA sign-in.
+// Apple's ITP blocks third-party cookies in standalone mode, but localStorage
+// and Authorization headers are always available.
+const TOKEN_KEY = 'cv_token';
+
+export function getStoredToken(): string | null {
+  try { return localStorage.getItem(TOKEN_KEY); } catch { return null; }
+}
+export function setStoredToken(token: string): void {
+  try { localStorage.setItem(TOKEN_KEY, token); } catch { /* ignore */ }
+}
+export function clearStoredToken(): void {
+  try { localStorage.removeItem(TOKEN_KEY); } catch { /* ignore */ }
+}
+
 const http = axios.create({
   baseURL: import.meta.env.VITE_API_URL ?? 'https://cardsafehq-api.michaelamarino16.workers.dev',
-  withCredentials: true,
+  withCredentials: true, // still send cookies for backwards compat on desktop
+});
+
+// Attach Bearer token from localStorage on every request
+http.interceptors.request.use((config) => {
+  const token = getStoredToken();
+  if (token) {
+    config.headers = config.headers ?? {};
+    (config.headers as Record<string, string>)['Authorization'] = `Bearer ${token}`;
+  }
+  return config;
 });
 
 (http.interceptors.response.use as any)(
@@ -205,9 +231,16 @@ const http = axios.create({
 export const api = {
   register: (payload: { email: string; password: string; username?: string }) =>
     http.post<never, User>('/api/auth/register', payload),
-  login: (payload: { email: string; password: string }) =>
-    http.post<never, User>('/api/auth/login', payload),
-  logout: () => http.post<never, { success: boolean }>('/api/auth/logout'),
+  login: async (payload: { email: string; password: string }): Promise<User> => {
+    const result = await http.post<never, User & { token?: string }>('/api/auth/login', payload);
+    // Store the session token in localStorage for PWA / iOS standalone mode
+    if ((result as any).token) setStoredToken((result as any).token);
+    return result;
+  },
+  logout: async (): Promise<{ success: boolean }> => {
+    clearStoredToken();
+    return http.post<never, { success: boolean }>('/api/auth/logout');
+  },
   me: () => http.get<never, User>('/api/me'),
 
   listCards: () => http.get<never, Card[]>('/api/cards'),
