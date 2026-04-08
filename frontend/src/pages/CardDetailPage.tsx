@@ -4,7 +4,6 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { ExternalLink } from 'lucide-react'
 import { api } from '../lib/api'
 import { queryKeys, useCollectionItem, useComps, useGrade, useCompsHistory } from '../lib/hooks'
-import CardCrop from '../components/CardCrop'
 
 // ── SVG Price Chart ───────────────────────────────────────────────────────────
 
@@ -216,13 +215,6 @@ export default function CardDetailPage() {
     [item, showFront],
   )
 
-  // Determine if we should use CardCrop (scanned sheet card with bbox)
-  const hasBbox =
-    item?.bbox_x != null &&
-    item?.bbox_y != null &&
-    item?.bbox_width != null &&
-    item?.bbox_height != null
-
   const sheetImageUrl = image
     ? `${import.meta.env.VITE_API_URL}/api/images/${encodeURIComponent(image)}`
     : null
@@ -293,11 +285,15 @@ export default function CardDetailPage() {
     navigate('/')
   }
 
-  if (isLoading || !item) return <div className="glass p-6">Loading card details...</div>
-
+   if (isLoading || !item) return <div className="glass p-6">Loading card details...</div>
   const avgPrice = comps?.summary?.average_price_cents
   const soldListings = comps?.sold ?? []
   const activeListings = comps?.active ?? []
+  // Most recent sold = first item in sold list (sorted by sold_date DESC from backend)
+  const mostRecentSold = soldListings.length > 0
+    ? [...soldListings].sort((a, b) => new Date(b.sold_date).getTime() - new Date(a.sold_date).getTime())[0]
+    : null
+  const headerPriceCents = mostRecentSold?.sold_price_cents ?? item.estimated_value_cents
 
   return (
     <div className="grid gap-4 lg:grid-cols-[340px,1fr]">
@@ -322,24 +318,11 @@ export default function CardDetailPage() {
         </div>
         <div className="w-full rounded-[var(--radius-md)] overflow-hidden bg-zinc-900" style={{ aspectRatio: '2.5/3.5' }}>
           {sheetImageUrl ? (
-            hasBbox ? (
-              <CardCrop
-                sheetUrl={sheetImageUrl}
-                bbox={{
-                  x: item.bbox_x!,
-                  y: item.bbox_y!,
-                  width: item.bbox_width!,
-                  height: item.bbox_height!,
-                }}
-                className="w-full h-full object-contain object-center"
-              />
-            ) : (
-              <img
-                className="w-full h-full object-contain object-center"
-                src={sheetImageUrl}
-                alt={item.card_name || item.player_name || 'Card'}
-              />
-            )
+            <img
+              className="w-full h-full object-contain object-center"
+              src={sheetImageUrl}
+              alt={item.card_name || item.player_name || 'Card'}
+            />
           ) : (
             <div className="h-full w-full bg-[linear-gradient(135deg,var(--primary),var(--secondary))]" />
           )}
@@ -401,15 +384,15 @@ export default function CardDetailPage() {
             </div>
             <div className="shrink-0 text-right">
               <p className="text-xs text-cv-muted mb-1">
-                {(item as any).latest_sold_price_cents
-                  ? 'Last eBay Sale'
+                {mostRecentSold
+                  ? `Last eBay Sale · ${new Date(mostRecentSold.sold_date).toLocaleDateString()}`
                   : item.estimated_value_cents
-                  ? 'My Cost / Est. Value'
+                  ? 'Est. Value'
                   : 'No Value Set'}
               </p>
               <p className="text-3xl font-bold">
-                {((item as any).latest_sold_price_cents || item.estimated_value_cents)
-                  ? `$${(((item as any).latest_sold_price_cents || item.estimated_value_cents || 0) / 100).toFixed(2)}`
+                {headerPriceCents
+                  ? `$${(headerPriceCents / 100).toFixed(2)}`
                   : '—'}
               </p>
               {trend && (

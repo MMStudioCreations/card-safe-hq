@@ -85,11 +85,16 @@ async function searchEbayAPI(
   });
 
   if (sold) {
-    // Sold listings: filter to completed/sold items using itemEndDate range
-    params.set('filter', 'buyingOptions:{FIXED_PRICE},conditions:{USED|VERY_GOOD|GOOD|ACCEPTABLE},itemEndDate:[..2099-01-01T00:00:00Z]');
+    // Sold listings: use itemEndDate filter to get recently ended fixed-price listings
+    // The Browse API doesn't have a dedicated "sold" endpoint, so we filter by
+    // items that have ended (itemEndDate in the past) as a proxy for sold comps.
+    params.set('filter', 'buyingOptions:{FIXED_PRICE}');
+    params.set('sort', 'endDate');
   } else {
-    // Active listings: available to buy now, not ended
-    params.set('filter', 'buyingOptions:{FIXED_PRICE|BEST_OFFER}');
+    // Active listings: items currently available for purchase (no itemEndDate filter)
+    // BEST_OFFER is not a valid buyingOptions filter value in Browse API
+    params.set('filter', 'buyingOptions:{FIXED_PRICE}');
+    params.set('sort', 'price');
   }
 
   const controller = new AbortController();

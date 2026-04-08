@@ -111,17 +111,26 @@ await run(
    WHERE card_id = ?`,
   [cardId, cardId],
 );
-  const rows = await queryAll<SalesCompRow>(
+  const soldRows = await queryAll<SalesCompRow>(
     env.DB,
     `SELECT source, title, sold_price_cents, sold_date, sold_platform, listing_url, condition_text, created_at
      FROM sales_comps
-     WHERE card_id = ?
-     ORDER BY sold_price_cents DESC`,
+     WHERE card_id = ? AND source = 'ebay_sold'
+     ORDER BY sold_date DESC`,
     [cardId],
   );
+  const activeRows = await queryAll<SalesCompRow>(
+    env.DB,
+    `SELECT source, title, sold_price_cents, sold_date, sold_platform, listing_url, condition_text, created_at
+     FROM sales_comps
+     WHERE card_id = ? AND source = 'ebay_active'
+     ORDER BY sold_price_cents ASC`,
+    [cardId],
+  );
+  const rows = [...soldRows, ...activeRows];
 
-  const sold    = rows.filter((r) => r.source === 'ebay_sold');
-  const active  = rows.filter((r) => r.source === 'ebay_active');
+  const sold    = soldRows;
+  const active  = activeRows;
   const lastSynced = rows.length > 0 ? rows[0].created_at : new Date().toISOString();
   const summary = summarizeComps(sold.map((r) => r.sold_price_cents));
 

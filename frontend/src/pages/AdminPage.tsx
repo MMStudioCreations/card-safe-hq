@@ -58,7 +58,7 @@ type ActivityRow = {
   scan_count: number
 }
 
-type Tab = 'overview' | 'users' | 'cards' | 'activity' | 'sql'
+type Tab = 'overview' | 'users' | 'cards' | 'activity' | 'sql' | 'catalog'
 
 function StatCard({ label, value }: { label: string; value: string | number }) {
   return (
@@ -322,12 +322,165 @@ function SqlTab() {
   )
 }
 
+type SeedStatus = {
+  total_catalog_cards: number
+  seeded_sets: number
+  sets: Array<{ set_id: string; set_name: string; total_cards: number; seeded_at: string }>
+}
+
+type SeedResult = {
+  message: string
+  total_sets: number
+  already_seeded: number
+  seeded_now: number
+  total_cards: number
+  results: Array<{ set_id: string; set_name: string; cards: number }>
+}
+
+function CatalogTab() {
+  const [seeding, setSeeding] = useState(false)
+  const [seedResult, setSeedResult] = useState<SeedResult | null>(null)
+  const [seedError, setSeedError] = useState<string | null>(null)
+  const [force, setForce] = useState(false)
+  const [allSets, setAllSets] = useState(false)
+  const { data: status, isLoading, refetch } = useQuery({
+    queryKey: ['admin', 'catalog', 'status'],
+    queryFn: () => adminFetch<SeedStatus>('/api/admin/seed/pokemon/status'),
+  })
+
+  async function runSeed() {
+    setSeeding(true)
+    setSeedResult(null)
+    setSeedError(null)
+    try {
+      const params = new URLSearchParams()
+      if (force) params.set('force', '1')
+      if (allSets) params.set('all', '1')
+      const result = await adminFetch<SeedResult>(`/api/admin/seed/pokemon?${params.toString()}`, { method: 'POST' })
+      setSeedResult(result)
+      void refetch()
+    } catch (e) {
+      setSeedError(e instanceof Error ? e.message : 'Seed failed')
+    } finally {
+      setSeeding(false)
+    }
+  }
+
+  return (
+    <div className="space-y-4">
+      <div className="rounded-[var(--radius-md)] bg-cv-surface p-5 space-y-4">
+        <div>
+          <h3 className="text-sm font-semibold text-cv-text">Pokémon Card Catalog</h3>
+          <p className="text-xs text-cv-muted mt-1">
+            Seeds the <code>pokemon_catalog</code> table with every card from every Pokémon TCG set.
+            Used by the vision pipeline for accurate card identification.
+          </p>
+        </div>
+        {isLoading ? (
+          <Loader2 className="h-5 w-5 animate-spin text-cv-secondary" />
+        ) : status ? (
+          <div className="grid grid-cols-2 gap-3">
+            <StatCard label="Catalog Cards" value={status.total_catalog_cards.toLocaleString()} />
+            <StatCard label="Seeded Sets" value={status.seeded_sets} />
+          </div>
+        ) : null}
+        <div className="flex flex-wrap gap-4 items-center">
+          <label className="flex items-center gap-2 text-sm text-cv-muted cursor-pointer">
+            <input type="checkbox" checked={force} onChange={(e) => setForce(e.target.checked)} className="accent-[var(--primary)]" />
+            Force re-seed (overwrite existing)
+          </label>
+          <label className="flex items-center gap-2 text-sm text-cv-muted cursor-pointer">
+            <input type="checkbox" checked={allSets} onChange={(e) => setAllSets(e.target.checked)} className="accent-[var(--primary)]" />
+            Include vintage sets (pre-2020)
+          </label>
+        </div>
+        <button
+          onClick={runSeed}
+          disabled={seeding}
+          className="px-4 py-2 rounded-[var(--radius-sm)] bg-[var(--primary)] text-white text-sm font-medium disabled:opacity-50 hover:opacity-90 transition flex items-center gap-2"
+          type="button"
+        >
+          {seeding && <Loader2 className="h-4 w-4 animate-spin" />}
+          {seeding ? 'Seeding...' : 'Run Seed'}
+        </button>
+      </div>
+
+      {seedError && (
+        <div className="rounded-[var(--radius-sm)] bg-red-900/30 border border-red-700 text-red-300 text-sm p-3">
+          {seedError}
+        </div>
+      )}
+
+      {seedResult && (
+        <div className="rounded-[var(--radius-md)] bg-cv-surface p-4 space-y-3">
+          <p className="text-sm font-medium text-cv-text">{seedResult.message}</p>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            <StatCard label="Total Sets" value={seedResult.total_sets} />
+            <StatCard label="Already Seeded" value={seedResult.already_seeded} />
+            <StatCard label="Seeded Now" value={seedResult.seeded_now} />
+            <StatCard label="Cards Added" value={seedResult.total_cards.toLocaleString()} />
+          </div>
+          {seedResult.results.length > 0 && (
+            <div className="overflow-x-auto">
+              <table className="w-full text-xs">
+                <thead>
+                  <tr className="border-b border-cv-border text-cv-muted">
+                    <th className="text-left px-3 py-2">Set ID</th>
+                    <th className="text-left px-3 py-2">Set Name</th>
+                    <th className="text-right px-3 py-2">Cards</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {seedResult.results.map((r) => (
+                    <tr key={r.set_id} className="border-b border-cv-border last:border-0">
+                      <td className="px-3 py-1.5 text-cv-muted font-mono">{r.set_id}</td>
+                      <td className="px-3 py-1.5 text-cv-text">{r.set_name}</td>
+                      <td className={`px-3 py-1.5 text-right font-medium ${r.cards < 0 ? 'text-red-400' : 'text-green-400'}`}>
+                        {r.cards < 0 ? 'Error' : r.cards}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      )}
+
+      {status && status.sets.length > 0 && (
+        <div className="rounded-[var(--radius-md)] bg-cv-surface overflow-x-auto">
+          <div className="px-4 py-2 border-b border-cv-border text-xs text-cv-muted">Previously seeded sets</div>
+          <table className="w-full text-xs">
+            <thead>
+              <tr className="border-b border-cv-border text-cv-muted">
+                <th className="text-left px-4 py-2">Set</th>
+                <th className="text-right px-4 py-2">Cards</th>
+                <th className="text-right px-4 py-2">Seeded</th>
+              </tr>
+            </thead>
+            <tbody>
+              {status.sets.map((s) => (
+                <tr key={s.set_id} className="border-b border-cv-border last:border-0 hover:bg-cv-hover">
+                  <td className="px-4 py-2 text-cv-text">{s.set_name} <span className="text-cv-muted">({s.set_id})</span></td>
+                  <td className="px-4 py-2 text-right text-cv-muted">{s.total_cards}</td>
+                  <td className="px-4 py-2 text-right text-cv-muted">{new Date(s.seeded_at).toLocaleDateString()}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  )
+}
+
 const TABS: { id: Tab; label: string }[] = [
   { id: 'overview', label: 'Overview' },
   { id: 'users', label: 'Users' },
   { id: 'cards', label: 'Cards' },
   { id: 'activity', label: 'Activity' },
   { id: 'sql', label: 'SQL Runner' },
+  { id: 'catalog', label: 'Pokémon Catalog' },
 ]
 
 export default function AdminPage() {
@@ -374,6 +527,7 @@ export default function AdminPage() {
       {tab === 'cards' && <CardsTab />}
       {tab === 'activity' && <ActivityTab />}
       {tab === 'sql' && <SqlTab />}
+      {tab === 'catalog' && <CatalogTab />}
     </div>
   )
 }

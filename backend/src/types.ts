@@ -7,6 +7,7 @@ export interface Env {
   EBAY_CLIENT_ID?: string;
   EBAY_CLIENT_SECRET?: string;
   POKEMON_TCG_API_KEY?: string;
+  ADMIN_EMAIL?: string;
 }
 export interface User {
   id: number;

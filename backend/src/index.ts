@@ -24,6 +24,7 @@ import { generateDeck } from './routes/deck';
 import { getCardPricing } from './routes/pricing';
 import { getPokemonSets, getSetChecklist, saveDeck, listDecks } from './routes/sets';
 import { getMetaDecks, getMetaDeck, analyzeDeckAgainstCollection } from './routes/meta';
+import { seedPokemonCatalog, getSeedStatus, lookupPokemonCard } from './routes/seed';
 import {
   handleAdminStats,
   handleAdminUsers,
@@ -366,6 +367,18 @@ export default {
         if (method === 'POST' && pathname === '/api/admin/query') {
           return withCors(await handleAdminQuery(env, user, request), request, env);
         }
+        // Pokémon catalog seeder
+        if (method === 'POST' && pathname === '/api/admin/seed/pokemon') {
+          return withCors(await seedPokemonCatalog(env, request, user), request, env);
+        }
+        if (method === 'GET' && pathname === '/api/admin/seed/pokemon/status') {
+          return withCors(await getSeedStatus(env, user), request, env);
+        }
+      }
+
+      // ── Public catalog lookup (used by vision pipeline) ───────────────────
+      if (pathname === '/api/catalog/pokemon/lookup') {
+        if (method === 'GET') return withCors(await lookupPokemonCard(env, request), request, env);
       }
 
       // ── Trades routes ──────────────────────────────────────────────────────

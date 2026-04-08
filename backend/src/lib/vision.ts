@@ -1,6 +1,7 @@
 import type { Env } from '../types';
 import { searchPokemonCard, extractTCGPlayerPrice } from './pokemontcg';
 import { fetchPriceChartingData } from './pricecharting';
+import { queryAll } from './db';
 
 // ─── Identification Types ────────────────────────────────────────────────────
 
@@ -88,11 +89,12 @@ SPORTS CARDS:
 - Variations: Rookie (RC), Refractor, Prizm, Holo, Auto, Patch, Serial numbered
 
 CRITICAL INSTRUCTIONS:
-1. For Pokémon cards, the card number (e.g. "252/193") is ALWAYS printed at the bottom left — read it exactly
+1. For Pokémon cards, the card number (e.g. "252/193") is ALWAYS printed at the bottom left of the card — zoom in and read it character by character
 2. The set name for Pokémon is NOT the series name — it is the specific product name (e.g. "Obsidian Flames", not "Scarlet & Violet")
 3. For alternate art cards, include "Special Illustration Rare" or "Illustration Rare" in the variation field
 4. Never guess a card number — use null if you cannot read it clearly
-5. Respond ONLY with valid JSON, no markdown, no explanation`;
+5. The card number is the MOST IMPORTANT field — it uniquely identifies the card. Prioritize reading it accurately over all other fields.
+6. Respond ONLY with valid JSON, no markdown, no explanation`;
 
 const USER_PROMPT = `Identify this trading card or sports card from the image. Read every visible detail carefully including the bottom of the card for the card number.
 
@@ -219,13 +221,104 @@ function extractCardNumber(raw: string | null): string | null {
   return match ? match[1] : raw;
 }
 
+interface CatalogRow {
+  ptcg_id: string;
+  card_name: string;
+  card_number: string;
+  set_id: string;
+  set_name: string;
+  series: string | null;
+  rarity: string | null;
+  image_small: string | null;
+  image_large: string | null;
+  tcgplayer_url: string | null;
+  tcgplayer_market_cents: number | null;
+  tcgplayer_low_cents: number | null;
+  legality_standard: string | null;
+  legality_expanded: string | null;
+}
+
+async function lookupCatalog(
+  db: D1Database,
+  cardName: string | null,
+  cardNumber: string | null,
+  setName: string | null,
+): Promise<CatalogRow | null> {
+  if (!cardNumber && !cardName) return null;
+
+  const conditions: string[] = [];
+  const params: (string | number)[] = [];
+
+  // Exact card number match is the most reliable signal
+  if (cardNumber) {
+    // Try both "123" and "123/197" formats
+    const bare = cardNumber.replace(/\/.*$/, '').trim();
+    conditions.push('(card_number = ? OR card_number LIKE ?)');
+    params.push(cardNumber, `${bare}/%`);
+  }
+  if (setName) {
+    conditions.push('set_name LIKE ?');
+    params.push(`%${setName}%`);
+  }
+  if (cardName) {
+    conditions.push('card_name LIKE ?');
+    params.push(`%${cardName}%`);
+  }
+
+  if (conditions.length === 0) return null;
+
+  const rows = await queryAll<CatalogRow>(
+    db,
+    `SELECT * FROM pokemon_catalog WHERE ${conditions.join(' AND ')} LIMIT 5`,
+    params,
+  );
+
+  if (rows.length === 0) return null;
+
+  // If we have multiple results, prefer the one whose name matches best
+  if (rows.length === 1) return rows[0];
+  if (cardName) {
+    const nameLower = cardName.toLowerCase();
+    const exact = rows.find((r) => r.card_name.toLowerCase() === nameLower);
+    if (exact) return exact;
+    const partial = rows.find((r) => r.card_name.toLowerCase().includes(nameLower));
+    if (partial) return partial;
+  }
+  return rows[0];
+}
+
 async function lookupPTCG(
   apiKey: string,
   gpt: GPTCardResult,
+  db?: D1Database,
 ): Promise<CardIdentification['ptcg_id'] extends infer T ? Partial<CardIdentification> : never> {
-  if (!apiKey || gpt.game?.toLowerCase() !== 'pokemon') return {};
+  if (gpt.game?.toLowerCase() !== 'pokemon') return {};
 
   const number = extractCardNumber(gpt.card_number);
+
+  // Attempt 0: local catalog lookup (fastest, most accurate)
+  if (db) {
+    const catalogRow = await lookupCatalog(db, gpt.card_name, number, gpt.set_name);
+    if (catalogRow) {
+      console.log(`[vision] Catalog hit: ${catalogRow.card_name} (${catalogRow.ptcg_id})`);
+      return {
+        ptcg_id: catalogRow.ptcg_id,
+        ptcg_confirmed: true,
+        ptcg_image_small: catalogRow.image_small,
+        ptcg_image_large: catalogRow.image_large,
+        ptcg_set_id: catalogRow.set_id,
+        ptcg_set_name: catalogRow.set_name,
+        ptcg_set_series: catalogRow.series,
+        ptcg_rarity: catalogRow.rarity,
+        ptcg_tcgplayer_url: catalogRow.tcgplayer_url,
+        price_market_cents: catalogRow.tcgplayer_market_cents,
+        price_low_cents: catalogRow.tcgplayer_low_cents,
+        price_source: catalogRow.tcgplayer_market_cents ? 'tcgplayer' : null,
+      };
+    }
+  }
+
+  if (!apiKey) return {};
 
   // Attempt 1: card name + number (most precise)
   let ptcgCard = gpt.card_name && number
@@ -314,8 +407,8 @@ export async function identifyCard(
     const { result: gpt, rawText: rt } = await callGPT4oVision(env.OPENAI_API_KEY, imageUrl);
     rawText = rt;
 
-    // Step 2: PTCG lookup (Pokemon only)
-    const ptcgData = await lookupPTCG(env.POKEMON_TCG_API_KEY ?? '', gpt);
+    // Step 2: PTCG lookup (Pokemon only) — tries local catalog first, then PTCG API
+    const ptcgData = await lookupPTCG(env.POKEMON_TCG_API_KEY ?? '', gpt, env.DB);
 
     // Step 3: Pricing — TCGPlayer from PTCG, or PriceCharting fallback
     let pricingData: Partial<CardIdentification> = {};
