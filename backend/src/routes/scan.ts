@@ -85,8 +85,8 @@ export async function handleSheetScan(env: Env, request: Request, user: User): P
       const game = ident.game ?? ident.sport ?? 'Unknown';
       const setName = ident.set_name_override ?? ident.ptcg_set_name ?? ident.set_name;
       const yearValue = ident.year && Number.isFinite(ident.year) ? ident.year : null;
-      const externalRef = ident.ptcg_id ??
-        [ident.manufacturer, ident.year, ident.card_number].filter(Boolean).join(':') || null;
+     const externalRef = ident.ptcg_id ??
+    ([ident.manufacturer, ident.year, ident.card_number].filter(Boolean).join(':') || null);
 
       // ── Upsert card record ──
       const existingCard = await queryOne<{ id: number }>(
