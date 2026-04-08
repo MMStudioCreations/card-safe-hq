@@ -1,6 +1,7 @@
 import { Navigate, Route, Routes } from 'react-router-dom'
 import Layout from './components/Layout'
 import ProtectedRoute from './components/ProtectedRoute'
+import AdminPage from './pages/AdminPage'
 import CardDetailPage from './pages/CardDetailPage'
 import CollectionPage from './pages/CollectionPage'
 import DashboardPage from './pages/DashboardPage'
@@ -72,6 +73,16 @@ export default function App() {
           <ProtectedRoute>
             <Layout>
               <CardDetailPage />
+            </Layout>
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/admin"
+        element={
+          <ProtectedRoute>
+            <Layout>
+              <AdminPage />
             </Layout>
           </ProtectedRoute>
         }
