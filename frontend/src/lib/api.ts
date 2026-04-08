@@ -316,15 +316,32 @@ export const api = {
       decks: Array<{
         name: string;
         archetype: string;
+        game: string;
         format: string;
         theme: string;
         description: string;
         key_cards: string[];
         strategy: string;
+        estimated_budget_usd?: number | null;
+        difficulty?: string | null;
+        commander?: { name: string; category: string; cmc: number; search: string } | null;
+        full_deck: Array<{ name: string; qty: number; category: string; search: string; isEvolution?: boolean; cmc?: number }>;
+        main_deck: Array<{ name: string; qty: number; category: string; search: string; isEvolution?: boolean; cmc?: number }>;
+        extra_deck: Array<{ name: string; qty: number; category: string; search: string }>;
+        side_deck: Array<{ name: string; qty: number; category: string; search: string }>;
+        sideboard: Array<{ name: string; qty: number; category: string; search: string; cmc?: number }>;
       }>;
     }>(`/api/meta/${game}`),
 
-  analyzeDeck: (payload: { key_cards: string[]; full_deck?: Array<{name:string;qty:number;category:string;search:string}> | null; game: string; deck_size: number }) =>
+  analyzeDeck: (payload: {
+    key_cards: string[];
+    full_deck?: Array<{ name: string; qty: number; category: string; search: string }> | null;
+    extra_deck?: Array<{ name: string; qty: number; category: string; search: string }> | null;
+    side_deck?: Array<{ name: string; qty: number; category: string; search: string }> | null;
+    sideboard?: Array<{ name: string; qty: number; category: string; search: string }> | null;
+    game: string;
+    deck_size: number;
+  }) =>
     http.post<never, {
       have: CollectionItem[];
       need: Array<{
@@ -339,6 +356,24 @@ export const api = {
       have_count: number;
       need_count: number;
       total_key_cards: number;
+      main_deck: {
+        have: CollectionItem[];
+        need: Array<{ name: string; qty: number; category: string; search: string; ebay_url: string; tcgplayer_url: string }>;
+        have_count: number;
+        total_count: number;
+      } | null;
+      extra_deck: {
+        have: CollectionItem[];
+        need: Array<{ name: string; qty: number; category: string; search: string; ebay_url: string; tcgplayer_url: string }>;
+        have_count: number;
+        total_count: number;
+      } | null;
+      side_deck: {
+        have: CollectionItem[];
+        need: Array<{ name: string; qty: number; category: string; search: string; ebay_url: string; tcgplayer_url: string }>;
+        have_count: number;
+        total_count: number;
+      } | null;
     }>('/api/deck/analyze', payload),
 
   saveDeck: (payload: { name: string; game: string; format: string; cards_json: string }) =>

@@ -22,7 +22,7 @@ import { handleSheetScan } from './routes/scan';
 import { generateDeck } from './routes/deck';
 import { getCardPricing } from './routes/pricing';
 import { getPokemonSets, getSetChecklist, saveDeck, listDecks } from './routes/sets';
-import { getMetaDecks, analyzeDeckAgainstCollection } from './routes/meta';
+import { getMetaDecks, getMetaDeck, analyzeDeckAgainstCollection } from './routes/meta';
 import {
   handleAdminStats,
   handleAdminUsers,
@@ -304,8 +304,13 @@ export default {
       }
 
       if (pathname.startsWith('/api/meta/')) {
-        const game = pathname.replace('/api/meta/', '');
-        if (method === 'GET') return withCors(await getMetaDecks(env, game), request, env);
+        const parts = pathname.replace('/api/meta/', '').split('/');
+        const game = parts[0];
+        const deckId = parts[1] ? decodeURIComponent(parts[1]) : null;
+        if (method === 'GET') {
+          if (deckId) return withCors(await getMetaDeck(env, game, deckId), request, env);
+          return withCors(await getMetaDecks(env, game), request, env);
+        }
       }
 
       if (pathname === '/api/deck/analyze') {
