@@ -1,7 +1,12 @@
 import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
+import { CheckSquare, Square, Trash2, X } from 'lucide-react'
 import CardTile from '../components/CardTile'
 import { useCollection } from '../lib/hooks'
+import { api } from '../lib/api'
+import { useQueryClient } from '@tanstack/react-query'
+import { queryKeys } from '../lib/hooks'
+import type { CollectionItem } from '../lib/api'
 
 const sortOptions = [
   { value: 'value-desc', label: 'Value: High → Low' },
@@ -26,11 +31,17 @@ const PRODUCT_TYPE_LABELS: Record<string, string> = {
 }
 
 export default function DashboardPage() {
+  const queryClient = useQueryClient()
   const { data = [], isLoading } = useCollection(true)
   const [search, setSearch] = useState('')
   const [categoryFilter, setCategoryFilter] = useState('All')
   const [typeFilter, setTypeFilter] = useState('all')
   const [sort, setSort] = useState('value-desc')
+
+  // Select mode state
+  const [selectMode, setSelectMode] = useState(false)
+  const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set())
+  const [deleting, setDeleting] = useState(false)
 
   // Derive unique categories from collection
   const categories = useMemo(() => {
@@ -100,6 +111,54 @@ export default function DashboardPage() {
       })
   }, [data, search, categoryFilter, typeFilter, sort])
 
+  function toggleSelectMode() {
+    setSelectMode((v) => !v)
+    setSelectedIds(new Set())
+  }
+
+  function toggleItem(id: number) {
+    setSelectedIds((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }
+
+  function selectAll() {
+    setSelectedIds(new Set(filtered.map((i) => i.id)))
+  }
+
+  function clearSelection() {
+    setSelectedIds(new Set())
+  }
+
+  async function handleBatchDelete() {
+    if (selectedIds.size === 0) return
+    if (!confirm(`Delete ${selectedIds.size} item${selectedIds.size > 1 ? 's' : ''}? This cannot be undone.`)) return
+    setDeleting(true)
+    try {
+      const ids = Array.from(selectedIds)
+      await api.batchDeleteCollectionItems(ids)
+      // Optimistically remove from React Query cache
+      queryClient.setQueryData<CollectionItem[]>(queryKeys.collection(true), (old) =>
+        (old ?? []).filter((item) => !selectedIds.has(item.id))
+      )
+      queryClient.setQueryData<CollectionItem[]>(queryKeys.collection(false), (old) =>
+        (old ?? []).filter((item) => !selectedIds.has(item.id))
+      )
+      queryClient.setQueryData<CollectionItem[]>(queryKeys.collection(undefined), (old) =>
+        (old ?? []).filter((item) => !selectedIds.has(item.id))
+      )
+      setSelectedIds(new Set())
+      setSelectMode(false)
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Delete failed')
+    } finally {
+      setDeleting(false)
+    }
+  }
+
   if (isLoading) return <div className="glass p-6">Loading vault...</div>
 
   return (
@@ -138,13 +197,64 @@ export default function DashboardPage() {
       {/* Filters */}
       <section className="glass p-4">
         <div className="flex flex-col gap-3">
-          {/* Search */}
-          <input
-            className="input"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search by name, set, year..."
-          />
+          {/* Search + Select toggle row */}
+          <div className="flex gap-2">
+            <input
+              className="input flex-1"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Search by name, set, year..."
+            />
+            <button
+              type="button"
+              onClick={toggleSelectMode}
+              className={`flex items-center gap-1.5 rounded-[var(--radius-sm)] px-3 py-2 text-sm font-medium transition ${
+                selectMode
+                  ? 'bg-[var(--primary)] text-white'
+                  : 'bg-cv-surface text-cv-muted hover:text-cv-text'
+              }`}
+            >
+              <CheckSquare className="h-4 w-4" />
+              <span className="hidden sm:inline">Select</span>
+            </button>
+          </div>
+
+          {/* Select mode toolbar */}
+          {selectMode && (
+            <div className="flex flex-wrap items-center gap-2 rounded-[var(--radius-sm)] bg-cv-surface px-3 py-2">
+              <span className="text-sm text-cv-muted">
+                {selectedIds.size} selected
+              </span>
+              <button type="button" onClick={selectAll} className="text-xs text-[var(--primary)] hover:underline">
+                Select all ({filtered.length})
+              </button>
+              {selectedIds.size > 0 && (
+                <button type="button" onClick={clearSelection} className="text-xs text-cv-muted hover:text-cv-text">
+                  Clear
+                </button>
+              )}
+              <div className="ml-auto flex gap-2">
+                <button
+                  type="button"
+                  onClick={handleBatchDelete}
+                  disabled={selectedIds.size === 0 || deleting}
+                  className="flex items-center gap-1.5 rounded-[var(--radius-sm)] bg-red-600/80 px-3 py-1.5 text-sm font-medium text-white disabled:opacity-40 hover:bg-red-600 transition"
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
+                  {deleting ? 'Deleting…' : `Delete Selected (${selectedIds.size})`}
+                </button>
+                <button
+                  type="button"
+                  onClick={toggleSelectMode}
+                  className="flex items-center gap-1 rounded-[var(--radius-sm)] bg-cv-surface px-3 py-1.5 text-sm text-cv-muted hover:text-cv-text transition"
+                >
+                  <X className="h-3.5 w-3.5" />
+                  Cancel
+                </button>
+              </div>
+            </div>
+          )}
+
           {/* Category chips */}
           <div className="flex flex-wrap gap-2">
             {categories.map((cat) => (
@@ -207,7 +317,30 @@ export default function DashboardPage() {
         </section>
       ) : (
         <section className="grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-4">
-          {filtered.map((item) => <CardTile key={item.id} collectionItem={item} />)}
+          {filtered.map((item) => (
+            selectMode ? (
+              <div
+                key={item.id}
+                className="relative cursor-pointer"
+                onClick={() => toggleItem(item.id)}
+              >
+                <div className={`absolute inset-0 z-10 rounded-[var(--radius-md)] border-2 transition ${
+                  selectedIds.has(item.id)
+                    ? 'border-[var(--primary)] bg-[var(--primary)]/10'
+                    : 'border-transparent'
+                }`} />
+                <div className="absolute right-2 top-2 z-20">
+                  {selectedIds.has(item.id)
+                    ? <CheckSquare className="h-5 w-5 text-[var(--primary)]" />
+                    : <Square className="h-5 w-5 text-cv-muted" />
+                  }
+                </div>
+                <CardTile collectionItem={item} />
+              </div>
+            ) : (
+              <CardTile key={item.id} collectionItem={item} />
+            )
+          ))}
         </section>
       )}
     </div>

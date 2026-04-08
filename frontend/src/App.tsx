@@ -11,82 +11,37 @@ import RegisterPage from './pages/RegisterPage'
 import ReviewQueuePage from './pages/ReviewQueuePage'
 import ScanPage from './pages/ScanPage'
 import UploadPage from './pages/UploadPage'
+import TradesPage from './pages/TradesPage'
+import TradeDetailPage from './pages/TradeDetailPage'
+import NewTradePage from './pages/NewTradePage'
+
+function Protected({ children }: { children: React.ReactNode }) {
+  return (
+    <ProtectedRoute>
+      <Layout>{children}</Layout>
+    </ProtectedRoute>
+  )
+}
 
 export default function App() {
   return (
     <Routes>
       <Route path="/login" element={<LoginPage />} />
       <Route path="/register" element={<RegisterPage />} />
-      <Route
-        path="/"
-        element={
-          <ProtectedRoute>
-            <Layout>
-              <CollectionPage />
-            </Layout>
-          </ProtectedRoute>
-        }
-      />
-      <Route
-        path="/scan"
-        element={
-          <ProtectedRoute>
-            <Layout>
-              <ScanPage />
-            </Layout>
-          </ProtectedRoute>
-        }
-      />
-      <Route
-        path="/upload"
-        element={
-          <ProtectedRoute>
-            <Layout>
-              <UploadPage />
-            </Layout>
-          </ProtectedRoute>
-        }
-      />
-      <Route
-        path="/review"
-        element={
-          <ProtectedRoute>
-            <Layout>
-              <ReviewQueuePage />
-            </Layout>
-          </ProtectedRoute>
-        }
-      />
-      <Route
-        path="/deck"
-        element={
-          <ProtectedRoute>
-            <Layout>
-              <DeckBuilderPage />
-            </Layout>
-          </ProtectedRoute>
-        }
-      />
-      <Route
-        path="/card/:id"
-        element={
-          <ProtectedRoute>
-            <Layout>
-              <CardDetailPage />
-            </Layout>
-          </ProtectedRoute>
-        }
-      />
-      <Route
-        path="/admin"
-        element={
-          <ProtectedRoute>
-            <Layout>
-              <AdminPage />
-            </Layout>
-          </ProtectedRoute>
-        }
-      />
+
+      <Route path="/"         element={<Protected><CollectionPage /></Protected>} />
+      <Route path="/scan"     element={<Protected><ScanPage /></Protected>} />
+      <Route path="/upload"   element={<Protected><UploadPage /></Protected>} />
+      <Route path="/review"   element={<Protected><ReviewQueuePage /></Protected>} />
+      <Route path="/deck"     element={<Protected><DeckBuilderPage /></Protected>} />
+      <Route path="/card/:id" element={<Protected><CardDetailPage /></Protected>} />
+      <Route path="/admin"    element={<Protected><AdminPage /></Protected>} />
+
+      {/* Trades */}
+      <Route path="/trades"        element={<Protected><TradesPage /></Protected>} />
+      <Route path="/trades/new"    element={<Protected><NewTradePage /></Protected>} />
+      <Route path="/trades/:id"    element={<Protected><TradeDetailPage /></Protected>} />
+
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   )

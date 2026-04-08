@@ -179,9 +179,27 @@ export async function updateCollectionItem(env: Env, request: Request, user: Use
 export async function deleteCollectionItem(env: Env, user: User, id: number): Promise<Response> {
   const existing = await queryOne(env.DB, 'SELECT id FROM collection_items WHERE id = ? AND user_id = ?', [id, user.id]);
   if (!existing) return notFound('Collection item not found');
-
   await run(env.DB, 'DELETE FROM collection_items WHERE id = ? AND user_id = ?', [id, user.id]);
   return ok({ deleted: true });
+}
+
+export async function batchDeleteCollectionItems(env: Env, request: Request, user: User): Promise<Response> {
+  const body = await parseJsonBody<{ ids: unknown }>(request);
+  if (body instanceof Response) return body;
+  if (!Array.isArray(body.ids) || body.ids.length === 0) {
+    return badRequest('ids must be a non-empty array');
+  }
+  const ids = body.ids.filter((id): id is number => typeof id === 'number' && Number.isInteger(id) && id > 0);
+  if (ids.length === 0) return badRequest('No valid ids provided');
+  if (ids.length > 500) return badRequest('Cannot delete more than 500 items at once');
+  // Only delete items that belong to this user
+  const placeholders = ids.map(() => '?').join(',');
+  await run(
+    env.DB,
+    `DELETE FROM collection_items WHERE id IN (${placeholders}) AND user_id = ?`,
+    [...ids, user.id],
+  );
+  return ok({ deleted: ids });
 }
 
 // ── Wishlist routes ──────────────────────────────────────────────────────────

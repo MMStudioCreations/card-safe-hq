@@ -4,6 +4,7 @@ import { badRequest, notFound, serverError } from './lib/json';
 import { handleLogin, handleLogout, handleMe, handleRegister } from './routes/auth';
 import { createCard, deleteCard, getCard, listCards, updateCard } from './routes/cards';
 import {
+  batchDeleteCollectionItems,
   createCollectionItem,
   deleteCollectionItem,
   getCollectionItem,
@@ -30,6 +31,16 @@ import {
   handleAdminActivity,
   handleAdminQuery,
 } from './routes/admin';
+import {
+  listTrades,
+  createTrade,
+  getTrade,
+  updateTradeStatus,
+  deleteTrade,
+  listNotifications,
+  markAllNotificationsRead,
+  markNotificationRead,
+} from './routes/trades';
 
 function parseId(pathname: string): number | null {
   const id = Number(pathname.split('/').pop());
@@ -156,6 +167,12 @@ export default {
         if (method === 'GET') return withCors(await getCard(env, id), request, env);
         if (method === 'PATCH') return withCors(await updateCard(env, request, id), request, env);
         if (method === 'DELETE') return withCors(await deleteCard(env, id), request, env);
+      }
+
+      if (method === 'DELETE' && pathname === '/api/collection/items/batch') {
+        const user = await requireAuth(env, request);
+        if (user instanceof Response) return withCors(user, request, env);
+        return withCors(await batchDeleteCollectionItems(env, request, user), request, env);
       }
 
       if (pathname === '/api/collection') {
@@ -349,6 +366,47 @@ export default {
         if (method === 'POST' && pathname === '/api/admin/query') {
           return withCors(await handleAdminQuery(env, user, request), request, env);
         }
+      }
+
+      // ── Trades routes ──────────────────────────────────────────────────────
+      if (pathname === '/api/trades') {
+        const user = await requireAuth(env, request);
+        if (user instanceof Response) return withCors(user, request, env);
+        if (method === 'GET')  return withCors(await listTrades(env, request, user), request, env);
+        if (method === 'POST') return withCors(await createTrade(env, request, user), request, env);
+      }
+      if (pathname.startsWith('/api/trades/') && pathname.endsWith('/status')) {
+        const user = await requireAuth(env, request);
+        if (user instanceof Response) return withCors(user, request, env);
+        const id = parseId(pathname.replace('/status', ''));
+        if (!id) return withCors(badRequest('Invalid trade id'), request, env);
+        if (method === 'PATCH') return withCors(await updateTradeStatus(env, request, user, id), request, env);
+      }
+      if (pathname.startsWith('/api/trades/')) {
+        const user = await requireAuth(env, request);
+        if (user instanceof Response) return withCors(user, request, env);
+        const id = parseId(pathname);
+        if (!id) return withCors(badRequest('Invalid trade id'), request, env);
+        if (method === 'GET')    return withCors(await getTrade(env, request, user, id), request, env);
+        if (method === 'DELETE') return withCors(await deleteTrade(env, request, user, id), request, env);
+      }
+      // ── Notifications routes ───────────────────────────────────────────────
+      if (pathname === '/api/notifications') {
+        const user = await requireAuth(env, request);
+        if (user instanceof Response) return withCors(user, request, env);
+        if (method === 'GET') return withCors(await listNotifications(env, request, user), request, env);
+      }
+      if (pathname === '/api/notifications/read-all') {
+        const user = await requireAuth(env, request);
+        if (user instanceof Response) return withCors(user, request, env);
+        if (method === 'PATCH') return withCors(await markAllNotificationsRead(env, request, user), request, env);
+      }
+      if (pathname.startsWith('/api/notifications/') && pathname.endsWith('/read')) {
+        const user = await requireAuth(env, request);
+        if (user instanceof Response) return withCors(user, request, env);
+        const id = parseId(pathname.replace('/read', ''));
+        if (!id) return withCors(badRequest('Invalid notification id'), request, env);
+        if (method === 'PATCH') return withCors(await markNotificationRead(env, request, user, id), request, env);
       }
 
       return withCors(notFound('Route not found'), request, env);

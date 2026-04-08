@@ -320,28 +320,30 @@ export default function CardDetailPage() {
             Back
           </button>
         </div>
-        {sheetImageUrl ? (
-          hasBbox ? (
-            <CardCrop
-              sheetUrl={sheetImageUrl}
-              bbox={{
-                x: item.bbox_x!,
-                y: item.bbox_y!,
-                width: item.bbox_width!,
-                height: item.bbox_height!,
-              }}
-              className="w-full rounded-[var(--radius-md)]"
-            />
+        <div className="w-full rounded-[var(--radius-md)] overflow-hidden bg-zinc-900" style={{ aspectRatio: '2.5/3.5' }}>
+          {sheetImageUrl ? (
+            hasBbox ? (
+              <CardCrop
+                sheetUrl={sheetImageUrl}
+                bbox={{
+                  x: item.bbox_x!,
+                  y: item.bbox_y!,
+                  width: item.bbox_width!,
+                  height: item.bbox_height!,
+                }}
+                className="w-full h-full object-contain object-center"
+              />
+            ) : (
+              <img
+                className="w-full h-full object-contain object-center"
+                src={sheetImageUrl}
+                alt={item.card_name || item.player_name || 'Card'}
+              />
+            )
           ) : (
-            <img
-              className="w-full rounded-[var(--radius-md)]"
-              src={sheetImageUrl}
-              alt={item.card_name || item.player_name || 'Card'}
-            />
-          )
-        ) : (
-          <div className="h-[420px] rounded-[var(--radius-md)] bg-[linear-gradient(135deg,var(--primary),var(--secondary))]" />
-        )}
+            <div className="h-full w-full bg-[linear-gradient(135deg,var(--primary),var(--secondary))]" />
+          )}
+        </div>
       </section>
 
       <section className="space-y-4">

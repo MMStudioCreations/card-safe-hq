@@ -1,7 +1,6 @@
 import { useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import type { CollectionItem } from '../lib/api'
-import CardCrop from './CardCrop'
 
 type Props = { collectionItem: CollectionItem }
 
@@ -39,35 +38,23 @@ export default function CardTile({ collectionItem }: Props) {
     [displayName],
   )
 
+  // front_image_url is an R2 key — always proxy through /api/images/
+  // Since scan.ts now stores a pre-cropped card key (not the sheet key),
+  // we render it directly as a plain <img> — no CardCrop needed.
   const apiBase = import.meta.env.VITE_API_URL ?? ''
   const imageUrl = collectionItem.front_image_url
     ? `${apiBase}/api/images/${encodeURIComponent(collectionItem.front_image_url)}`
     : null
 
-  const hasBbox =
-    collectionItem.bbox_x != null &&
-    collectionItem.bbox_y != null &&
-    collectionItem.bbox_width != null &&
-    collectionItem.bbox_height != null
-
-  const bbox = hasBbox ? {
-    x: collectionItem.bbox_x!,
-    y: collectionItem.bbox_y!,
-    width: collectionItem.bbox_width!,
-    height: collectionItem.bbox_height!,
-  } : null
-
   return (
     <button className="glass text-left p-3" onClick={() => navigate(`/card/${collectionItem.id}`)} type="button">
-      <div className="h-36 w-full rounded-[var(--radius-md)] overflow-hidden">
-        {imageUrl && bbox ? (
-          <CardCrop
-            sheetUrl={imageUrl}
-            bbox={bbox}
-            className="w-full h-full object-cover"
+      <div className="w-full rounded-[var(--radius-md)] overflow-hidden bg-zinc-900" style={{ aspectRatio: '2.5/3.5' }}>
+        {imageUrl ? (
+          <img
+            src={imageUrl}
+            alt={displayName}
+            className="w-full h-full object-contain object-center"
           />
-        ) : imageUrl ? (
-          <img src={imageUrl} alt={displayName} className="w-full h-full object-cover" />
         ) : (
           <div className="flex h-full w-full items-center justify-center bg-[linear-gradient(135deg,var(--primary),var(--secondary))] text-3xl font-bold">
             {initials || 'CV'}

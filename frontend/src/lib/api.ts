@@ -140,6 +140,45 @@ export type VisionConfirmPayload = {
   confidence: number
 }
 
+export type TradeStatus = 'pending' | 'accepted' | 'declined' | 'cancelled' | 'completed'
+
+export type TradeRow = {
+  id: number
+  initiator_id: number
+  recipient_id: number
+  status: TradeStatus
+  message: string | null
+  created_at: string
+  updated_at: string
+  initiator_username: string | null
+  initiator_email: string
+  recipient_username: string | null
+  recipient_email: string
+}
+
+export type TradeItem = {
+  id: number
+  collection_item_id: number
+  direction: 'offer' | 'request'
+  card_name: string | null
+  player_name: string | null
+  set_name: string | null
+  estimated_value_cents: number | null
+  front_image_url: string | null
+}
+
+export type TradeDetail = TradeRow & { items: TradeItem[] }
+
+export type Notification = {
+  id: number
+  type: string
+  title: string
+  body: string | null
+  trade_id: number | null
+  read: number
+  created_at: string
+}
+
 const http = axios.create({
   baseURL: import.meta.env.VITE_API_URL ?? 'https://cardsafehq-api.michaelamarino16.workers.dev',
   withCredentials: true,
@@ -190,6 +229,9 @@ export const api = {
     http.patch<never, CollectionItem>(`/api/collection/${id}`, payload),
   deleteCollectionItem: (id: number | string) =>
     http.delete<never, { success: boolean }>(`/api/collection/${id}`),
+
+  batchDeleteCollectionItems: (ids: number[]) =>
+    http.delete<never, { deleted: number[] }>('/api/collection/items/batch', { data: { ids } }),
 
   uploadDirect: (collectionItemId: number, side: 'front' | 'back', file: File) => {
     const formData = new FormData()
@@ -254,6 +296,28 @@ export const api = {
   createRelease: (payload: Omit<Release, 'id' | 'created_at'>) =>
     http.post<never, Release>('/api/releases', payload),
   getRelease: (id: number | string) => http.get<never, Release>(`/api/releases/${id}`),
+
+  // ── Trades ──────────────────────────────────────────────────────────────
+  listTrades: () => http.get<never, TradeRow[]>('/api/trades'),
+  createTrade: (payload: {
+    recipient_id: number;
+    offer_item_ids: number[];
+    request_item_ids: number[];
+    message?: string;
+  }) => http.post<never, { trade_id: number; status: string }>('/api/trades', payload),
+  getTrade: (id: number | string) => http.get<never, TradeDetail>(`/api/trades/${id}`),
+  updateTradeStatus: (id: number | string, status: TradeStatus) =>
+    http.patch<never, { trade_id: number; status: string }>(`/api/trades/${id}/status`, { status }),
+  deleteTrade: (id: number | string) =>
+    http.delete<never, { deleted: boolean; trade_id: number }>(`/api/trades/${id}`),
+
+  // ── Notifications ────────────────────────────────────────────────────────
+  listNotifications: () =>
+    http.get<never, { notifications: Notification[]; unread_count: number }>('/api/notifications'),
+  markAllNotificationsRead: () =>
+    http.patch<never, { marked_read: boolean }>('/api/notifications/read-all'),
+  markNotificationRead: (id: number) =>
+    http.patch<never, { marked_read: boolean; notification_id: number }>(`/api/notifications/${id}/read`),
 
   getCardPricing: (cardId: number | string) =>
     http.get<never, {

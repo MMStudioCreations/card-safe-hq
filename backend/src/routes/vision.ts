@@ -19,6 +19,11 @@ interface PendingIdentificationRow {
 
 // ── POST /api/vision/identify ─────────────────────────────────────────────────
 
+interface CollectionItemFullRow extends CollectionItemRow {
+  product_type: string | null;
+  product_name: string | null;
+}
+
 export async function identifyCollectionItem(env: Env, request: Request, user: User): Promise<Response> {
   const body = await parseJsonBody<{ collectionItemId?: unknown }>(request);
   if (body instanceof Response) return body;
@@ -28,12 +33,86 @@ export async function identifyCollectionItem(env: Env, request: Request, user: U
     return badRequest('collectionItemId must be a positive integer');
   }
 
-  const item = await queryOne<CollectionItemRow>(
+  const item = await queryOne<CollectionItemFullRow>(
     env.DB,
-    'SELECT id, user_id, front_image_url FROM collection_items WHERE id = ? AND user_id = ?',
+    'SELECT id, user_id, front_image_url, product_type, product_name FROM collection_items WHERE id = ? AND user_id = ?',
     [collectionItemId, user.id],
   );
   if (!item) return notFound('Collection item not found');
+
+  // ── Sealed product fast-path: skip AI identification ──────────────────────
+  // Sealed products (packs, boxes, ETBs, tins, bundles) don't need card AI.
+  // Instead we create a minimal card record using the product_name and fetch
+  // eBay comps to populate pricing.
+  const SEALED_TYPES = new Set(['booster_pack', 'booster_box', 'etb', 'tin', 'bundle', 'promo_pack', 'other_sealed']);
+  if (item.product_type && SEALED_TYPES.has(item.product_type)) {
+    const productName = item.product_name ?? item.product_type ?? 'Sealed Product';
+
+    // Upsert a card record for this sealed product
+    const existingCard = await queryOne<{ id: number }>(
+      env.DB,
+      `SELECT id FROM cards WHERE card_name = ? AND game = 'sealed' LIMIT 1`,
+      [productName],
+    );
+    let cardId: number;
+    if (existingCard) {
+      cardId = existingCard.id;
+    } else {
+      await run(
+        env.DB,
+        `INSERT INTO cards (game, card_name, set_name) VALUES ('sealed', ?, ?)`,
+        [productName, item.product_type],
+      );
+      const newCard = await queryOne<{ id: number }>(env.DB, 'SELECT id FROM cards WHERE id = last_insert_rowid()');
+      if (!newCard) return serverError('Failed to create sealed product card record');
+      cardId = newCard.id;
+    }
+
+    // Link collection item to card record
+    await run(
+      env.DB,
+      `UPDATE collection_items SET card_id = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND user_id = ?`,
+      [cardId, collectionItemId, user.id],
+    );
+
+    // Fetch eBay comps in background for sealed pricing
+    if (env.EBAY_CLIENT_ID && env.EBAY_CLIENT_SECRET) {
+      const { fetchEbayComps } = await import('../lib/ebay');
+      fetchEbayComps(env.EBAY_CLIENT_ID, env.EBAY_CLIENT_SECRET, {
+        player_name: productName,
+        year: null,
+        set_name: null,
+        card_number: null,
+        variation: null,
+      } as any).then(async (comps) => {
+        for (const comp of comps) {
+          try {
+            await run(
+              env.DB,
+              `INSERT INTO sales_comps (card_id, source, title, sold_price_cents, sold_date, sold_platform, listing_url, condition_text)
+               VALUES (?, 'ebay_sold', ?, ?, ?, 'eBay', ?, ?)`,
+              [cardId, comp.title, comp.sold_price_cents, comp.sold_date, comp.listing_url, comp.condition_text],
+            );
+          } catch { /* ignore comp insert errors */ }
+        }
+        // Update estimated value from first comp
+        if (comps.length > 0) {
+          const avgCents = Math.round(comps.reduce((s, c) => s + c.sold_price_cents, 0) / comps.length);
+          await run(env.DB, `UPDATE collection_items SET estimated_value_cents = ? WHERE id = ?`, [avgCents, collectionItemId]);
+        }
+      }).catch((err) => console.error('[vision] sealed eBay comps failed:', err));
+    }
+
+    return ok({
+      collection_item_id: collectionItemId,
+      sealed: true,
+      product_type: item.product_type,
+      product_name: productName,
+      card_id: cardId,
+    }, 201);
+  }
+
+  // ── Single card AI identification path ────────────────────────────────────
   if (!item.front_image_url) return badRequest('Collection item has no front image — upload one first');
 
   // front_image_url is an R2 key; read bytes and encode as base64 data URL

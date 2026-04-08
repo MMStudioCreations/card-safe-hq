@@ -4,6 +4,7 @@ import { badRequest, ok, serverError } from '../lib/json';
 import { analyzeSheet } from '../lib/anthropic';
 import { fetchEbayComps } from '../lib/ebay';
 import { identifyCard, correctCardSet } from '../lib/vision';
+import { cropCardFromSheet } from '../lib/crop';
 
 const ALLOWED_MIME_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp']);
 const MAX_FILE_SIZE = 20 * 1024 * 1024; // 20 MB
@@ -73,6 +74,24 @@ export async function handleSheetScan(env: Env, request: Request, user: User): P
   for (const cardData of analysis.cards) {
     try {
       const grading = cardData.grading;
+
+      // ── Crop individual card from sheet ──
+      let cardImageUrl: string = sheetKey; // fallback to sheet key
+      const cropBuffer = await cropCardFromSheet(fileBuffer, file.type, cardData.bbox);
+      if (cropBuffer) {
+        const cropKey = `cards/${user.id}/${timestamp}-card-${cardData.position}.jpg`;
+        try {
+          await env.BUCKET.put(cropKey, cropBuffer, {
+            httpMetadata: { contentType: 'image/jpeg' },
+          });
+          cardImageUrl = cropKey;
+        } catch (cropUploadErr) {
+          console.error(`[scan] Failed to upload crop for card ${cardData.position}:`, cropUploadErr);
+          // cardImageUrl stays as sheetKey fallback
+        }
+      } else {
+        console.error(`[scan] cropCardFromSheet returned null for card ${cardData.position} — bbox:`, cardData.bbox, '— falling back to sheet key');
+      }
 
       // ── Identify card via GPT-4o → PTCG → PriceCharting pipeline ──
       // Build a data URL from the sheet for per-card identification
@@ -174,19 +193,25 @@ export async function handleSheetScan(env: Env, request: Request, user: User): P
         })();
 
       // ── Insert collection item ──
+      // Store bbox so the frontend can still use CardCrop if needed,
+      // but front_image_url now points to the pre-cropped card image key.
       await run(
         env.DB,
         `INSERT INTO collection_items
            (user_id, card_id, quantity, condition_note, estimated_grade, estimated_value_cents,
-            front_image_url, product_type)
-         VALUES (?, ?, 1, ?, ?, ?, ?, 'single_card')`,
+            front_image_url, bbox_x, bbox_y, bbox_width, bbox_height, product_type)
+         VALUES (?, ?, 1, ?, ?, ?, ?, ?, ?, ?, ?, 'single_card')`,
         [
           user.id,
           cardId,
           ident.condition_notes ?? null,
           grading.estimated_grade_range,
           estimatedValueCents,
-          sheetKey,
+          cardImageUrl,
+          cardData.bbox.x,
+          cardData.bbox.y,
+          cardData.bbox.width,
+          cardData.bbox.height,
         ],
       );
 
