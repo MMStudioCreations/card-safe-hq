@@ -2,7 +2,8 @@ import type { Env, User } from '../types';
 import { queryOne, run } from '../lib/db';
 import { badRequest, ok, serverError } from '../lib/json';
 import { fetchEbayComps } from '../lib/ebay';
-import { identifyCard, correctCardSet } from '../lib/vision';
+import { identifyCard as visionIdentifyCard, correctCardSet } from '../lib/vision';
+import { identifyCard as ocrIdentifyCard } from '../lib/anthropic';
 import { cropCardFromSheet } from '../lib/crop';
 
 const ALLOWED_MIME_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp']);
@@ -22,6 +23,73 @@ function arrayBufferToBase64(buffer: ArrayBuffer): string {
   let binary = '';
   for (let i = 0; i < uint8.length; i++) binary += String.fromCharCode(uint8[i]);
   return btoa(binary);
+}
+
+// ─── Pokemon TCG API types + lookup helpers ───────────────────────────────────
+
+interface TCGCard {
+  id: string;
+  name: string;
+  number: string;
+  set: { name: string; series: string; id: string };
+  rarity: string;
+  images: { small: string; large: string };
+  tcgplayer?: { url?: string; prices?: Record<string, { market?: number }> };
+}
+
+async function lookupBySetNumber(
+  cardName: string | null,
+  setNumber: string | null,
+  apiKey: string,
+): Promise<TCGCard | null> {
+  if (!setNumber && !cardName) return null;
+
+  // Extract just the number portion (e.g. "171" from "171/167")
+  const numOnly = setNumber?.split('/')[0]?.trim();
+
+  let query = '';
+  if (cardName && numOnly) {
+    query = `name:"${cardName}" number:${numOnly}`;
+  } else if (numOnly) {
+    query = `number:${numOnly}`;
+  } else if (cardName) {
+    query = `name:"${cardName}"`;
+  }
+
+  try {
+    const url = `https://api.pokemontcg.io/v2/cards?q=${encodeURIComponent(query)}&pageSize=3&orderBy=set.releaseDate`;
+    const res = await fetch(url, { headers: { 'X-Api-Key': apiKey } });
+    if (!res.ok) return null;
+    const data = await res.json() as { data: TCGCard[] };
+    if (!data.data?.length) return null;
+
+    // Prefer exact name + number match
+    if (cardName && numOnly) {
+      const exact = data.data.find(
+        (c) => c.name.toLowerCase() === cardName.toLowerCase() && c.number === numOnly,
+      );
+      if (exact) return exact;
+    }
+
+    return data.data[0];
+  } catch {
+    return null;
+  }
+}
+
+async function lookupByNameOnly(
+  cardName: string,
+  apiKey: string,
+): Promise<TCGCard | null> {
+  try {
+    const url = `https://api.pokemontcg.io/v2/cards?q=name:"${encodeURIComponent(cardName)}"&pageSize=1&orderBy=-set.releaseDate`;
+    const res = await fetch(url, { headers: { 'X-Api-Key': apiKey } });
+    if (!res.ok) return null;
+    const data = await res.json() as { data: TCGCard[] };
+    return data.data?.[0] ?? null;
+  } catch {
+    return null;
+  }
 }
 
 // Fixed-grid bbox for a standard 9-pocket binder page (3×3 grid).
@@ -96,7 +164,7 @@ export async function handleSheetScan(env: Env, request: Request, user: User): P
     try {
       const imageBase64 = arrayBufferToBase64(fileBuffer);
       const dataUrl = `data:${file.type};base64,${imageBase64}`;
-      ident = await identifyCard(env, dataUrl);
+      ident = await visionIdentifyCard(env, dataUrl);
     } catch (err) {
       console.error('Single card identification failed:', err);
       return serverError(`AI identification failed: ${err instanceof Error ? err.message : 'Unknown error'}`);
@@ -256,20 +324,41 @@ export async function handleSheetScan(env: Env, request: Request, user: User): P
         console.error(`[scan] cropCardFromSheet returned null for position ${position}`);
       }
 
-      // Phase 2: Send individual crop to GPT-4o for identification
+      // Phase 2: OCR — focused extraction of collector number + card name
       const identBuffer = cropBuffer ?? fileBuffer;
       const identMime = cropBuffer ? 'image/jpeg' : file.type;
       const identBase64 = arrayBufferToBase64(identBuffer);
-      const dataUrl = `data:${identMime};base64,${identBase64}`;
-      const ident = await identifyCard(env, dataUrl);
+      const ocrResult = await ocrIdentifyCard(env.OPENAI_API_KEY, identBase64, identMime);
+
+      console.log(`[scan] Position ${position} OCR:`, JSON.stringify(ocrResult));
+
+      // Phase 3: TCG API lookup — set number first, name-only fallback
+      let tcgCard: TCGCard | null = null;
+
+      if (ocrResult.set_number || ocrResult.card_name) {
+        tcgCard = await lookupBySetNumber(
+          ocrResult.card_name,
+          ocrResult.set_number,
+          env.POKEMON_TCG_API_KEY ?? '',
+        );
+      }
+
+      if (!tcgCard && ocrResult.card_name) {
+        tcgCard = await lookupByNameOnly(ocrResult.card_name, env.POKEMON_TCG_API_KEY ?? '');
+      }
+
+      console.log(`[scan] Position ${position} TCG match:`, tcgCard?.name ?? 'none');
 
       // ── Resolve canonical card name and game ──
-      const cardName = ident.card_name ?? ident.player_name ?? 'Unknown Card';
-      const game = ident.game ?? ident.sport ?? 'Unknown';
-      const setName = ident.set_name_override ?? ident.ptcg_set_name ?? ident.set_name;
-      const yearValue = ident.year && Number.isFinite(ident.year) ? ident.year : null;
-      const externalRef = ident.ptcg_id ??
-        ([ident.manufacturer, ident.year, ident.card_number].filter(Boolean).join(':') || null);
+      const cardName = tcgCard?.name ?? ocrResult.card_name ?? 'Unknown Card';
+      const game = 'Pokemon';
+      const setName = tcgCard?.set.name ?? null;
+      const yearValue: number | null = null;
+      const externalRef: string | null = tcgCard?.id ?? null;
+      const finalNumber = tcgCard?.number ?? ocrResult.set_number ?? null;
+      const marketPrice = tcgCard?.tcgplayer?.prices
+        ? Object.values(tcgCard.tcgplayer.prices)[0]?.market ?? null
+        : null;
 
       // ── Upsert card record ──
       const existingCard = await queryOne<{ id: number }>(
@@ -279,7 +368,7 @@ export async function handleSheetScan(env: Env, request: Request, user: User): P
            AND game = ?
            AND COALESCE(card_number, '') = COALESCE(?, '')
          LIMIT 1`,
-        [cardName, game, ident.card_number ?? null],
+        [cardName, game, finalNumber],
       );
 
       let cardId: number;
@@ -302,14 +391,14 @@ export async function handleSheetScan(env: Env, request: Request, user: User): P
            WHERE id = ?`,
           [
             setName ?? null,
-            ident.ptcg_rarity ?? null,
-            ident.ptcg_image_large ?? ident.ptcg_image_small ?? null,
+            tcgCard?.rarity ?? null,
+            tcgCard?.images.large ?? tcgCard?.images.small ?? null,
             externalRef,
-            ident.sport ?? null,
-            ident.player_name ?? null,
+            null,
+            null,
             yearValue,
-            ident.variation ?? null,
-            ident.manufacturer ?? null,
+            null,
+            null,
             cardId,
           ],
         );
@@ -324,15 +413,15 @@ export async function handleSheetScan(env: Env, request: Request, user: User): P
             game,
             setName ?? null,
             cardName,
-            ident.card_number ?? null,
-            ident.ptcg_rarity ?? ident.variation ?? null,
-            ident.ptcg_image_large ?? ident.ptcg_image_small ?? null,
+            finalNumber,
+            tcgCard?.rarity ?? null,
+            tcgCard?.images.large ?? tcgCard?.images.small ?? null,
             externalRef,
-            ident.sport ?? null,
-            ident.player_name ?? null,
+            null,
+            null,
             yearValue,
-            ident.variation ?? null,
-            ident.manufacturer ?? null,
+            null,
+            null,
           ],
         );
 
@@ -344,8 +433,8 @@ export async function handleSheetScan(env: Env, request: Request, user: User): P
         cardId = newCard.id;
       }
 
-      // ── Resolve estimated value from real pricing data ──
-      const estimatedValueCents = ident.price_market_cents ?? ident.price_mid_cents ?? 0;
+      // ── Resolve estimated value from TCG market price ──
+      const estimatedValueCents = marketPrice ? Math.round(marketPrice * 100) : 0;
 
       // Step C: INSERT collection item — front_image_url is the crop key, NOT the sheet key
       console.log(`[scan] Saving card ${position} with image key: ${cardImageUrl}`);
@@ -358,7 +447,7 @@ export async function handleSheetScan(env: Env, request: Request, user: User): P
         [
           user.id,
           cardId,
-          ident.condition_notes ?? null,
+          null,
           null,
           estimatedValueCents,
           cardImageUrl,
@@ -390,7 +479,7 @@ export async function handleSheetScan(env: Env, request: Request, user: User): P
           null,
           null,
           null,
-          ident.confidence,
+          tcgCard ? 95 : (ocrResult.confidence ?? 0),
           null,
         ],
       );
@@ -402,11 +491,11 @@ export async function handleSheetScan(env: Env, request: Request, user: User): P
         const capturedCardId = cardId;
 
         const ebayIdent = {
-          card_number: ident.card_number,
-          player_name: ident.card_name ?? ident.player_name,
-          year: ident.year,
+          card_number: finalNumber,
+          player_name: cardName,
+          year: null,
           set_name: setName ?? null,
-          variation: ident.variation,
+          variation: null,
         };
 
         fetchEbayComps(ebayClientId, ebayClientSecret, ebayIdent as any).then(async (comps) => {
@@ -442,19 +531,19 @@ export async function handleSheetScan(env: Env, request: Request, user: User): P
           ...fullItem,
           sheet_url: sheetKey,
           bbox: fixedBbox,
-          ptcg_confirmed: ident.ptcg_confirmed,
-          ptcg_id: ident.ptcg_id,
-          ptcg_set_name: ident.ptcg_set_name,
-          ptcg_set_series: ident.ptcg_set_series,
-          ptcg_image_large: ident.ptcg_image_large,
-          ptcg_tcgplayer_url: ident.ptcg_tcgplayer_url,
-          price_market_cents: ident.price_market_cents,
-          price_low_cents: ident.price_low_cents,
-          price_high_cents: ident.price_high_cents,
-          price_psa9_cents: ident.price_psa9_cents,
-          price_psa10_cents: ident.price_psa10_cents,
-          price_source: ident.price_source,
-          identification_confidence: ident.confidence,
+          ptcg_confirmed: tcgCard != null,
+          ptcg_id: tcgCard?.id ?? null,
+          ptcg_set_name: tcgCard?.set.name ?? null,
+          ptcg_set_series: tcgCard?.set.series ?? null,
+          ptcg_image_large: tcgCard?.images.large ?? null,
+          ptcg_tcgplayer_url: tcgCard?.tcgplayer?.url ?? null,
+          price_market_cents: marketPrice ? Math.round(marketPrice * 100) : null,
+          price_low_cents: null,
+          price_high_cents: null,
+          price_psa9_cents: null,
+          price_psa10_cents: null,
+          price_source: marketPrice ? 'tcgplayer' : null,
+          identification_confidence: tcgCard ? 95 : (ocrResult.confidence ?? 0),
         });
       }
     } catch (err) {
