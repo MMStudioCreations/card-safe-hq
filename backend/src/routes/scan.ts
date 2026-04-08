@@ -535,7 +535,7 @@ The collector number is critical — read it exactly.`;
         cardId = newCard.id;
       }
 
-      console.log(`[scan] INSERT pos ${position} front_image_url: ${cropKey}`);
+      console.log(`[scan] INSERT pos ${position} front_image_url: ${cardImageUrl} (cropKey=${cropKey}, fallback=${cardImageUrl === sheetKey})`);
       await run(
         env.DB,
         `INSERT INTO collection_items
