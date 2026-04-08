@@ -1,4 +1,3 @@
-import { useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import type { CollectionItem } from '../lib/api'
 
@@ -33,33 +32,20 @@ export default function CardTile({ collectionItem }: Props) {
     || 'Other'
   ).toLowerCase()
 
-  const initials = useMemo(
-    () => displayName.split(' ').map((part) => part[0]).join('').slice(0, 2),
-    [displayName],
-  )
-
-  // front_image_url is an R2 key — always proxy through /api/images/
-  // Since scan.ts now stores a pre-cropped card key (not the sheet key),
-  // we render it directly as a plain <img> — no CardCrop needed.
-  const apiBase = import.meta.env.VITE_API_URL ?? ''
+  // front_image_url is an R2 key pointing to the pre-cropped card image.
+  // Always proxy through /api/images/ — no CardCrop needed in the collection view.
   const imageUrl = collectionItem.front_image_url
-    ? `${apiBase}/api/images/${encodeURIComponent(collectionItem.front_image_url)}`
-    : null
+    ? `${import.meta.env.VITE_API_URL}/api/images/${encodeURIComponent(collectionItem.front_image_url)}`
+    : '/placeholder-card.png'
 
   return (
     <button className="glass text-left p-3" onClick={() => navigate(`/card/${collectionItem.id}`)} type="button">
       <div className="w-full rounded-[var(--radius-md)] overflow-hidden bg-zinc-900" style={{ aspectRatio: '2.5/3.5' }}>
-        {imageUrl ? (
-          <img
-            src={imageUrl}
-            alt={displayName}
-            className="w-full h-full object-contain object-center"
-          />
-        ) : (
-          <div className="flex h-full w-full items-center justify-center bg-[linear-gradient(135deg,var(--primary),var(--secondary))] text-3xl font-bold">
-            {initials || 'CV'}
-          </div>
-        )}
+        <img
+          src={imageUrl}
+          alt={displayName}
+          className="w-full h-full object-contain object-center"
+        />
       </div>
       <div className="mt-3 space-y-2">
         <h3 className="line-clamp-2 text-sm font-bold">{displayName}</h3>
