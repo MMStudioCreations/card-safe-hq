@@ -58,7 +58,157 @@ export async function handleSheetScan(env: Env, request: Request, user: User): P
     return serverError('Failed to upload sheet image');
   }
 
-  // Analyze sheet layout with Anthropic (bounding boxes)
+  const mode = (formData.get('mode') as string | null) ?? 'sheet';
+
+  // ─── Single card scan path ────────────────────────────────────────────────
+  if (mode === 'single') {
+    const cardKey = `cards/${user.id}/${timestamp}-card.${ext}`;
+    try {
+      await env.BUCKET.put(cardKey, fileBuffer, {
+        httpMetadata: { contentType: file.type },
+      });
+    } catch (err) {
+      console.error('R2 upload failed (single card):', err);
+      return serverError('Failed to upload card image');
+    }
+
+    let ident;
+    try {
+      const imageBase64 = arrayBufferToBase64(fileBuffer);
+      const dataUrl = `data:${file.type};base64,${imageBase64}`;
+      ident = await identifyCard(env, dataUrl);
+    } catch (err) {
+      console.error('Single card identification failed:', err);
+      return serverError(`AI identification failed: ${err instanceof Error ? err.message : 'Unknown error'}`);
+    }
+
+    const cardName = ident.card_name ?? ident.player_name ?? 'Unknown Card';
+    const game = ident.game ?? ident.sport ?? 'Unknown';
+    const setName = ident.set_name_override ?? ident.ptcg_set_name ?? ident.set_name;
+    const yearValue = ident.year && Number.isFinite(ident.year) ? ident.year : null;
+    const externalRef = ident.ptcg_id ??
+      ([ident.manufacturer, ident.year, ident.card_number].filter(Boolean).join(':') || null);
+
+    const existingCard = await queryOne<{ id: number }>(
+      env.DB,
+      `SELECT id FROM cards
+       WHERE card_name = ?
+         AND game = ?
+         AND COALESCE(card_number, '') = COALESCE(?, '')
+       LIMIT 1`,
+      [cardName, game, ident.card_number ?? null],
+    );
+
+    let cardId: number;
+    if (existingCard) {
+      cardId = existingCard.id;
+      await run(
+        env.DB,
+        `UPDATE cards SET
+           set_name      = COALESCE(set_name, ?),
+           rarity        = COALESCE(rarity, ?),
+           image_url     = COALESCE(image_url, ?),
+           external_ref  = COALESCE(external_ref, ?),
+           sport         = COALESCE(sport, ?),
+           player_name   = COALESCE(player_name, ?),
+           year          = COALESCE(year, ?),
+           variation     = COALESCE(variation, ?),
+           manufacturer  = COALESCE(manufacturer, ?),
+           updated_at    = CURRENT_TIMESTAMP
+         WHERE id = ?`,
+        [
+          setName ?? null,
+          ident.ptcg_rarity ?? null,
+          ident.ptcg_image_large ?? ident.ptcg_image_small ?? null,
+          externalRef,
+          ident.sport ?? null,
+          ident.player_name ?? null,
+          yearValue,
+          ident.variation ?? null,
+          ident.manufacturer ?? null,
+          cardId,
+        ],
+      );
+    } else {
+      await run(
+        env.DB,
+        `INSERT INTO cards
+           (game, set_name, card_name, card_number, rarity, image_url, external_ref,
+            sport, player_name, year, variation, manufacturer)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [
+          game,
+          setName ?? null,
+          cardName,
+          ident.card_number ?? null,
+          ident.ptcg_rarity ?? ident.variation ?? null,
+          ident.ptcg_image_large ?? ident.ptcg_image_small ?? null,
+          externalRef,
+          ident.sport ?? null,
+          ident.player_name ?? null,
+          yearValue,
+          ident.variation ?? null,
+          ident.manufacturer ?? null,
+        ],
+      );
+      const newCard = await queryOne<{ id: number }>(
+        env.DB,
+        'SELECT id FROM cards WHERE id = last_insert_rowid()',
+      );
+      if (!newCard) return serverError('Failed to create card record');
+      cardId = newCard.id;
+    }
+
+    const estimatedValueCents = ident.price_market_cents ?? ident.price_mid_cents ?? 0;
+
+    await run(
+      env.DB,
+      `INSERT INTO collection_items
+         (user_id, card_id, quantity, condition_note, estimated_value_cents,
+          front_image_url, product_type)
+       VALUES (?, ?, 1, ?, ?, ?, 'single_card')`,
+      [user.id, cardId, ident.condition_notes ?? null, estimatedValueCents, cardKey],
+    );
+
+    const newItem = await queryOne<{ id: number }>(
+      env.DB,
+      'SELECT id FROM collection_items WHERE id = last_insert_rowid()',
+    );
+    if (!newItem) return serverError('Failed to create collection item');
+
+    const fullItem = await queryOne<Record<string, unknown>>(
+      env.DB,
+      `SELECT ci.*, c.game, c.set_name, c.card_name, c.card_number, c.rarity,
+              c.sport, c.player_name, c.year, c.variation, c.manufacturer, c.image_url
+       FROM collection_items ci
+       LEFT JOIN cards c ON ci.card_id = c.id
+       WHERE ci.id = ?`,
+      [newItem.id],
+    );
+
+    return ok({
+      card: {
+        ...(fullItem ?? {}),
+        ptcg_confirmed: ident.ptcg_confirmed,
+        ptcg_id: ident.ptcg_id,
+        ptcg_set_name: ident.ptcg_set_name,
+        ptcg_image_large: ident.ptcg_image_large,
+        ptcg_tcgplayer_url: ident.ptcg_tcgplayer_url,
+        price_market_cents: ident.price_market_cents,
+        price_low_cents: ident.price_low_cents,
+        price_high_cents: ident.price_high_cents,
+        price_psa9_cents: ident.price_psa9_cents,
+        price_psa10_cents: ident.price_psa10_cents,
+        price_source: ident.price_source,
+        identification_confidence: ident.confidence,
+        front_image_url: cardKey,
+      },
+    });
+  }
+
+  // ─── Sheet scan path ──────────────────────────────────────────────────────
+
+  // Analyze sheet layout with GPT-4o (bounding boxes + identification)
   let analysis;
   try {
     const imageBase64 = arrayBufferToBase64(fileBuffer);
@@ -73,8 +223,6 @@ export async function handleSheetScan(env: Env, request: Request, user: User): P
 
   for (const cardData of analysis.cards) {
     try {
-      const grading = cardData.grading;
-
       // ── Crop individual card from sheet ──
       let cardImageUrl: string = sheetKey; // fallback to sheet key
       const cropBuffer = await cropCardFromSheet(fileBuffer, file.type, cardData.bbox);
@@ -193,16 +341,11 @@ export async function handleSheetScan(env: Env, request: Request, user: User): P
       }
 
       // ── Resolve estimated value from real pricing data ──
-      // Priority: TCGPlayer market → PriceCharting loose → grade-based fallback
+      // Priority: TCGPlayer market → PriceCharting loose → sheet AI estimate fallback
       const estimatedValueCents = ident.price_market_cents
         ?? ident.price_mid_cents
-        ?? (() => {
-          const gradeParts = grading.estimated_grade_range.split('-').map(Number).filter(isFinite);
-          const avgGrade = gradeParts.length > 0
-            ? gradeParts.reduce((a, b) => a + b, 0) / gradeParts.length
-            : 7;
-          return Math.round(avgGrade * 200); // rough fallback only
-        })();
+        ?? cardData.estimated_value_cents
+        ?? 0;
 
       // ── Insert collection item ──
       // Store bbox so the frontend can still use CardCrop if needed,
@@ -217,7 +360,7 @@ export async function handleSheetScan(env: Env, request: Request, user: User): P
           user.id,
           cardId,
           ident.condition_notes ?? null,
-          grading.estimated_grade_range,
+          cardData.estimated_grade,
           estimatedValueCents,
           cardImageUrl,
           cardData.bbox.x,
@@ -235,6 +378,7 @@ export async function handleSheetScan(env: Env, request: Request, user: User): P
       const collectionItemId = newItem.id;
 
       // ── Insert grading estimate ──
+      // Sheet analysis provides a grade string; component scores are null (not available from sheet scan).
       await run(
         env.DB,
         `INSERT INTO grading_estimates
@@ -243,13 +387,13 @@ export async function handleSheetScan(env: Env, request: Request, user: User): P
          VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
         [
           collectionItemId,
-          grading.estimated_grade_range,
-          grading.centering_score,
-          grading.corners_score,
-          grading.edges_score,
-          grading.surface_score,
-          grading.confidence_score,
-          grading.explanation,
+          cardData.estimated_grade,
+          null,
+          null,
+          null,
+          null,
+          cardData.confidence,
+          null,
         ],
       );
 
@@ -328,7 +472,7 @@ export async function handleSheetScan(env: Env, request: Request, user: User): P
 
   return ok({
     sheet_url: sheetKey,
-    cards_detected: analysis.card_count,
+    cards_detected: analysis.cards.length,
     collection_items: collectionItems,
     ...(errors.length > 0 ? { errors } : {}),
   });

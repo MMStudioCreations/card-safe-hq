@@ -4,6 +4,7 @@ import { useQueryClient } from '@tanstack/react-query'
 import { api } from '../lib/api'
 import CardCrop from '../components/CardCrop'
 
+type Mode = 'sheet' | 'single'
 type State = 'idle' | 'processing' | 'done' | 'error'
 
 interface ScanResultItem {
@@ -13,7 +14,9 @@ interface ScanResultItem {
   estimated_grade?: string
   estimated_value_cents?: number
   sheet_url?: string
+  front_image_url?: string
   bbox?: { x: number; y: number; width: number; height: number }
+  identification_confidence?: number
 }
 
 const STATUS_MESSAGES = [
@@ -25,26 +28,37 @@ const STATUS_MESSAGES = [
   'Saving to your collection...',
 ]
 
+const SINGLE_STATUS_MESSAGES = [
+  'Uploading image...',
+  'Identifying card with AI...',
+  'Fetching market prices...',
+  'Saving to your collection...',
+]
+
 export default function ScanPage() {
   const queryClient = useQueryClient()
   const fileInputRef = useRef<HTMLInputElement>(null)
   const dropRef = useRef<HTMLDivElement>(null)
 
+  const [mode, setMode] = useState<Mode>('sheet')
   const [state, setState] = useState<State>('idle')
   const [preview, setPreview] = useState<string | null>(null)
   const [selectedFile, setSelectedFile] = useState<File | null>(null)
   const [dragOver, setDragOver] = useState(false)
   const [statusIndex, setStatusIndex] = useState(0)
-  const [result, setResult] = useState<{ cards_detected: number; collection_items: ScanResultItem[] } | null>(null)
+  const [sheetResult, setSheetResult] = useState<{ cards_detected: number; collection_items: ScanResultItem[] } | null>(null)
+  const [singleResult, setSingleResult] = useState<ScanResultItem | null>(null)
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
+
+  const statusMessages = mode === 'single' ? SINGLE_STATUS_MESSAGES : STATUS_MESSAGES
 
   useEffect(() => {
     if (state !== 'processing') return
     const interval = setInterval(() => {
-      setStatusIndex((i) => (i + 1) % STATUS_MESSAGES.length)
+      setStatusIndex((i) => (i + 1) % statusMessages.length)
     }, 3000)
     return () => clearInterval(interval)
-  }, [state])
+  }, [state, statusMessages.length])
 
   function handleFile(file: File) {
     if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type)) {
@@ -87,13 +101,24 @@ export default function ScanPage() {
     if (!selectedFile) return
     setState('processing')
     setStatusIndex(0)
-    setResult(null)
+    setSheetResult(null)
+    setSingleResult(null)
     setErrorMessage(null)
 
     try {
-      const data = await api.scanSheet(selectedFile)
+      const data = await api.scanSheet(selectedFile, mode)
       await queryClient.invalidateQueries({ queryKey: ['collection'] })
-      setResult({ cards_detected: data.cards_detected, collection_items: data.collection_items })
+
+      if (mode === 'single') {
+        if (data.card) {
+          setSingleResult(data.card as ScanResultItem)
+        }
+      } else {
+        setSheetResult({
+          cards_detected: data.cards_detected ?? 0,
+          collection_items: (data.collection_items ?? []) as ScanResultItem[],
+        })
+      }
       setState('done')
     } catch (err) {
       setErrorMessage(err instanceof Error ? err.message : 'Scan failed. Please try again.')
@@ -106,18 +131,48 @@ export default function ScanPage() {
     setPreview(null)
     setSelectedFile(null)
     setState('idle')
-    setResult(null)
+    setSheetResult(null)
+    setSingleResult(null)
     setErrorMessage(null)
     if (fileInputRef.current) fileInputRef.current.value = ''
+  }
+
+  function handleModeChange(newMode: Mode) {
+    setMode(newMode)
+    handleReset()
   }
 
   return (
     <div className="mx-auto max-w-2xl space-y-6">
       <div>
-        <h2 className="text-2xl font-bold">Scan Binder Page</h2>
+        <h2 className="text-2xl font-bold">Scan Card</h2>
         <p className="mt-1 text-sm text-cv-muted">
-          Upload a scanned 9-pocket binder page to automatically identify and grade each card.
+          Upload a card image to automatically identify and add it to your collection.
         </p>
+      </div>
+
+      {/* Mode tabs */}
+      <div className="glass flex rounded-[var(--radius-lg)] overflow-hidden">
+        <button
+          type="button"
+          onClick={() => handleModeChange('sheet')}
+          className={`flex-1 py-2.5 text-sm font-medium transition-colors
+            ${mode === 'sheet'
+              ? 'bg-[var(--primary)] text-white'
+              : 'text-cv-muted hover:text-white'}`}
+        >
+          Binder Sheet (9-pocket)
+        </button>
+        <button
+          type="button"
+          onClick={() => handleModeChange('single')}
+          className={`flex-1 py-2.5 text-sm font-medium transition-colors
+            ${mode === 'single'
+              ? 'bg-[var(--primary)] text-white'
+              : 'text-cv-muted hover:text-white'}`}
+        >
+          Single Card
+        </button>
       </div>
 
       {(state === 'idle' || state === 'error') && (
@@ -149,7 +204,11 @@ export default function ScanPage() {
                   </svg>
                 </div>
                 <div>
-                  <p className="font-semibold">Upload your 9-pocket binder page scan</p>
+                  <p className="font-semibold">
+                    {mode === 'sheet'
+                      ? 'Upload your 9-pocket binder page scan'
+                      : 'Upload a single card photo'}
+                  </p>
                   <p className="mt-1 text-xs text-cv-muted">Supports JPEG, PNG, WebP up to 20MB</p>
                 </div>
                 <p className="text-xs text-cv-muted">Drag & drop or click to browse</p>
@@ -195,24 +254,71 @@ export default function ScanPage() {
         <div className="glass flex min-h-64 flex-col items-center justify-center gap-6 rounded-[var(--radius-lg)] p-8 text-center">
           <div className="h-12 w-12 animate-spin rounded-full border-4 border-cv-surface border-t-[var(--primary)]" />
           <div>
-            <p className="font-semibold">{STATUS_MESSAGES[statusIndex]}</p>
+            <p className="font-semibold">{statusMessages[statusIndex]}</p>
             <p className="mt-1 text-xs text-cv-muted">This may take up to 30 seconds</p>
           </div>
         </div>
       )}
 
-      {state === 'done' && result && (
+      {/* Single card result */}
+      {state === 'done' && mode === 'single' && singleResult && (
         <div className="space-y-6">
           <div className="glass rounded-[var(--radius-lg)] p-5 text-center">
-            <p className="text-2xl font-bold text-[var(--primary)]">{result.cards_detected}</p>
+            <p className="text-2xl font-bold text-[var(--primary)]">Card identified</p>
+            <p className="mt-1 text-sm text-cv-muted">Added to your collection</p>
+          </div>
+
+          <div className="glass rounded-[var(--radius-lg)] overflow-hidden">
+            {preview && (
+              <img
+                src={preview}
+                alt={singleResult.card_name ?? 'Scanned card'}
+                className="w-full object-contain max-h-80"
+              />
+            )}
+            <div className="p-4 space-y-1">
+              <p className="font-semibold text-lg">{singleResult.card_name || 'Unknown Card'}</p>
+              <p className="text-sm text-cv-muted">{singleResult.set_name || 'Unknown set'}</p>
+              {singleResult.estimated_grade && (
+                <p className="text-sm">Grade: {singleResult.estimated_grade}</p>
+              )}
+              {singleResult.estimated_value_cents != null && singleResult.estimated_value_cents > 0 && (
+                <p className="text-sm">
+                  Est. value: ${(singleResult.estimated_value_cents / 100).toFixed(2)}
+                </p>
+              )}
+              {singleResult.identification_confidence != null && (
+                <p className="text-xs text-cv-muted">
+                  Confidence: {singleResult.identification_confidence}%
+                </p>
+              )}
+            </div>
+          </div>
+
+          <div className="flex gap-3">
+            <Link to="/" className="btn-primary flex-1 text-center">
+              View Full Collection
+            </Link>
+            <button className="btn-ghost" onClick={handleReset} type="button">
+              Scan Another Card
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Sheet scan result */}
+      {state === 'done' && mode === 'sheet' && sheetResult && (
+        <div className="space-y-6">
+          <div className="glass rounded-[var(--radius-lg)] p-5 text-center">
+            <p className="text-2xl font-bold text-[var(--primary)]">{sheetResult.cards_detected}</p>
             <p className="mt-1 text-sm text-cv-muted">
-              {result.cards_detected === 1 ? 'card' : 'cards'} detected and added to your collection
+              {sheetResult.cards_detected === 1 ? 'card' : 'cards'} detected and added to your collection
             </p>
           </div>
 
-          {result.collection_items.length > 0 && (
+          {sheetResult.collection_items.length > 0 && (
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-              {result.collection_items.map((item: ScanResultItem) => (
+              {sheetResult.collection_items.map((item: ScanResultItem) => (
                 <div key={item.id} className="glass rounded-[var(--radius-lg)] overflow-hidden">
                   {item.sheet_url && item.bbox ? (
                     <CardCrop
