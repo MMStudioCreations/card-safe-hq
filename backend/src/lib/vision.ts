@@ -1,57 +1,117 @@
 import type { Env } from '../types';
+import { searchPokemonCard, extractTCGPlayerPrice } from './pokemontcg';
+import { fetchPriceChartingData } from './pricecharting';
+
+// ─── Identification Types ────────────────────────────────────────────────────
 
 export interface CardIdentification {
-  player_name: string | null;
-  year: number | null;
+  // GPT-4o extracted fields
+  card_name: string | null;
+  card_number: string | null;        // e.g. "252/193" — primary lookup key
   set_name: string | null;
-  card_number: string | null;
-  sport: string | null;
+  game: string | null;               // "Pokemon" | "Magic" | "Baseball" | etc.
+  sport: string | null;              // for sports cards
+  player_name: string | null;        // for sports cards
+  year: number | null;
   variation: string | null;
   manufacturer: string | null;
   condition_notes: string | null;
   confidence: number;
   raw_response: string;
+
+  // PTCG confirmed fields (populated after API lookup)
+  ptcg_id: string | null;            // e.g. "sv3pt5-252"
+  ptcg_confirmed: boolean;           // true = PTCG match found
+  ptcg_image_small: string | null;
+  ptcg_image_large: string | null;
+  ptcg_set_id: string | null;
+  ptcg_set_name: string | null;      // canonical set name from PTCG API
+  ptcg_set_series: string | null;
+  ptcg_rarity: string | null;
+  ptcg_tcgplayer_url: string | null;
+
+  // Pricing (from PTCG TCGPlayer data or PriceCharting fallback)
+  price_market_cents: number | null;
+  price_low_cents: number | null;
+  price_mid_cents: number | null;
+  price_high_cents: number | null;
+  price_psa9_cents: number | null;
+  price_psa10_cents: number | null;
+  price_source: 'tcgplayer' | 'pricecharting' | null;
+
+  // User-correctable — can be overridden post-scan
+  set_name_override: string | null;
 }
 
 const FAILED_IDENTIFICATION: Omit<CardIdentification, 'raw_response'> = {
+  card_name: null,
+  card_number: null,
+  set_name: null,
+  game: null,
+  sport: null,
   player_name: null,
   year: null,
-  set_name: null,
-  card_number: null,
-  sport: null,
   variation: null,
   manufacturer: null,
   condition_notes: null,
   confidence: 0,
+  ptcg_id: null,
+  ptcg_confirmed: false,
+  ptcg_image_small: null,
+  ptcg_image_large: null,
+  ptcg_set_id: null,
+  ptcg_set_name: null,
+  ptcg_set_series: null,
+  ptcg_rarity: null,
+  ptcg_tcgplayer_url: null,
+  price_market_cents: null,
+  price_low_cents: null,
+  price_mid_cents: null,
+  price_high_cents: null,
+  price_psa9_cents: null,
+  price_psa10_cents: null,
+  price_source: null,
+  set_name_override: null,
 };
 
-const SYSTEM_PROMPT = `You are an expert sports and trading card grader and authenticator with decades of experience. You have encyclopedic knowledge of:
+// ─── GPT-4o Prompts ──────────────────────────────────────────────────────────
 
-- Sports cards across all major sports: Baseball, Basketball, Football, Soccer, Hockey, Golf, Tennis, and more
-- Trading card games: Pokemon, Magic: The Gathering, Yu-Gi-Oh!, Dragon Ball, and others
-- All major manufacturers: Topps, Panini, Upper Deck, Donruss, Fleer, Bowman, Score, O-Pee-Chee, Leaf, and others
-- Card variations and parallels: Rookie cards (RC), Refractors, Prizms, Holofoil, Autographs (Auto), Patch/Relic cards, Serial numbered (/10, /25, /99, /250, etc.), Short Prints (SP), Super Short Prints (SSP), and more
-- Card numbering conventions, set checklists, and vintage vs modern cardboard
+const SYSTEM_PROMPT = `You are an expert trading card and sports card identifier. You have encyclopedic knowledge of:
 
-When shown a card image, carefully examine every visible detail: the front design, back text, copyright year, set name, card number, logos, foil patterns, and any printed signatures or swatches.
+TRADING CARD GAMES:
+- Pokémon TCG: all sets from Base Set (1999) through the current Scarlet & Violet era. Card numbers follow the format "XXX/YYY" printed at the bottom left. Set symbols appear on the right side of the card. EX, GX, V, VMAX, VSTAR, ex designations are part of the card name.
+- Magic: The Gathering, Yu-Gi-Oh!, Dragon Ball Super, One Piece, Lorcana
 
-You MUST respond ONLY with a single valid JSON object. No markdown fences, no explanation before or after, just the JSON.`;
+SPORTS CARDS:
+- Baseball, Basketball, Football, Soccer, Hockey
+- Manufacturers: Topps, Panini, Upper Deck, Donruss, Fleer, Bowman
+- Variations: Rookie (RC), Refractor, Prizm, Holo, Auto, Patch, Serial numbered
 
-const USER_PROMPT = `Identify this sports or trading card from the image. Extract every piece of visible metadata.
+CRITICAL INSTRUCTIONS:
+1. For Pokémon cards, the card number (e.g. "252/193") is ALWAYS printed at the bottom left — read it exactly
+2. The set name for Pokémon is NOT the series name — it is the specific product name (e.g. "Obsidian Flames", not "Scarlet & Violet")
+3. For alternate art cards, include "Special Illustration Rare" or "Illustration Rare" in the variation field
+4. Never guess a card number — use null if you cannot read it clearly
+5. Respond ONLY with valid JSON, no markdown, no explanation`;
+
+const USER_PROMPT = `Identify this trading card or sports card from the image. Read every visible detail carefully including the bottom of the card for the card number.
 
 Return a JSON object with exactly these fields:
-- "player_name": the athlete or character name, or null if not determinable
-- "year": the 4-digit card year as a number, or null if not visible
-- "set_name": the full set/product name (e.g. "2023 Topps Chrome", "Base Set"), or null
-- "card_number": the card number exactly as printed (e.g. "#247", "PSA 1"), or null
-- "sport": the sport or game (Baseball, Basketball, Football, Soccer, Hockey, Pokemon, etc.), or null
-- "variation": any special parallel or insert designation (Rookie, Refractor, Holo, Auto, Patch, Gold, Prizm, etc.), or null
-- "manufacturer": the card company (Topps, Panini, Upper Deck, etc.), or null
-- "condition_notes": visible condition issues such as corner wear, edge chipping, surface scratches, print defects, or centering problems; null if card appears clean
-- "confidence": your confidence in this identification as an integer 0–100
-- "raw_response": a concise plain-English sentence summarising what you see (e.g. "1989 Upper Deck Ken Griffey Jr. rookie card #1, appears Near Mint")
+- "card_name": the full card name exactly as printed (e.g. "Chi-Yu ex", "Mike Trout"), or null
+- "card_number": the card number exactly as printed (e.g. "252/193", "1", "RC-10"), or null — read from bottom of card
+- "set_name": the specific set/product name (e.g. "Obsidian Flames", "2023 Topps Chrome"), or null
+- "game": the game or sport ("Pokemon", "Magic", "Baseball", "Basketball", "Football", "Soccer", "Hockey", "Yu-Gi-Oh", "Other"), or null
+- "sport": for sports cards only, the specific sport, or null
+- "player_name": for sports cards, the athlete name, or null
+- "year": the 4-digit year as a number, or null
+- "variation": special designation (e.g. "Special Illustration Rare", "Holo", "Reverse Holo", "Full Art", "Refractor", "Prizm", "Auto", "Patch", "Rookie"), or null
+- "manufacturer": card company (e.g. "The Pokemon Company", "Topps", "Panini", "Upper Deck"), or null
+- "condition_notes": visible issues (corner wear, edge chips, surface scratches, centering problems), or null if card looks clean
+- "confidence": your confidence 0-100 as an integer
 
-Set any field to null if it cannot be determined. Do not guess; use null when uncertain.`;
+Set any field to null if uncertain. Never guess card numbers.`;
+
+// ─── OpenAI Vision Call ──────────────────────────────────────────────────────
 
 type ImageMediaType = 'image/jpeg' | 'image/png' | 'image/webp' | 'image/gif';
 
@@ -65,33 +125,30 @@ interface OpenAIMessage {
 }
 
 interface OpenAIResponse {
-  choices: Array<{
-    message: { content: string };
-  }>;
+  choices: Array<{ message: { content: string } }>;
   error?: { message: string };
 }
 
-export async function r2KeyToDataUrl(env: Env, key: string): Promise<string | null> {
-  const obj = await env.BUCKET.get(key);
-  if (!obj) return null;
-
-  const bytes = await obj.arrayBuffer();
-  const mediaType = (obj.httpMetadata?.contentType ?? 'image/jpeg') as ImageMediaType;
-
-  const uint8 = new Uint8Array(bytes);
-  let binary = '';
-  for (let i = 0; i < uint8.length; i++) {
-    binary += String.fromCharCode(uint8[i]);
-  }
-  const base64 = btoa(binary);
-
-  return `data:${mediaType};base64,${base64}`;
+interface GPTCardResult {
+  card_name: string | null;
+  card_number: string | null;
+  set_name: string | null;
+  game: string | null;
+  sport: string | null;
+  player_name: string | null;
+  year: number | null;
+  variation: string | null;
+  manufacturer: string | null;
+  condition_notes: string | null;
+  confidence: number;
 }
 
-export async function identifyCard(env: Env, imageUrl: string): Promise<CardIdentification> {
+async function callGPT4oVision(
+  apiKey: string,
+  imageUrl: string,
+): Promise<{ result: GPTCardResult; rawText: string }> {
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), 30_000);
-
   let rawText = '';
 
   try {
@@ -109,7 +166,7 @@ export async function identifyCard(env: Env, imageUrl: string): Promise<CardIden
     const response = await fetch('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
       headers: {
-        'Authorization': `Bearer ${env.OPENAI_API_KEY}`,
+        'Authorization': `Bearer ${apiKey}`,
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
@@ -124,38 +181,229 @@ export async function identifyCard(env: Env, imageUrl: string): Promise<CardIden
     if (!response.ok) {
       const errBody = await response.text();
       console.error('OpenAI API error', response.status, errBody);
-      return { ...FAILED_IDENTIFICATION, raw_response: errBody };
+      throw new Error(`OpenAI error ${response.status}: ${errBody}`);
     }
 
     const data = (await response.json()) as OpenAIResponse;
     rawText = data.choices?.[0]?.message?.content ?? '';
-
     const jsonText = rawText.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '').trim();
-    const parsed = JSON.parse(jsonText) as Partial<CardIdentification>;
+    const parsed = JSON.parse(jsonText) as Partial<GPTCardResult>;
 
     return {
-      player_name: typeof parsed.player_name === 'string' ? parsed.player_name : null,
-      year: typeof parsed.year === 'number' && Number.isFinite(parsed.year) ? Math.trunc(parsed.year) : null,
-      set_name: typeof parsed.set_name === 'string' ? parsed.set_name : null,
-      card_number: typeof parsed.card_number === 'string' ? parsed.card_number : null,
-      sport: typeof parsed.sport === 'string' ? parsed.sport : null,
-      variation: typeof parsed.variation === 'string' ? parsed.variation : null,
-      manufacturer: typeof parsed.manufacturer === 'string' ? parsed.manufacturer : null,
-      condition_notes: typeof parsed.condition_notes === 'string' ? parsed.condition_notes : null,
-      confidence:
-        typeof parsed.confidence === 'number' && Number.isFinite(parsed.confidence)
-          ? Math.max(0, Math.min(100, Math.round(parsed.confidence)))
-          : 0,
-      raw_response: rawText,
+      rawText,
+      result: {
+        card_name: typeof parsed.card_name === 'string' ? parsed.card_name : null,
+        card_number: typeof parsed.card_number === 'string' ? parsed.card_number : null,
+        set_name: typeof parsed.set_name === 'string' ? parsed.set_name : null,
+        game: typeof parsed.game === 'string' ? parsed.game : null,
+        sport: typeof parsed.sport === 'string' ? parsed.sport : null,
+        player_name: typeof parsed.player_name === 'string' ? parsed.player_name : null,
+        year: typeof parsed.year === 'number' && Number.isFinite(parsed.year) ? Math.trunc(parsed.year) : null,
+        variation: typeof parsed.variation === 'string' ? parsed.variation : null,
+        manufacturer: typeof parsed.manufacturer === 'string' ? parsed.manufacturer : null,
+        condition_notes: typeof parsed.condition_notes === 'string' ? parsed.condition_notes : null,
+        confidence: typeof parsed.confidence === 'number' ? Math.max(0, Math.min(100, Math.round(parsed.confidence))) : 0,
+      },
     };
-  } catch (err) {
-    if (err instanceof Error && err.name === 'AbortError') {
-      console.error('identifyCard: OpenAI API timed out after 30s');
-    } else {
-      console.error('identifyCard: failed to parse response', err, 'raw:', rawText);
-    }
-    return { ...FAILED_IDENTIFICATION, raw_response: rawText };
   } finally {
     clearTimeout(timeoutId);
   }
+}
+
+// ─── PTCG Lookup ─────────────────────────────────────────────────────────────
+
+// Strip the "/total" from card numbers like "252/193" → "252"
+function extractCardNumber(raw: string | null): string | null {
+  if (!raw) return null;
+  const match = raw.match(/^(\d+[A-Za-z]?)/);
+  return match ? match[1] : raw;
+}
+
+async function lookupPTCG(
+  apiKey: string,
+  gpt: GPTCardResult,
+): Promise<CardIdentification['ptcg_id'] extends infer T ? Partial<CardIdentification> : never> {
+  if (!apiKey || gpt.game?.toLowerCase() !== 'pokemon') return {};
+
+  const number = extractCardNumber(gpt.card_number);
+
+  // Attempt 1: card name + number (most precise)
+  let ptcgCard = gpt.card_name && number
+    ? await searchPokemonCard(apiKey, gpt.card_name, number, null)
+    : null;
+
+  // Attempt 2: card name + set name (if number failed)
+  if (!ptcgCard && gpt.card_name && gpt.set_name) {
+    ptcgCard = await searchPokemonCard(apiKey, gpt.card_name, null, gpt.set_name);
+  }
+
+  // Attempt 3: card name only (soft fallback)
+  if (!ptcgCard && gpt.card_name) {
+    ptcgCard = await searchPokemonCard(apiKey, gpt.card_name, null, null);
+  }
+
+  if (!ptcgCard) return {};
+
+  const prices = extractTCGPlayerPrice(ptcgCard);
+
+  return {
+    ptcg_id: ptcgCard.id,
+    ptcg_confirmed: true,
+    ptcg_image_small: ptcgCard.images.small,
+    ptcg_image_large: ptcgCard.images.large,
+    ptcg_set_id: ptcgCard.set.id,
+    ptcg_set_name: ptcgCard.set.name,
+    ptcg_set_series: ptcgCard.set.series,
+    ptcg_rarity: ptcgCard.rarity,
+    ptcg_tcgplayer_url: ptcgCard.tcgplayer?.url ?? null,
+    price_market_cents: prices.market,
+    price_low_cents: prices.low,
+    price_mid_cents: prices.mid,
+    price_high_cents: prices.high,
+    price_source: prices.market ? 'tcgplayer' : null,
+  };
+}
+
+// ─── PriceCharting Fallback ───────────────────────────────────────────────────
+
+async function lookupPriceCharting(
+  gpt: GPTCardResult,
+  setOverride?: string | null,
+): Promise<Partial<CardIdentification>> {
+  const setName = setOverride ?? gpt.set_name;
+  const data = await fetchPriceChartingData(
+    gpt.card_name ?? gpt.player_name ?? '',
+    setName,
+    gpt.card_number,
+  );
+
+  if (!data.loose_price_cents && !data.psa_10_price_cents) return {};
+
+  return {
+    price_market_cents: data.loose_price_cents,
+    price_psa9_cents: data.psa_9_price_cents,
+    price_psa10_cents: data.psa_10_price_cents,
+    price_source: 'pricecharting',
+  };
+}
+
+// ─── R2 Utility ──────────────────────────────────────────────────────────────
+
+export async function r2KeyToDataUrl(env: Env, key: string): Promise<string | null> {
+  const obj = await env.BUCKET.get(key);
+  if (!obj) return null;
+  const bytes = await obj.arrayBuffer();
+  const mediaType = (obj.httpMetadata?.contentType ?? 'image/jpeg') as ImageMediaType;
+  const uint8 = new Uint8Array(bytes);
+  let binary = '';
+  for (let i = 0; i < uint8.length; i++) binary += String.fromCharCode(uint8[i]);
+  return `data:${mediaType};base64,${btoa(binary)}`;
+}
+
+// ─── Main Entry Point ─────────────────────────────────────────────────────────
+
+export async function identifyCard(
+  env: Env,
+  imageUrl: string,
+  setOverride?: string | null,   // user-provided set correction
+): Promise<CardIdentification> {
+  let rawText = '';
+
+  try {
+    // Step 1: GPT-4o vision
+    const { result: gpt, rawText: rt } = await callGPT4oVision(env.OPENAI_API_KEY, imageUrl);
+    rawText = rt;
+
+    // Step 2: PTCG lookup (Pokemon only)
+    const ptcgData = await lookupPTCG(env.POKEMON_TCG_API_KEY ?? '', gpt);
+
+    // Step 3: Pricing — TCGPlayer from PTCG, or PriceCharting fallback
+    let pricingData: Partial<CardIdentification> = {};
+    if (!ptcgData.price_market_cents) {
+      pricingData = await lookupPriceCharting(gpt, setOverride);
+    }
+
+    // Step 4: Resolve set name — priority: user override > PTCG confirmed > GPT extracted
+    const resolvedSetName = setOverride ?? ptcgData.ptcg_set_name ?? gpt.set_name;
+
+    return {
+      ...FAILED_IDENTIFICATION,
+      // GPT fields
+      card_name: gpt.card_name,
+      card_number: gpt.card_number,
+      set_name: resolvedSetName,
+      game: gpt.game,
+      sport: gpt.sport,
+      player_name: gpt.player_name,
+      year: gpt.year,
+      variation: gpt.variation,
+      manufacturer: gpt.manufacturer,
+      condition_notes: gpt.condition_notes,
+      confidence: gpt.confidence,
+      raw_response: rawText,
+      // PTCG confirmed fields
+      ...ptcgData,
+      // Pricing fallback
+      ...pricingData,
+      // User correction
+      set_name_override: setOverride ?? null,
+    };
+  } catch (err) {
+    if (err instanceof Error && err.name === 'AbortError') {
+      console.error('identifyCard: GPT-4o timed out');
+    } else {
+      console.error('identifyCard: failed', err, 'raw:', rawText);
+    }
+    return { ...FAILED_IDENTIFICATION, raw_response: rawText };
+  }
+}
+
+// ─── Set Correction (called when user updates set) ───────────────────────────
+
+export async function correctCardSet(
+  env: Env,
+  cardName: string,
+  cardNumber: string | null,
+  newSetName: string,
+): Promise<Partial<CardIdentification>> {
+  // Re-run PTCG lookup with new set name
+  const ptcgCard = await searchPokemonCard(
+    env.POKEMON_TCG_API_KEY ?? '',
+    cardName,
+    cardNumber ? extractCardNumber(cardNumber) : null,
+    newSetName,
+  );
+
+  if (ptcgCard) {
+    const prices = extractTCGPlayerPrice(ptcgCard);
+    return {
+      ptcg_id: ptcgCard.id,
+      ptcg_confirmed: true,
+      ptcg_image_small: ptcgCard.images.small,
+      ptcg_image_large: ptcgCard.images.large,
+      ptcg_set_id: ptcgCard.set.id,
+      ptcg_set_name: ptcgCard.set.name,
+      ptcg_set_series: ptcgCard.set.series,
+      ptcg_rarity: ptcgCard.rarity,
+      ptcg_tcgplayer_url: ptcgCard.tcgplayer?.url ?? null,
+      price_market_cents: prices.market,
+      price_low_cents: prices.low,
+      price_mid_cents: prices.mid,
+      price_high_cents: prices.high,
+      price_source: prices.market ? 'tcgplayer' : null,
+      set_name_override: newSetName,
+    };
+  }
+
+  // PTCG didn't find it — try PriceCharting with the new set
+  const pcData = await fetchPriceChartingData(cardName, newSetName, cardNumber);
+  return {
+    ptcg_confirmed: false,
+    set_name_override: newSetName,
+    ptcg_set_name: newSetName,
+    price_market_cents: pcData.loose_price_cents,
+    price_psa9_cents: pcData.psa_9_price_cents,
+    price_psa10_cents: pcData.psa_10_price_cents,
+    price_source: pcData.loose_price_cents ? 'pricecharting' : null,
+  };
 }
