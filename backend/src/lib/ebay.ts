@@ -1,5 +1,3 @@
-import type { CardIdentification } from './anthropic';
-
 export interface EbaySoldListing {
   title: string;
   sold_price_cents: number;
@@ -25,6 +23,7 @@ interface EbaySearchResponse {
   itemSummaries?: EbayItemSummary[];
 }
 
+// ─── Auth ─────────────────────────────────────────────────────────────────────
 
 export async function getEbayToken(clientId: string, clientSecret: string): Promise<string> {
   const credentials = btoa(`${clientId}:${clientSecret}`);
@@ -47,6 +46,7 @@ export async function getEbayToken(clientId: string, clientSecret: string): Prom
   return data.access_token;
 }
 
+// ─── Search ───────────────────────────────────────────────────────────────────
 
 export async function searchSoldListings(
   token: string,
@@ -97,33 +97,72 @@ export async function searchSoldListings(
     .filter((item): item is EbaySoldListing => item !== null);
 }
 
-export function buildSearchQuery(identification: CardIdentification): string {
-  // Prioritize most specific identifiers first: card_number, player_name, year, set_name, variation
-  const parts = [
-    identification.card_number,
-    identification.player_name,
-    identification.year,
-    identification.set_name,
-    identification.variation,
-  ]
-    .map((v) => (v ?? '').trim())
-    .filter((v) => v.length > 0);
+// ─── Query Builder ────────────────────────────────────────────────────────────
+// Uses canonical card identification fields from the new vision.ts pipeline.
+// Priority: card_number (most specific) → card_name → set_name → variation → year
+// For Pokémon: card_number alone is a near-perfect eBay search key
+// For sports: player_name + year + set_name is the strongest combo
 
-  const query = parts.join(' ');
+export interface EbayCardIdent {
+  card_name: string | null;
+  card_number: string | null;
+  set_name: string | null;
+  variation: string | null;
+  year: number | null;
+  player_name: string | null;   // sports cards
+  game: string | null;          // "Pokemon" | "Baseball" | etc.
+  ptcg_set_name: string | null; // canonical set name from PTCG API if confirmed
+}
+
+export function buildSearchQuery(ident: EbayCardIdent): string {
+  const isPokemon = ident.game?.toLowerCase() === 'pokemon';
+  const resolvedSetName = ident.ptcg_set_name ?? ident.set_name;
+
+  let parts: (string | number | null | undefined)[];
+
+  if (isPokemon) {
+    // Pokémon: name + number is extremely precise on eBay
+    // e.g. "Chi-Yu ex 252/193 Obsidian Flames"
+    parts = [
+      ident.card_name,
+      ident.card_number,
+      resolvedSetName,
+      ident.variation,
+    ];
+  } else {
+    // Sports/other: player + year + set + variation
+    // e.g. "Mike Trout 2023 Topps Chrome Refractor"
+    parts = [
+      ident.player_name ?? ident.card_name,
+      ident.year,
+      resolvedSetName,
+      ident.variation,
+      ident.card_number,
+    ];
+  }
+
+  const query = parts
+    .map((v) => String(v ?? '').trim())
+    .filter((v) => v.length > 0)
+    .join(' ');
+
   return query.length > 200 ? query.slice(0, 200).trimEnd() : query;
 }
+
+// ─── Main Export ──────────────────────────────────────────────────────────────
 
 export async function fetchEbayComps(
   clientId: string | undefined,
   clientSecret: string | undefined,
-  identification: CardIdentification,
+  ident: EbayCardIdent,
 ): Promise<EbaySoldListing[]> {
   if (!clientId || !clientSecret) return [];
 
   try {
     const token = await getEbayToken(clientId, clientSecret);
-    const query = buildSearchQuery(identification);
+    const query = buildSearchQuery(ident);
     if (!query) return [];
+    console.log('[eBay] search query:', query);
     return await searchSoldListings(token, query);
   } catch (err) {
     console.error('fetchEbayComps failed (non-blocking):', err);
