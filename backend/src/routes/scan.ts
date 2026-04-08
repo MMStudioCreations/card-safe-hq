@@ -3,7 +3,6 @@ import { queryOne, run } from '../lib/db';
 import { badRequest, ok, serverError } from '../lib/json';
 import { fetchEbayComps } from '../lib/ebay';
 import { identifyCard as visionIdentifyCard, correctCardSet } from '../lib/vision';
-import { identifyCard as ocrIdentifyCard } from '../lib/anthropic';
 import { cropCardFromSheet } from '../lib/crop';
 
 const ALLOWED_MIME_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp']);
@@ -325,23 +324,145 @@ export async function handleSheetScan(env: Env, request: Request, user: User): P
   }
 
   // ─── Sheet scan path ──────────────────────────────────────────────────────
-  // Phase 1: Crop each of the 9 positions using fixed grid math (no GPT-4o bbox guessing).
-  // Phase 2: Send each individual crop to GPT-4o for identification.
-  // This eliminates bbox misalignment entirely — each card is identified from its own image.
+  // Step 1: Send FULL sheet to GPT-4o once — identify all 9 cards at full resolution.
+  // Step 2: For each position, lookup in Pokemon TCG API.
+  // Step 3: Crop each position using fixed grid math.
+  // Step 4: Upload crop to R2 and INSERT collection item.
+
+  const FULL_SHEET_PROMPT = `You are analyzing a high-resolution scan of a
+9-pocket Pokemon card binder page. The cards are arranged in a 3x3 grid.
+
+Examine the FULL image carefully. For each of the 9 card positions
+(left to right, top to bottom, positions 1-9):
+
+Read the text printed on each card:
+- Card name: large bold text at the TOP of each card
+- Collector number: small text at the BOTTOM of each card (format: "168/162")
+- HP: number at top-right of each card
+
+You MUST return all 9 positions. If a slot appears empty return null values.
+
+Return ONLY this JSON:
+{
+  "cards": [
+    {
+      "position": 1,
+      "card_name": "exact name printed at top",
+      "collector_number": "168/162",
+      "hp": 50
+    },
+    ... 9 total entries
+  ]
+}
+
+Read what is literally printed. Do not guess from artwork.
+The collector number is critical — read it exactly.`;
+
+  interface SheetCardResult {
+    position: number;
+    card_name: string | null;
+    collector_number: string | null;
+    hp: number | null;
+  }
+
+  // ── Step 1: GPT-4o full sheet identification ──
+  const sheetBase64 = arrayBufferToBase64(fileBuffer);
+  const gptController = new AbortController();
+  const gptTimeout = setTimeout(() => gptController.abort(), 60_000);
+
+  let sheetCards: SheetCardResult[] = [];
+
+  try {
+    const gptResponse = await fetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${env.OPENAI_API_KEY}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        model: 'gpt-4o',
+        max_tokens: 1000,
+        messages: [
+          {
+            role: 'user',
+            content: [
+              {
+                type: 'image_url',
+                image_url: {
+                  url: `data:${file.type};base64,${sheetBase64}`,
+                  detail: 'high',
+                },
+              },
+              { type: 'text', text: FULL_SHEET_PROMPT },
+            ],
+          },
+        ],
+        response_format: { type: 'json_object' },
+      }),
+      signal: gptController.signal,
+    });
+
+    if (gptResponse.ok) {
+      const gptData = await gptResponse.json() as { choices: Array<{ message: { content: string } }> };
+      const rawText = gptData.choices?.[0]?.message?.content ?? '';
+      const jsonText = rawText.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '').trim();
+      const parsed = JSON.parse(jsonText) as { cards: SheetCardResult[] };
+      sheetCards = Array.isArray(parsed.cards) ? parsed.cards : [];
+    } else {
+      const errBody = await gptResponse.text();
+      console.error('[scan] GPT-4o full sheet error:', gptResponse.status, errBody);
+    }
+  } catch (err) {
+    console.error('[scan] GPT-4o full sheet call failed:', err);
+  } finally {
+    clearTimeout(gptTimeout);
+  }
+
+  console.log('[scan] GPT-4o full sheet result:', JSON.stringify(sheetCards));
+
+  // Build position map — fill any missing positions with nulls
+  const cardsByPosition = new Map<number, SheetCardResult>();
+  for (const c of sheetCards) {
+    if (c.position >= 1 && c.position <= 9) cardsByPosition.set(c.position, c);
+  }
+  for (let p = 1; p <= 9; p++) {
+    if (!cardsByPosition.has(p)) {
+      cardsByPosition.set(p, { position: p, card_name: null, collector_number: null, hp: null });
+    }
+  }
 
   const collectionItems: Record<string, unknown>[] = [];
   const errors: Array<{ position: number; error: string }> = [];
 
   for (let position = 1; position <= 9; position++) {
     try {
-      // Phase 1: Crop using fixed grid math
+      const gptCard = cardsByPosition.get(position)!;
+      const { card_name, collector_number } = gptCard;
+
+      // Extract just the number portion (e.g. "168/162" → "168")
+      const numOnly = collector_number?.split('/')[0]?.trim() ?? null;
+
+      // ── Step 2: TCG API lookup ──
+      let tcgCard: TCGCard | null = null;
+      if (card_name || numOnly) {
+        tcgCard = await lookupBySetNumber(card_name, collector_number, env.POKEMON_TCG_API_KEY ?? '');
+      }
+      if (!tcgCard && numOnly) {
+        tcgCard = await lookupBySetNumber(null, numOnly, env.POKEMON_TCG_API_KEY ?? '');
+      }
+      if (!tcgCard && card_name) {
+        tcgCard = await lookupByNameOnly(card_name, env.POKEMON_TCG_API_KEY ?? '');
+      }
+
+      console.log(`[scan] pos ${position}: ${card_name} ${collector_number} → TCG: ${tcgCard?.name}`);
+
+      // ── Step 3: Crop using fixed grid math ──
       const fixedBbox = getFixedBbox(position);
       const cropBuffer = await cropCardFromSheet(fileBuffer, file.type, fixedBbox);
 
-      // Step B: Upload crop to R2
+      const cropKey = `cards/${user.id}/${timestamp}-card-${position}.jpg`;
       let cardImageUrl: string = sheetKey;
       if (cropBuffer) {
-        const cropKey = `cards/${user.id}/${timestamp}-card-${position}.jpg`;
         try {
           await env.BUCKET.put(cropKey, cropBuffer, {
             httpMetadata: { contentType: 'image/jpeg' },
@@ -354,54 +475,21 @@ export async function handleSheetScan(env: Env, request: Request, user: User): P
         console.error(`[scan] cropCardFromSheet returned null for position ${position}`);
       }
 
-      // Phase 2: OCR — focused extraction of collector number + card name
-      const identBuffer = cropBuffer ?? fileBuffer;
-      const identMime = cropBuffer ? 'image/jpeg' : file.type;
-      const identBase64 = arrayBufferToBase64(identBuffer);
-      const ocrResult = await ocrIdentifyCard(env.OPENAI_API_KEY, identBase64, identMime);
+      console.log(`[scan] pos ${position}: saving crop key: ${cardImageUrl}`);
 
-      // Validate card_name — reject if it looks like an attack/ability word, not a Pokemon name
-      if (ocrResult.card_name) {
-        const nameLower = ocrResult.card_name.toLowerCase();
-        const isInvalidName = NOT_A_CARD_NAME.some((word) => nameLower.includes(word));
-        if (isInvalidName) {
-          console.warn(`[scan] Rejected invalid card_name: ${ocrResult.card_name}`);
-          ocrResult.card_name = null;
-        }
-      }
-
-      console.log(`[scan] pos ${position} raw OCR:`, JSON.stringify(ocrResult));
-
-      // Phase 3: TCG API lookup — set number first, name-only fallback
-      let tcgCard: TCGCard | null = null;
-
-      if (ocrResult.set_number || ocrResult.card_name) {
-        tcgCard = await lookupBySetNumber(
-          ocrResult.card_name,
-          ocrResult.set_number,
-          env.POKEMON_TCG_API_KEY ?? '',
-          null,
-        );
-      }
-
-      if (!tcgCard && ocrResult.card_name) {
-        tcgCard = await lookupByNameOnly(ocrResult.card_name, env.POKEMON_TCG_API_KEY ?? '');
-      }
-
-      console.log(`[scan] pos ${position} TCG result:`, tcgCard?.name ?? 'NO MATCH');
-
-      // ── Resolve canonical card name and game ──
-      const cardName = tcgCard?.name ?? ocrResult.card_name ?? 'Unknown Card';
+      // ── Step 4: Resolve card data and INSERT ──
+      const cardName = tcgCard?.name ?? card_name ?? 'Unknown Card';
       const game = 'Pokemon';
       const setName = tcgCard?.set.name ?? null;
-      const yearValue: number | null = null;
+      const finalNumber = tcgCard?.number ?? numOnly ?? null;
       const externalRef: string | null = tcgCard?.id ?? null;
-      const finalNumber = tcgCard?.number ?? ocrResult.set_number ?? null;
       const marketPrice = tcgCard?.tcgplayer?.prices
         ? Object.values(tcgCard.tcgplayer.prices)[0]?.market ?? null
         : null;
+      const estimatedValueCents = marketPrice ? Math.round(marketPrice * 100) : 0;
+      const confidence = tcgCard ? 95 : 50;
 
-      // ── Upsert card record ──
+      // Upsert card record
       const existingCard = await queryOne<{ id: number }>(
         env.DB,
         `SELECT id FROM cards
@@ -423,25 +511,9 @@ export async function handleSheetScan(env: Env, request: Request, user: User): P
              rarity        = COALESCE(rarity, ?),
              image_url     = COALESCE(image_url, ?),
              external_ref  = COALESCE(external_ref, ?),
-             sport         = COALESCE(sport, ?),
-             player_name   = COALESCE(player_name, ?),
-             year          = COALESCE(year, ?),
-             variation     = COALESCE(variation, ?),
-             manufacturer  = COALESCE(manufacturer, ?),
              updated_at    = CURRENT_TIMESTAMP
            WHERE id = ?`,
-          [
-            setName ?? null,
-            tcgCard?.rarity ?? null,
-            tcgCard?.images.large ?? tcgCard?.images.small ?? null,
-            externalRef,
-            null,
-            null,
-            yearValue,
-            null,
-            null,
-            cardId,
-          ],
+          [setName, tcgCard?.rarity ?? null, tcgCard?.images.large ?? tcgCard?.images.small ?? null, externalRef, cardId],
         );
       } else {
         await run(
@@ -458,11 +530,7 @@ export async function handleSheetScan(env: Env, request: Request, user: User): P
             tcgCard?.rarity ?? null,
             tcgCard?.images.large ?? tcgCard?.images.small ?? null,
             externalRef,
-            null,
-            null,
-            yearValue,
-            null,
-            null,
+            null, null, null, null, null,
           ],
         );
 
@@ -474,29 +542,13 @@ export async function handleSheetScan(env: Env, request: Request, user: User): P
         cardId = newCard.id;
       }
 
-      // ── Resolve estimated value from TCG market price ──
-      const estimatedValueCents = marketPrice ? Math.round(marketPrice * 100) : 0;
-
-      // Step C: INSERT collection item — front_image_url is the crop key, NOT the sheet key
-      console.log(`[scan] Saving card ${position} with image key: ${cardImageUrl}`);
       await run(
         env.DB,
         `INSERT INTO collection_items
            (user_id, card_id, quantity, condition_note, estimated_grade, estimated_value_cents,
             front_image_url, bbox_x, bbox_y, bbox_width, bbox_height, product_type)
          VALUES (?, ?, 1, ?, ?, ?, ?, ?, ?, ?, ?, 'single_card')`,
-        [
-          user.id,
-          cardId,
-          null,
-          null,
-          estimatedValueCents,
-          cardImageUrl,
-          fixedBbox.x,
-          fixedBbox.y,
-          fixedBbox.width,
-          fixedBbox.height,
-        ],
+        [user.id, cardId, null, null, estimatedValueCents, cardImageUrl, fixedBbox.x, fixedBbox.y, fixedBbox.width, fixedBbox.height],
       );
 
       const newItem = await queryOne<{ id: number }>(
@@ -506,57 +558,35 @@ export async function handleSheetScan(env: Env, request: Request, user: User): P
       if (!newItem) throw new Error('Failed to create collection item');
       const collectionItemId = newItem.id;
 
-      // ── Insert grading estimate ──
       await run(
         env.DB,
         `INSERT INTO grading_estimates
            (collection_item_id, estimated_grade_range, centering_score, corners_score,
             edges_score, surface_score, confidence_score, explanation)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-        [
-          collectionItemId,
-          null,
-          null,
-          null,
-          null,
-          null,
-          tcgCard ? 95 : (ocrResult.confidence ?? 0),
-          null,
-        ],
+        [collectionItemId, null, null, null, null, null, confidence, null],
       );
 
-      // ── Fetch eBay comps in background (non-blocking) ──
+      // eBay comps in background (non-blocking)
       if (env.EBAY_CLIENT_ID && env.EBAY_CLIENT_SECRET) {
         const ebayClientId = env.EBAY_CLIENT_ID;
         const ebayClientSecret = env.EBAY_CLIENT_SECRET;
         const capturedCardId = cardId;
-
-        const ebayIdent = {
-          card_number: finalNumber,
-          player_name: cardName,
-          year: null,
-          set_name: setName ?? null,
-          variation: null,
-        };
-
+        const ebayIdent = { card_number: finalNumber, player_name: cardName, year: null, set_name: setName, variation: null };
         fetchEbayComps(ebayClientId, ebayClientSecret, ebayIdent as any).then(async (comps) => {
           for (const comp of comps) {
             try {
-              await run(
-                env.DB,
+              await run(env.DB,
                 `INSERT INTO sales_comps
                    (card_id, source, title, sold_price_cents, sold_date, sold_platform, listing_url, condition_text)
                  VALUES (?, 'ebay_sold', ?, ?, ?, 'eBay', ?, ?)`,
                 [capturedCardId, comp.title, comp.sold_price_cents, comp.sold_date, comp.listing_url, comp.condition_text],
               );
-            } catch (compErr) {
-              console.error('Failed to save comp:', compErr);
-            }
+            } catch (compErr) { console.error('Failed to save comp:', compErr); }
           }
         }).catch((err) => console.error('eBay comps background task failed:', err));
       }
 
-      // ── Pull full item for response ──
       const fullItem = await queryOne<Record<string, unknown>>(
         env.DB,
         `SELECT ci.*, c.game, c.set_name, c.card_name, c.card_number, c.rarity,
@@ -584,15 +614,12 @@ export async function handleSheetScan(env: Env, request: Request, user: User): P
           price_psa9_cents: null,
           price_psa10_cents: null,
           price_source: marketPrice ? 'tcgplayer' : null,
-          identification_confidence: tcgCard ? 95 : (ocrResult.confidence ?? 0),
+          identification_confidence: confidence,
         });
       }
     } catch (err) {
       console.error(`Failed to process card at position ${position}:`, err);
-      errors.push({
-        position,
-        error: err instanceof Error ? err.message : 'Unknown error',
-      });
+      errors.push({ position, error: err instanceof Error ? err.message : 'Unknown error' });
     }
   }
 
