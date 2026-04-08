@@ -61,49 +61,42 @@ interface TCGCard {
 
 async function lookupBySetNumber(
   cardName: string | null,
-  setNumber: string | null,
+  collectorNumber: string | null,
   apiKey: string,
-  setNameHint?: string | null,
 ): Promise<TCGCard | null> {
-  if (!setNumber && !cardName) return null;
+  if (!collectorNumber && !cardName) return null;
 
-  // Extract just the number portion (e.g. "171" from "171/167")
-  const numOnly = setNumber?.split('/')[0]?.trim();
+  const parts = collectorNumber?.split('/');
+  const cardNum = parts?.[0]?.trim();
+  const setPrintedTotal = parts?.[1]?.trim();
 
-  let query = '';
-  if (cardName && numOnly) {
-    query = `name:"${cardName}" number:${numOnly}`;
-  } else if (numOnly) {
-    query = `number:${numOnly}`;
-  } else if (cardName) {
-    query = `name:"${cardName}"`;
+  // Try most specific query first: name + number
+  const queries: string[] = [];
+
+  if (cardName && cardNum) {
+    queries.push(`name:"${cardName}" number:${cardNum}`);
+  }
+  if (cardNum && setPrintedTotal) {
+    // Use set total to narrow — sets have unique print totals
+    queries.push(`number:${cardNum} set.printedTotal:${setPrintedTotal}`);
+  }
+  if (cardName) {
+    queries.push(`name:"${cardName}" number:${cardNum}`);
   }
 
-  // Narrow search by set ID if we can map the set name
-  if (setNameHint) {
-    const setId = SET_NAME_TO_ID[setNameHint.toLowerCase()];
-    if (setId) query += ` set.id:${setId}`;
+  for (const q of queries) {
+    try {
+      const url = `https://api.pokemontcg.io/v2/cards?q=${encodeURIComponent(q)}&pageSize=5&orderBy=-set.releaseDate`;
+      const res = await fetch(url, { headers: { 'X-Api-Key': apiKey } });
+      if (!res.ok) continue;
+      const data = await res.json() as { data: TCGCard[] };
+      if (data.data?.length) {
+        console.log(`[tcg] query "${q}" → ${data.data[0].name} (${data.data[0].set.name})`);
+        return data.data[0];
+      }
+    } catch { continue; }
   }
-
-  try {
-    const url = `https://api.pokemontcg.io/v2/cards?q=${encodeURIComponent(query)}&pageSize=3&orderBy=set.releaseDate`;
-    const res = await fetch(url, { headers: { 'X-Api-Key': apiKey } });
-    if (!res.ok) return null;
-    const data = await res.json() as { data: TCGCard[] };
-    if (!data.data?.length) return null;
-
-    // Prefer exact name + number match
-    if (cardName && numOnly) {
-      const exact = data.data.find(
-        (c) => c.name.toLowerCase() === cardName.toLowerCase() && c.number === numOnly,
-      );
-      if (exact) return exact;
-    }
-
-    return data.data[0];
-  } catch {
-    return null;
-  }
+  return null;
 }
 
 async function lookupByNameOnly(
@@ -447,8 +440,8 @@ The collector number is critical — read it exactly.`;
       if (card_name || numOnly) {
         tcgCard = await lookupBySetNumber(card_name, collector_number, env.POKEMON_TCG_API_KEY ?? '');
       }
-      if (!tcgCard && numOnly) {
-        tcgCard = await lookupBySetNumber(null, numOnly, env.POKEMON_TCG_API_KEY ?? '');
+      if (!tcgCard && collector_number) {
+        tcgCard = await lookupBySetNumber(null, collector_number, env.POKEMON_TCG_API_KEY ?? '');
       }
       if (!tcgCard && card_name) {
         tcgCard = await lookupByNameOnly(card_name, env.POKEMON_TCG_API_KEY ?? '');
@@ -542,6 +535,7 @@ The collector number is critical — read it exactly.`;
         cardId = newCard.id;
       }
 
+      console.log(`[scan] INSERT pos ${position} front_image_url: ${cropKey}`);
       await run(
         env.DB,
         `INSERT INTO collection_items
