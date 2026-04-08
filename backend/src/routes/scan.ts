@@ -27,6 +27,29 @@ function arrayBufferToBase64(buffer: ArrayBuffer): string {
 
 // ─── Pokemon TCG API types + lookup helpers ───────────────────────────────────
 
+// Known attack/ability words that are NOT card names
+const NOT_A_CARD_NAME = [
+  'smack', 'filch', 'tackle', 'scratch', 'growl', 'ability',
+  'whirlwind', 'razor', 'wing', 'draw', 'energy', 'trainer',
+  'supporter', 'item', 'stadium', 'basic', 'stage',
+];
+
+const SET_NAME_TO_ID: Record<string, string> = {
+  'phantasmal flames': 'sv8pt5',
+  'surging sparks': 'sv8',
+  'stellar crown': 'sv7',
+  'twilight masquerade': 'sv6',
+  'temporal forces': 'sv5',
+  'paradox rift': 'sv4',
+  'obsidian flames': 'sv3',
+  'paldea evolved': 'sv2',
+  'scarlet & violet': 'sv1',
+  'brilliant stars': 'swsh9',
+  'crown zenith': 'swsh12pt5',
+  'lost origin': 'swsh11',
+  'silver tempest': 'swsh12',
+};
+
 interface TCGCard {
   id: string;
   name: string;
@@ -41,6 +64,7 @@ async function lookupBySetNumber(
   cardName: string | null,
   setNumber: string | null,
   apiKey: string,
+  setNameHint?: string | null,
 ): Promise<TCGCard | null> {
   if (!setNumber && !cardName) return null;
 
@@ -54,6 +78,12 @@ async function lookupBySetNumber(
     query = `number:${numOnly}`;
   } else if (cardName) {
     query = `name:"${cardName}"`;
+  }
+
+  // Narrow search by set ID if we can map the set name
+  if (setNameHint) {
+    const setId = SET_NAME_TO_ID[setNameHint.toLowerCase()];
+    if (setId) query += ` set.id:${setId}`;
   }
 
   try {
@@ -330,7 +360,17 @@ export async function handleSheetScan(env: Env, request: Request, user: User): P
       const identBase64 = arrayBufferToBase64(identBuffer);
       const ocrResult = await ocrIdentifyCard(env.OPENAI_API_KEY, identBase64, identMime);
 
-      console.log(`[scan] Position ${position} OCR:`, JSON.stringify(ocrResult));
+      // Validate card_name — reject if it looks like an attack/ability word, not a Pokemon name
+      if (ocrResult.card_name) {
+        const nameLower = ocrResult.card_name.toLowerCase();
+        const isInvalidName = NOT_A_CARD_NAME.some((word) => nameLower.includes(word));
+        if (isInvalidName) {
+          console.warn(`[scan] Rejected invalid card_name: ${ocrResult.card_name}`);
+          ocrResult.card_name = null;
+        }
+      }
+
+      console.log(`[scan] pos ${position} raw OCR:`, JSON.stringify(ocrResult));
 
       // Phase 3: TCG API lookup — set number first, name-only fallback
       let tcgCard: TCGCard | null = null;
@@ -340,6 +380,7 @@ export async function handleSheetScan(env: Env, request: Request, user: User): P
           ocrResult.card_name,
           ocrResult.set_number,
           env.POKEMON_TCG_API_KEY ?? '',
+          null,
         );
       }
 
@@ -347,7 +388,7 @@ export async function handleSheetScan(env: Env, request: Request, user: User): P
         tcgCard = await lookupByNameOnly(ocrResult.card_name, env.POKEMON_TCG_API_KEY ?? '');
       }
 
-      console.log(`[scan] Position ${position} TCG match:`, tcgCard?.name ?? 'none');
+      console.log(`[scan] pos ${position} TCG result:`, tcgCard?.name ?? 'NO MATCH');
 
       // ── Resolve canonical card name and game ──
       const cardName = tcgCard?.name ?? ocrResult.card_name ?? 'Unknown Card';

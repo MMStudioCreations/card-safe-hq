@@ -1,26 +1,34 @@
 // OCR layer: focused set-number + card-name extraction for the three-layer identification pipeline.
 // Uses GPT-4o vision with a narrow prompt — reads only the collector number and card name.
 
-const CARD_OCR_PROMPT = `You are reading a Pokemon trading card image.
-Your ONLY job is to find and read the collector number printed on the card.
+const CARD_OCR_PROMPT = `You are reading a Pokemon trading card.
 
-The collector number looks like: "025/078" or "171/167" or "SV001/SV122"
-It is always located near the bottom of the card, usually bottom-left or bottom-right.
-It may appear as just the number portion like "025" or the full "025/078".
+STEP 1 - Find the card name:
+Look at the VERY TOP of the card above the artwork.
+The name is the largest text on the card, printed in bold.
+It may be followed by "ex", "V", "VMAX", "GX", "V-UNION" etc — include these.
+Examples: "Pikachu ex", "Charizard VMAX", "Aipom", "Lumineon V"
+DO NOT read attack names, ability names, flavor text, or artist names.
 
-Also read the card name printed in large text at the TOP of the card.
-Also read the HP number printed at the top-right area.
+STEP 2 - Find the collector number:
+Look at the BOTTOM of the card, usually bottom-left or bottom-right.
+It looks like "221/182" or "025/078" or "SV001/SV122".
+Read ONLY this number, exactly as printed.
 
-Return ONLY this JSON, nothing else:
+STEP 3 - Find the HP:
+The HP is at the top-right of the card, a number followed by "HP".
+Example: "110 HP" → return 110.
+
+Return ONLY this JSON:
 {
-  "card_name": "exact name printed at top of card, or null",
-  "set_number": "the collector number exactly as printed, or null",
+  "card_name": "name at top of card exactly as printed",
+  "set_number": "collector number at bottom exactly as printed",
   "hp": number or null,
   "confidence": 0-100
 }
 
-Do not guess. If you cannot clearly read the text, return null for that field.
-Never invent a card name. Only return what you can literally see printed.`;
+If you cannot clearly read something, return null. Never guess or infer.
+Never return attack names, ability names, or Pokemon descriptions as card_name.`;
 
 export interface OcrResult {
   card_name: string | null;
