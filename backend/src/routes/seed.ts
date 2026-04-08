@@ -128,7 +128,7 @@ export async function seedPokemonCatalog(
   user: User,
 ): Promise<Response> {
   // Admin-only guard
-  const ADMIN_EMAIL = env.ADMIN_EMAIL ?? 'admin@cardsafehq.com';
+  const ADMIN_EMAIL = env.ADMIN_EMAIL ?? 'michaelamarino16@gmail.com';
   if (user.email !== ADMIN_EMAIL) {
     return badRequest('Admin access required');
   }
@@ -207,7 +207,7 @@ export async function seedPokemonCatalog(
 // ── GET /api/admin/seed/pokemon/status ────────────────────────────────────────
 
 export async function getSeedStatus(env: Env, user: User): Promise<Response> {
-  const ADMIN_EMAIL = env.ADMIN_EMAIL ?? 'admin@cardsafehq.com';
+  const ADMIN_EMAIL = env.ADMIN_EMAIL ?? 'michaelamarino16@gmail.com';
   if (user.email !== ADMIN_EMAIL) {
     return badRequest('Admin access required');
   }
