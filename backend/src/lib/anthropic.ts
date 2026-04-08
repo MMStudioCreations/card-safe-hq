@@ -23,12 +23,20 @@ export interface GradingResult {
 export interface SheetCard {
   position: number;
   bbox: { x: number; y: number; width: number; height: number };
-  identification: CardIdentification;
-  grading: GradingResult;
+  card_name: string;
+  year: string | null;
+  set_name: string;
+  card_number: string | null;
+  sport: string;
+  variation: string | null;
+  manufacturer: string;
+  condition_notes: string;
+  confidence: number;
+  estimated_grade: string;
+  estimated_value_cents: number;
 }
 
 export interface SheetAnalysis {
-  card_count: number;
   cards: SheetCard[];
 }
 
@@ -116,64 +124,52 @@ async function callOpenAI(
   }
 }
 
-const SHEET_SYSTEM_PROMPT = `You are an expert trading card and sports card authenticator and grader. \
-You analyze scanned binder pages containing multiple cards arranged in a \
-3x3 grid (9-pocket page). For each card you can see, identify it completely \
-and assess its condition. Always respond with valid JSON only. \
-Always provide card names and set names in English, even for Japanese cards. \
-For Japanese Pokemon cards, translate the name to English (e.g. シャワーズ = Vaporeon). \
-Always provide a confidence value between 1 and 100, never 0.`;
+const SHEET_SYSTEM_PROMPT = `You are an expert trading card authenticator. \
+You analyze scanned 9-pocket binder pages. You MUST identify ALL 9 card positions \
+in every response, even if a slot appears empty or the card is unclear. \
+For unclear cards, do your best and set confidence low. Never skip a position. \
+Always respond with valid JSON only. Always use English for all card names and set names. \
+For Japanese Pokemon cards, translate the name to English (e.g. シャワーズ = Vaporeon).`;
 
-const SHEET_USER_PROMPT = `This is a scanned 9-pocket binder page. Please analyze every card visible.
-For each card provide:
-1. Its position in the grid (1-9, left to right, top to bottom)
-2. Bounding box as percentage of total image: {x, y, width, height} where 0,0 is top-left
-3. Complete identification:
-   - player_name (or card name for trading cards)
-   - year
-   - set_name
-   - card_number
-   - sport (or game for trading cards like Pokemon, Magic)
-   - variation (parallel, foil, holo, etc or empty string)
-   - manufacturer (Topps, Panini, PSA, Pokemon Company, etc)
-   - condition_notes (specific defects you can see)
-   - confidence (0-100 how confident you are in the identification)
-4. Grade assessment:
-   - estimated_grade_range (e.g. "7-8", "8-9", "9-10")
-   - centering_score (1-10)
-   - corners_score (1-10)
-   - edges_score (1-10)
-   - surface_score (1-10)
-   - confidence_score (0-100)
-   - explanation (brief explanation of grade)
+const SHEET_USER_PROMPT = `This is a 9-pocket binder page (3 rows × 3 columns).
+Analyze every position (1–9, left to right, top to bottom).
 
-Respond ONLY with a JSON object in this exact format:
+YOU MUST RETURN ALL 9 POSITIONS. If a slot is empty, return it with card_name: "Empty Slot".
+If a card is unclear, make your best attempt and set confidence below 40.
+Never return fewer than 9 items in the cards array.
+
+For each position return:
+- position: 1–9
+- bbox: { x, y, width, height } as percentage of full image (0–100)
+- card_name: primary name of the card (Pokemon name, player name, etc.)
+- year: 4-digit year or null
+- set_name: full set name in English
+- card_number: card number as printed or null
+- sport: sport or game (Pokemon, Baseball, Basketball, etc.)
+- variation: holo, reverse holo, full art, etc. or null
+- manufacturer: The Pokemon Company, Topps, Panini, etc.
+- condition_notes: visible defects or "Appears clean"
+- confidence: 0–100 integer — your confidence in this identification
+- estimated_grade: your grade estimate (PSA 1–10 scale, e.g. "8", "9-10", "7-8")
+- estimated_value_cents: estimated market value in cents or 0 if unknown
+
+Return exactly this structure:
 {
-  "card_count": number,
   "cards": [
     {
       "position": number,
       "bbox": {"x": number, "y": number, "width": number, "height": number},
-      "identification": {
-        "player_name": string,
-        "year": string,
-        "set_name": string,
-        "card_number": string,
-        "sport": string,
-        "variation": string,
-        "manufacturer": string,
-        "condition_notes": string,
-        "confidence": number
-      },
-      "grading": {
-        "estimated_grade_range": string,
-        "centering_score": number,
-        "corners_score": number,
-        "edges_score": number,
-        "surface_score": number,
-        "confidence_score": number,
-        "explanation": string
-      }
+      "card_name": string,
+      "year": string | null,
+      "set_name": string,
+      "card_number": string | null,
+      "sport": string,
+      "variation": string | null,
+      "manufacturer": string,
+      "condition_notes": string,
+      "confidence": number,
+      "estimated_grade": string,
+      "estimated_value_cents": number
     }
   ]
 }`;
@@ -194,8 +190,11 @@ export async function analyzeSheet(
 
   try {
     const parsed = JSON.parse(stripJsonFences(rawText)) as SheetAnalysis;
-    if (typeof parsed.card_count !== 'number' || !Array.isArray(parsed.cards)) {
-      throw new Error('Response missing card_count or cards array');
+    if (!Array.isArray(parsed.cards)) {
+      throw new Error('Response missing cards array');
+    }
+    if (parsed.cards.length < 9) {
+      console.warn(`[scan] Only ${parsed.cards.length} of 9 cards returned by GPT-4o`);
     }
     return parsed;
   } catch (err) {

@@ -299,16 +299,21 @@ export const api = {
   getGrade: (collectionItemId: number | string) =>
     http.get<never, GradingEstimate>(`/api/grading/${collectionItemId}`),
 
-  scanSheet: (file: File) => {
+  scanSheet: (file: File, mode: 'sheet' | 'single' = 'sheet') => {
     const formData = new FormData();
     formData.append('file', file);
+    formData.append('mode', mode);
     return http.post<never, {
-      sheet_url: string;
-      cards_detected: number;
-      collection_items: Array<CollectionItem & {
+      sheet_url?: string;
+      cards_detected?: number;
+      collection_items?: Array<CollectionItem & {
         sheet_url?: string;
         bbox?: { x: number; y: number; width: number; height: number };
       }>;
+      card?: CollectionItem & {
+        front_image_url?: string;
+        identification_confidence?: number;
+      };
     }>('/api/scan/sheet', formData, {
       headers: { 'Content-Type': 'multipart/form-data' },
     });
