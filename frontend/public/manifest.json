@@ -7,6 +7,7 @@
   "display": "standalone",
   "start_url": "/",
   "scope": "/",
+  "orientation": "portrait",
   "icons": [
     {
       "src": "/icons/icon-192.png",
@@ -23,6 +24,11 @@
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "any maskable"
+    },
+    {
+      "src": "/icons/apple-touch-icon.png",
+      "sizes": "180x180",
+      "type": "image/png"
     }
   ]
 }

@@ -51,11 +51,22 @@ function parseId(pathname: string): number | null {
 const ALLOWED_METHODS = 'GET, POST, PATCH, DELETE, OPTIONS';
 const ALLOWED_HEADERS = 'Content-Type, Authorization';
 
+const ALLOWED_ORIGINS = new Set([
+  'https://cardsafehq.com',
+  'https://www.cardsafehq.com',
+  'https://card-vault-ai.pages.dev',
+]);
+
 function getAllowedOrigin(request: Request, env: Env): string {
   if (env.CORS_ORIGIN?.trim()) return env.CORS_ORIGIN.trim();
-  const origin = request.headers.get('origin');
-  if (origin === 'https://card-vault-ai.pages.dev') return origin;
-  return '*';
+  const origin = request.headers.get('origin') ?? '';
+  // Must echo the exact origin (not '*') when credentials are included.
+  // Wildcard '*' causes browsers to reject cookies in standalone PWA mode.
+  if (ALLOWED_ORIGINS.has(origin)) return origin;
+  // Allow localhost for development
+  if (origin.startsWith('http://localhost') || origin.startsWith('http://127.0.0.1')) return origin;
+  // For any other origin, echo it back (Cloudflare Workers; auth still requires valid session cookie)
+  return origin || 'https://cardsafehq.com';
 }
 
 function withCors(response: Response, request: Request, env: Env): Response {

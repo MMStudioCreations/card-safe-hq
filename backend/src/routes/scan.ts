@@ -94,9 +94,21 @@ export async function handleSheetScan(env: Env, request: Request, user: User): P
       }
 
       // ── Identify card via GPT-4o → PTCG → PriceCharting pipeline ──
-      // Build a data URL from the sheet for per-card identification
-      const imageBase64 = arrayBufferToBase64(fileBuffer);
-      const dataUrl = `data:${file.type};base64,${imageBase64}`;
+      // IMPORTANT: Pass the CROPPED card image (not the full sheet) so the AI
+      // sees only the individual card and can accurately read the card number.
+      let identImageBuffer: ArrayBuffer;
+      let identMimeType: string;
+      if (cropBuffer) {
+        // Use the upscaled crop for identification
+        identImageBuffer = cropBuffer;
+        identMimeType = 'image/jpeg';
+      } else {
+        // Fallback: use the full sheet (less accurate)
+        identImageBuffer = fileBuffer;
+        identMimeType = file.type;
+      }
+      const identBase64 = arrayBufferToBase64(identImageBuffer);
+      const dataUrl = `data:${identMimeType};base64,${identBase64}`;
       const ident = await identifyCard(env, dataUrl);
 
       // ── Resolve canonical card name and game ──
