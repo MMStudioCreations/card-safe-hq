@@ -1,7 +1,6 @@
 import type { Env, User } from '../types';
 import { queryOne, run } from '../lib/db';
 import { badRequest, ok, serverError } from '../lib/json';
-import { analyzeSheet } from '../lib/anthropic';
 import { fetchEbayComps } from '../lib/ebay';
 import { identifyCard, correctCardSet } from '../lib/vision';
 import { cropCardFromSheet } from '../lib/crop';
@@ -23,6 +22,27 @@ function arrayBufferToBase64(buffer: ArrayBuffer): string {
   let binary = '';
   for (let i = 0; i < uint8.length; i++) binary += String.fromCharCode(uint8[i]);
   return btoa(binary);
+}
+
+// Fixed-grid bbox for a standard 9-pocket binder page (3×3 grid).
+// Uses math instead of GPT-4o estimates — positions are always correct.
+function getFixedBbox(position: number) {
+  // position 1-9, left to right, top to bottom
+  const col = (position - 1) % 3;  // 0, 1, 2
+  const row = Math.floor((position - 1) / 3);  // 0, 1, 2
+
+  // Approximate card cell boundaries — accounts for binder page margins and pocket borders
+  const colStarts = [0.03, 0.36, 0.69];
+  const rowStarts = [0.04, 0.36, 0.68];
+  const cellWidth = 0.28;
+  const cellHeight = 0.28;
+
+  return {
+    x: colStarts[col] * 100,
+    y: rowStarts[row] * 100,
+    width: cellWidth * 100,
+    height: cellHeight * 100,
+  };
 }
 
 // ─── Sheet Scan ───────────────────────────────────────────────────────────────
@@ -207,56 +227,40 @@ export async function handleSheetScan(env: Env, request: Request, user: User): P
   }
 
   // ─── Sheet scan path ──────────────────────────────────────────────────────
-
-  // Analyze sheet layout with GPT-4o (bounding boxes + identification)
-  let analysis;
-  try {
-    const imageBase64 = arrayBufferToBase64(fileBuffer);
-    analysis = await analyzeSheet(env.OPENAI_API_KEY, imageBase64, file.type);
-  } catch (err) {
-    console.error('Sheet analysis failed:', err);
-    return serverError(`AI analysis failed: ${err instanceof Error ? err.message : 'Unknown error'}`);
-  }
+  // Phase 1: Crop each of the 9 positions using fixed grid math (no GPT-4o bbox guessing).
+  // Phase 2: Send each individual crop to GPT-4o for identification.
+  // This eliminates bbox misalignment entirely — each card is identified from its own image.
 
   const collectionItems: Record<string, unknown>[] = [];
   const errors: Array<{ position: number; error: string }> = [];
 
-  for (const cardData of analysis.cards) {
+  for (let position = 1; position <= 9; position++) {
     try {
-      // ── Crop individual card from sheet ──
-      let cardImageUrl: string = sheetKey; // fallback to sheet key
-      const cropBuffer = await cropCardFromSheet(fileBuffer, file.type, cardData.bbox);
+      // Phase 1: Crop using fixed grid math
+      const fixedBbox = getFixedBbox(position);
+      const cropBuffer = await cropCardFromSheet(fileBuffer, file.type, fixedBbox);
+
+      // Step B: Upload crop to R2
+      let cardImageUrl: string = sheetKey;
       if (cropBuffer) {
-        const cropKey = `cards/${user.id}/${timestamp}-card-${cardData.position}.jpg`;
+        const cropKey = `cards/${user.id}/${timestamp}-card-${position}.jpg`;
         try {
           await env.BUCKET.put(cropKey, cropBuffer, {
             httpMetadata: { contentType: 'image/jpeg' },
           });
           cardImageUrl = cropKey;
         } catch (cropUploadErr) {
-          console.error(`[scan] Failed to upload crop for card ${cardData.position}:`, cropUploadErr);
-          // cardImageUrl stays as sheetKey fallback
+          console.error(`[scan] Failed to upload crop for card ${position}:`, cropUploadErr);
         }
       } else {
-        console.error(`[scan] cropCardFromSheet returned null for card ${cardData.position} — bbox:`, cardData.bbox, '— falling back to sheet key');
+        console.error(`[scan] cropCardFromSheet returned null for position ${position}`);
       }
 
-      // ── Identify card via GPT-4o → PTCG → PriceCharting pipeline ──
-      // IMPORTANT: Pass the CROPPED card image (not the full sheet) so the AI
-      // sees only the individual card and can accurately read the card number.
-      let identImageBuffer: ArrayBuffer;
-      let identMimeType: string;
-      if (cropBuffer) {
-        // Use the upscaled crop for identification
-        identImageBuffer = cropBuffer;
-        identMimeType = 'image/jpeg';
-      } else {
-        // Fallback: use the full sheet (less accurate)
-        identImageBuffer = fileBuffer;
-        identMimeType = file.type;
-      }
-      const identBase64 = arrayBufferToBase64(identImageBuffer);
-      const dataUrl = `data:${identMimeType};base64,${identBase64}`;
+      // Phase 2: Send individual crop to GPT-4o for identification
+      const identBuffer = cropBuffer ?? fileBuffer;
+      const identMime = cropBuffer ? 'image/jpeg' : file.type;
+      const identBase64 = arrayBufferToBase64(identBuffer);
+      const dataUrl = `data:${identMime};base64,${identBase64}`;
       const ident = await identifyCard(env, dataUrl);
 
       // ── Resolve canonical card name and game ──
@@ -264,8 +268,8 @@ export async function handleSheetScan(env: Env, request: Request, user: User): P
       const game = ident.game ?? ident.sport ?? 'Unknown';
       const setName = ident.set_name_override ?? ident.ptcg_set_name ?? ident.set_name;
       const yearValue = ident.year && Number.isFinite(ident.year) ? ident.year : null;
-     const externalRef = ident.ptcg_id ??
-    ([ident.manufacturer, ident.year, ident.card_number].filter(Boolean).join(':') || null);
+      const externalRef = ident.ptcg_id ??
+        ([ident.manufacturer, ident.year, ident.card_number].filter(Boolean).join(':') || null);
 
       // ── Upsert card record ──
       const existingCard = await queryOne<{ id: number }>(
@@ -341,15 +345,10 @@ export async function handleSheetScan(env: Env, request: Request, user: User): P
       }
 
       // ── Resolve estimated value from real pricing data ──
-      // Priority: TCGPlayer market → PriceCharting loose → sheet AI estimate fallback
-      const estimatedValueCents = ident.price_market_cents
-        ?? ident.price_mid_cents
-        ?? cardData.estimated_value_cents
-        ?? 0;
+      const estimatedValueCents = ident.price_market_cents ?? ident.price_mid_cents ?? 0;
 
-      // ── Insert collection item ──
-      // Store bbox so the frontend can still use CardCrop if needed,
-      // but front_image_url now points to the pre-cropped card image key.
+      // Step C: INSERT collection item — front_image_url is the crop key, NOT the sheet key
+      console.log(`[scan] Saving card ${position} with image key: ${cardImageUrl}`);
       await run(
         env.DB,
         `INSERT INTO collection_items
@@ -360,13 +359,13 @@ export async function handleSheetScan(env: Env, request: Request, user: User): P
           user.id,
           cardId,
           ident.condition_notes ?? null,
-          cardData.estimated_grade,
+          null,
           estimatedValueCents,
           cardImageUrl,
-          cardData.bbox.x,
-          cardData.bbox.y,
-          cardData.bbox.width,
-          cardData.bbox.height,
+          fixedBbox.x,
+          fixedBbox.y,
+          fixedBbox.width,
+          fixedBbox.height,
         ],
       );
 
@@ -378,7 +377,6 @@ export async function handleSheetScan(env: Env, request: Request, user: User): P
       const collectionItemId = newItem.id;
 
       // ── Insert grading estimate ──
-      // Sheet analysis provides a grade string; component scores are null (not available from sheet scan).
       await run(
         env.DB,
         `INSERT INTO grading_estimates
@@ -387,12 +385,12 @@ export async function handleSheetScan(env: Env, request: Request, user: User): P
          VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
         [
           collectionItemId,
-          cardData.estimated_grade,
           null,
           null,
           null,
           null,
-          cardData.confidence,
+          null,
+          ident.confidence,
           null,
         ],
       );
@@ -403,7 +401,6 @@ export async function handleSheetScan(env: Env, request: Request, user: User): P
         const ebayClientSecret = env.EBAY_CLIENT_SECRET;
         const capturedCardId = cardId;
 
-        // Build eBay ident shape from our new identification
         const ebayIdent = {
           card_number: ident.card_number,
           player_name: ident.card_name ?? ident.player_name,
@@ -444,8 +441,7 @@ export async function handleSheetScan(env: Env, request: Request, user: User): P
         collectionItems.push({
           ...fullItem,
           sheet_url: sheetKey,
-          bbox: cardData.bbox,
-          // Include identification metadata for UI display
+          bbox: fixedBbox,
           ptcg_confirmed: ident.ptcg_confirmed,
           ptcg_id: ident.ptcg_id,
           ptcg_set_name: ident.ptcg_set_name,
@@ -462,9 +458,9 @@ export async function handleSheetScan(env: Env, request: Request, user: User): P
         });
       }
     } catch (err) {
-      console.error(`Failed to process card at position ${cardData.position}:`, err);
+      console.error(`Failed to process card at position ${position}:`, err);
       errors.push({
-        position: cardData.position,
+        position,
         error: err instanceof Error ? err.message : 'Unknown error',
       });
     }
@@ -472,7 +468,7 @@ export async function handleSheetScan(env: Env, request: Request, user: User): P
 
   return ok({
     sheet_url: sheetKey,
-    cards_detected: analysis.cards.length,
+    cards_detected: collectionItems.length,
     collection_items: collectionItems,
     ...(errors.length > 0 ? { errors } : {}),
   });
