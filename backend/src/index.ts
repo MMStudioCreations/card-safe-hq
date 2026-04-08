@@ -23,6 +23,13 @@ import { generateDeck } from './routes/deck';
 import { getCardPricing } from './routes/pricing';
 import { getPokemonSets, getSetChecklist, saveDeck, listDecks } from './routes/sets';
 import { getMetaDecks, analyzeDeckAgainstCollection } from './routes/meta';
+import {
+  handleAdminStats,
+  handleAdminUsers,
+  handleAdminCards,
+  handleAdminActivity,
+  handleAdminQuery,
+} from './routes/admin';
 
 function parseId(pathname: string): number | null {
   const id = Number(pathname.split('/').pop());
@@ -315,6 +322,28 @@ export default {
         if (user instanceof Response) return withCors(user, request, env);
         if (method === 'GET') return withCors(await listDecks(env, user), request, env);
         if (method === 'POST') return withCors(await saveDeck(env, request, user), request, env);
+      }
+
+      // Admin routes — require auth + admin email check inside each handler
+      if (pathname.startsWith('/api/admin/')) {
+        const user = await requireAuth(env, request);
+        if (user instanceof Response) return withCors(user, request, env);
+
+        if (method === 'GET' && pathname === '/api/admin/stats') {
+          return withCors(await handleAdminStats(env, user), request, env);
+        }
+        if (method === 'GET' && pathname === '/api/admin/users') {
+          return withCors(await handleAdminUsers(env, user), request, env);
+        }
+        if (method === 'GET' && pathname === '/api/admin/cards') {
+          return withCors(await handleAdminCards(env, user), request, env);
+        }
+        if (method === 'GET' && pathname === '/api/admin/activity') {
+          return withCors(await handleAdminActivity(env, user), request, env);
+        }
+        if (method === 'POST' && pathname === '/api/admin/query') {
+          return withCors(await handleAdminQuery(env, user, request), request, env);
+        }
       }
 
       return withCors(notFound('Route not found'), request, env);
