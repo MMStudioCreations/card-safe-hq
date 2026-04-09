@@ -4,6 +4,7 @@ import { badRequest, ok, serverError } from '../lib/json';
 import { fetchEbayComps } from '../lib/ebay';
 import { identifyCard as visionIdentifyCard, correctCardSet } from '../lib/vision';
 import { cropCardFromSheet } from '../lib/crop';
+import { lookupCardInCatalog } from '../lib/pokemon-reference';
 
 const ALLOWED_MIME_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp']);
 const MAX_FILE_SIZE = 20 * 1024 * 1024; // 20 MB
@@ -24,7 +25,7 @@ function arrayBufferToBase64(buffer: ArrayBuffer): string {
   return btoa(binary);
 }
 
-// ─── Pokemon TCG API types + lookup helpers ───────────────────────────────────
+// ─── Pokemon TCG card shape ───────────────────────────────────────────────────
 
 // Known attack/ability words that are NOT card names
 const NOT_A_CARD_NAME = [
@@ -32,22 +33,6 @@ const NOT_A_CARD_NAME = [
   'whirlwind', 'razor', 'wing', 'draw', 'energy', 'trainer',
   'supporter', 'item', 'stadium', 'basic', 'stage',
 ];
-
-const SET_NAME_TO_ID: Record<string, string> = {
-  'phantasmal flames': 'sv8pt5',
-  'surging sparks': 'sv8',
-  'stellar crown': 'sv7',
-  'twilight masquerade': 'sv6',
-  'temporal forces': 'sv5',
-  'paradox rift': 'sv4',
-  'obsidian flames': 'sv3',
-  'paldea evolved': 'sv2',
-  'scarlet & violet': 'sv1',
-  'brilliant stars': 'swsh9',
-  'crown zenith': 'swsh12pt5',
-  'lost origin': 'swsh11',
-  'silver tempest': 'swsh12',
-};
 
 interface TCGCard {
   id: string;
@@ -57,61 +42,6 @@ interface TCGCard {
   rarity: string;
   images: { small: string; large: string };
   tcgplayer?: { url?: string; prices?: Record<string, { market?: number }> };
-}
-
-async function lookupBySetNumber(
-  cardName: string | null,
-  collectorNumber: string | null,
-  apiKey: string,
-): Promise<TCGCard | null> {
-  if (!collectorNumber && !cardName) return null;
-
-  const parts = collectorNumber?.split('/');
-  const cardNum = parts?.[0]?.trim();
-  const setPrintedTotal = parts?.[1]?.trim();
-
-  // Try most specific query first: name + number
-  const queries: string[] = [];
-
-  if (cardName && cardNum) {
-    queries.push(`name:"${cardName}" number:${cardNum}`);
-  }
-  if (cardNum && setPrintedTotal) {
-    // Use set total to narrow — sets have unique print totals
-    queries.push(`number:${cardNum} set.printedTotal:${setPrintedTotal}`);
-  }
-  if (cardName) {
-    queries.push(`name:"${cardName}" number:${cardNum}`);
-  }
-
-  for (const q of queries) {
-    try {
-      const url = `https://api.pokemontcg.io/v2/cards?q=${encodeURIComponent(q)}&pageSize=5&orderBy=-set.releaseDate`;
-      const res = await fetch(url, { headers: { 'X-Api-Key': apiKey } });
-      if (!res.ok) continue;
-      const data = await res.json() as { data: TCGCard[] };
-      if (data.data?.length) {
-        console.log(`[tcg] query "${q}" → ${data.data[0].name} (${data.data[0].set.name})`);
-        return data.data[0];
-      }
-    } catch { continue; }
-  }
-  return null;
-}
-
-async function lookupByNameOnly(
-  cardName: string,
-  apiKey: string,
-): Promise<TCGCard | null> {
-  try {
-    const url = `https://api.pokemontcg.io/v2/cards?q=name:"${encodeURIComponent(cardName)}"&pageSize=1&orderBy=-set.releaseDate`;
-    const res = await fetch(url, { headers: { 'X-Api-Key': apiKey } });
-    if (!res.ok) return null;
-    const data = await res.json() as { data: TCGCard[] };
-    return data.data?.[0] ?? null;
-  } catch {
-    return null;
-  }
 }
 
 // Fixed-grid bbox for a standard 9-pocket binder page (3×3 grid).
@@ -435,19 +365,32 @@ The collector number is critical — read it exactly.`;
       // Extract just the number portion (e.g. "168/162" → "168")
       const numOnly = collector_number?.split('/')[0]?.trim() ?? null;
 
-      // ── Step 2: TCG API lookup ──
-      let tcgCard: TCGCard | null = null;
-      if (card_name || numOnly) {
-        tcgCard = await lookupBySetNumber(card_name, collector_number, env.POKEMON_TCG_API_KEY ?? '');
-      }
-      if (!tcgCard && collector_number) {
-        tcgCard = await lookupBySetNumber(null, collector_number, env.POKEMON_TCG_API_KEY ?? '');
-      }
-      if (!tcgCard && card_name) {
-        tcgCard = await lookupByNameOnly(card_name, env.POKEMON_TCG_API_KEY ?? '');
-      }
+      // ── Step 2: D1 catalog lookup ──
+      const catalogCard = await lookupCardInCatalog(env.DB, card_name, collector_number);
+      console.log(`[scan] pos ${position}: ${card_name} ${collector_number} → catalog: ${catalogCard?.card_name} (${catalogCard?.set_name})`);
 
-      console.log(`[scan] pos ${position}: ${card_name} ${collector_number} → TCG: ${tcgCard?.name}`);
+      // Map catalogCard to the tcgCard shape the rest of the code expects
+      const tcgCard: TCGCard | null = catalogCard ? {
+        id: catalogCard.ptcg_id,
+        name: catalogCard.card_name,
+        number: catalogCard.card_number,
+        set: {
+          id: catalogCard.set_id,
+          name: catalogCard.set_name,
+          series: catalogCard.series ?? '',
+        },
+        rarity: catalogCard.rarity ?? '',
+        images: {
+          small: catalogCard.image_small ?? '',
+          large: catalogCard.image_large ?? '',
+        },
+        tcgplayer: catalogCard.tcgplayer_url ? {
+          url: catalogCard.tcgplayer_url,
+          prices: catalogCard.tcgplayer_market_cents ? {
+            holofoil: { market: catalogCard.tcgplayer_market_cents / 100 }
+          } : undefined,
+        } : undefined,
+      } : null;
 
       // ── Step 3: Crop using fixed grid math ──
       const fixedBbox = getFixedBbox(position);
