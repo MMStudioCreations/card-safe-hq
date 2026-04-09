@@ -361,7 +361,11 @@ All 9 positions are REQUIRED. Do not stop at 7 or 8.`;
     try {
       const gptCard = cardsByPosition.get(position)!;
       const { card_name, collector_number } = gptCard;
-
+      // Skip truly empty / unreadable slots — don't insert Unknown Cards into the collection
+      if (!card_name && !collector_number && !gptCard.hp) {
+        console.log(`[scan] pos ${position}: slot empty — skipping insert`);
+        continue;
+      }
       // Extract just the number portion (e.g. "168/162" → "168")
       const numOnly = collector_number?.split('/')[0]?.trim() ?? null;
 

@@ -218,7 +218,7 @@ export default function Layout({ children }: Props) {
                   </span>
                 )}
               </div>
-              {link.label}
+              <span className="text-center leading-tight">{link.label}</span>
             </NavLink>
           )
         })}
