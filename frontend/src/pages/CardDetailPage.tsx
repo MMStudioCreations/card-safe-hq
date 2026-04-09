@@ -4,6 +4,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { ExternalLink } from 'lucide-react'
 import { api } from '../lib/api'
 import { queryKeys, useCollectionItem, useComps, useGrade, useCompsHistory } from '../lib/hooks'
+import CardCrop from '../components/CardCrop'
 
 // ── SVG Price Chart ───────────────────────────────────────────────────────────
 
@@ -215,6 +216,11 @@ export default function CardDetailPage() {
     [item, showFront],
   )
 
+  const isSheet = image?.includes('sheets/')
+  const detailBbox = (item?.bbox_x != null && item?.bbox_y != null)
+    ? { x: item.bbox_x, y: item.bbox_y, width: item.bbox_width ?? 28, height: item.bbox_height ?? 28 }
+    : null
+
   const sheetImageUrl = image
     ? `${import.meta.env.VITE_API_URL}/api/images/${encodeURIComponent(image)}`
     : null
@@ -317,10 +323,23 @@ export default function CardDetailPage() {
           </button>
         </div>
         <div className="w-full rounded-[var(--radius-md)] overflow-hidden bg-zinc-900" style={{ aspectRatio: '2.5/3.5' }}>
-          {sheetImageUrl ? (
+          {isSheet && detailBbox && sheetImageUrl ? (
+            <CardCrop
+              sheetUrl={sheetImageUrl}
+              bbox={detailBbox}
+              alt={item.card_name || item.player_name || 'Card'}
+              className="w-full h-full object-contain"
+            />
+          ) : sheetImageUrl ? (
             <img
               className="w-full h-full object-contain object-center"
               src={sheetImageUrl}
+              alt={item.card_name || item.player_name || 'Card'}
+            />
+          ) : item?.image_url ? (
+            <img
+              className="w-full h-full object-contain object-center"
+              src={item.image_url}
               alt={item.card_name || item.player_name || 'Card'}
             />
           ) : (
