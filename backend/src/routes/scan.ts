@@ -43,6 +43,16 @@ interface TCGCard {
   tcgplayer?: { url?: string; prices?: Record<string, { market?: number }> };
 }
 
+interface ScanApiPayload {
+  mode: 'single' | 'sheet';
+  sheet_url: string | null;
+  cards_detected: number;
+  card: Record<string, unknown> | null;
+  cards: Record<string, unknown>[];
+  errors: Array<{ position?: number; error: string }>;
+  error: string | null;
+}
+
 // ─── Fixed-grid bbox for a standard 9-pocket binder page (3×3 grid) ──────────
 // Used as fallback when GPT-4o bbox detection does not return a position.
 // Approximate card cell boundaries — accounts for binder page margins and pocket borders.
@@ -64,15 +74,25 @@ function getFixedBbox(position: number) {
 // ─── Sheet Scan ───────────────────────────────────────────────────────────────
 
 export async function handleSheetScan(env: Env, request: Request, user: User): Promise<Response> {
+  console.log('[scan] Entered scan handler');
+  console.log('[scan] Runtime config check:', {
+    hasOpenAiKey: Boolean(env.OPENAI_API_KEY),
+    hasBucketBinding: Boolean(env.BUCKET),
+  });
+
   let formData: FormData;
   try {
     formData = await request.formData();
   } catch {
+    console.error('[scan] request.formData() failed; request was not valid multipart/form-data');
     return badRequest('Request must be multipart/form-data');
   }
 
   const file = formData.get('file');
+  const mode = (formData.get('mode') as string | null) ?? 'sheet';
+  console.log('[scan] Mode detected:', mode);
   if (!(file instanceof File)) return badRequest('Missing "file" field in form data');
+  console.log('[scan] File metadata:', { name: file.name, type: file.type, size: file.size });
   if (!ALLOWED_MIME_TYPES.has(file.type)) return badRequest('Unsupported image type. Use JPEG, PNG, or WebP.');
 
   const fileBuffer = await file.arrayBuffer();
@@ -89,12 +109,11 @@ export async function handleSheetScan(env: Env, request: Request, user: User): P
     await env.BUCKET.put(sheetKey, fileBuffer, {
       httpMetadata: { contentType: file.type },
     });
+    console.log('[scan] R2 sheet upload succeeded:', sheetKey);
   } catch (err) {
     console.error('R2 upload failed:', err);
     return serverError('Failed to upload sheet image');
   }
-
-  const mode = (formData.get('mode') as string | null) ?? 'sheet';
 
   // ─── Single card scan path ────────────────────────────────────────────────
   if (mode === 'single') {
@@ -103,6 +122,7 @@ export async function handleSheetScan(env: Env, request: Request, user: User): P
       await env.BUCKET.put(cardKey, fileBuffer, {
         httpMetadata: { contentType: file.type },
       });
+      console.log('[scan] R2 single-card upload succeeded:', cardKey);
     } catch (err) {
       console.error('R2 upload failed (single card):', err);
       return serverError('Failed to upload card image');
@@ -112,7 +132,14 @@ export async function handleSheetScan(env: Env, request: Request, user: User): P
     try {
       const imageBase64 = arrayBufferToBase64(fileBuffer);
       const dataUrl = `data:${file.type};base64,${imageBase64}`;
+      console.log('[scan] Starting OpenAI single-card identify request');
       ident = await visionIdentifyCard(env, dataUrl);
+      console.log('[scan] Parsed OpenAI single-card content:', {
+        card_name: ident.card_name,
+        card_number: ident.card_number,
+        set_name: ident.set_name ?? ident.ptcg_set_name ?? null,
+        confidence: ident.confidence ?? null,
+      });
     } catch (err) {
       console.error('Single card identification failed:', err);
       return serverError(`AI identification failed: ${err instanceof Error ? err.message : 'Unknown error'}`);
@@ -223,24 +250,57 @@ export async function handleSheetScan(env: Env, request: Request, user: User): P
       [newItem.id],
     );
 
-    return ok({
-      card: {
-        ...(fullItem ?? {}),
-        ptcg_confirmed: ident.ptcg_confirmed,
-        ptcg_id: ident.ptcg_id,
-        ptcg_set_name: ident.ptcg_set_name,
-        ptcg_image_large: ident.ptcg_image_large,
-        ptcg_tcgplayer_url: ident.ptcg_tcgplayer_url,
-        price_market_cents: ident.price_market_cents,
-        price_low_cents: ident.price_low_cents,
-        price_high_cents: ident.price_high_cents,
-        price_psa9_cents: ident.price_psa9_cents,
-        price_psa10_cents: ident.price_psa10_cents,
-        price_source: ident.price_source,
-        identification_confidence: ident.confidence,
-        front_image_url: cardKey,
-      },
+    const responsePayload: ScanApiPayload = {
+      mode: 'single',
+      sheet_url: null,
+      cards_detected: fullItem ? 1 : 0,
+      card: fullItem
+        ? {
+            ...fullItem,
+            ptcg_confirmed: ident.ptcg_confirmed,
+            ptcg_id: ident.ptcg_id,
+            ptcg_set_name: ident.ptcg_set_name,
+            ptcg_image_large: ident.ptcg_image_large,
+            ptcg_tcgplayer_url: ident.ptcg_tcgplayer_url,
+            price_market_cents: ident.price_market_cents,
+            price_low_cents: ident.price_low_cents,
+            price_high_cents: ident.price_high_cents,
+            price_psa9_cents: ident.price_psa9_cents,
+            price_psa10_cents: ident.price_psa10_cents,
+            price_source: ident.price_source,
+            identification_confidence: ident.confidence,
+            front_image_url: cardKey,
+          }
+        : null,
+      cards: fullItem
+        ? [{
+            ...fullItem,
+            ptcg_confirmed: ident.ptcg_confirmed,
+            ptcg_id: ident.ptcg_id,
+            ptcg_set_name: ident.ptcg_set_name,
+            ptcg_image_large: ident.ptcg_image_large,
+            ptcg_tcgplayer_url: ident.ptcg_tcgplayer_url,
+            price_market_cents: ident.price_market_cents,
+            price_low_cents: ident.price_low_cents,
+            price_high_cents: ident.price_high_cents,
+            price_psa9_cents: ident.price_psa9_cents,
+            price_psa10_cents: ident.price_psa10_cents,
+            price_source: ident.price_source,
+            identification_confidence: ident.confidence,
+            front_image_url: cardKey,
+          }]
+        : [],
+      errors: [],
+      error: null,
+    };
+    console.log('[scan] Final response payload shape:', {
+      mode: responsePayload.mode,
+      cards_detected: responsePayload.cards_detected,
+      has_card: Boolean(responsePayload.card),
+      cards_count: responsePayload.cards.length,
+      errors_count: responsePayload.errors.length,
     });
+    return ok(responsePayload);
   }
 
   // ─── Sheet scan path ──────────────────────────────────────────────────────
@@ -336,6 +396,7 @@ Fill in ALL 9 positions with real values from the image. Do NOT leave any positi
   let sheetCards: SheetCardResult[] = [];
 
   try {
+    console.log('[scan] Starting OpenAI full-sheet identify request');
     const gptResponse = await fetch('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
       headers: {
@@ -365,6 +426,7 @@ Fill in ALL 9 positions with real values from the image. Do NOT leave any positi
       signal: gptController.signal,
     });
 
+    console.log('[scan] OpenAI full-sheet response status:', gptResponse.status);
     if (gptResponse.ok) {
       const gptData = await gptResponse.json() as { choices: Array<{ message: { content: string } }> };
       const rawText = gptData.choices?.[0]?.message?.content ?? '';
@@ -537,6 +599,7 @@ Return ONLY a JSON object in this exact format:
     const bboxController = new AbortController();
     const bboxTimeout = setTimeout(() => bboxController.abort(), 45_000);
 
+    console.log('[scan] Starting OpenAI bbox detection request');
     const bboxResponse = await fetch('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
       headers: {
@@ -568,6 +631,7 @@ Return ONLY a JSON object in this exact format:
 
     clearTimeout(bboxTimeout);
 
+    console.log('[scan] OpenAI bbox detection response status:', bboxResponse.status);
     if (bboxResponse.ok) {
       const bboxData = await bboxResponse.json() as { choices: Array<{ message: { content: string } }> };
       const rawText = bboxData.choices?.[0]?.message?.content ?? '';
@@ -886,12 +950,23 @@ Return ONLY a JSON object in this exact format:
     }
   }
 
-  return ok({
+  const responsePayload: ScanApiPayload = {
+    mode: 'sheet',
     sheet_url: sheetKey,
     cards_detected: collectionItems.length,
-    collection_items: collectionItems,
-    ...(errors.length > 0 ? { errors } : {}),
+    card: null,
+    cards: collectionItems,
+    errors,
+    error: null,
+  };
+  console.log('[scan] Final response payload shape:', {
+    mode: responsePayload.mode,
+    cards_detected: responsePayload.cards_detected,
+    has_card: Boolean(responsePayload.card),
+    cards_count: responsePayload.cards.length,
+    errors_count: responsePayload.errors.length,
   });
+  return ok(responsePayload);
 }
 
 // ─── Set Correction Endpoint ──────────────────────────────────────────────────

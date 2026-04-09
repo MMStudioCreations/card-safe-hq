@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useQueryClient } from '@tanstack/react-query'
-import { api } from '../lib/api'
+import { api, type ScanApiResult } from '../lib/api'
 import CardCrop from '../components/CardCrop'
 
 type Mode = 'sheet' | 'single'
@@ -49,6 +49,7 @@ export default function ScanPage() {
   const [sheetResult, setSheetResult] = useState<{ cards_detected: number; collection_items: ScanResultItem[] } | null>(null)
   const [singleResult, setSingleResult] = useState<ScanResultItem | null>(null)
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
+  const [scanErrors, setScanErrors] = useState<string[]>([])
 
   const statusMessages = mode === 'single' ? SINGLE_STATUS_MESSAGES : STATUS_MESSAGES
 
@@ -61,6 +62,7 @@ export default function ScanPage() {
   }, [state, statusMessages.length])
 
   function handleFile(file: File) {
+    console.log('[scan-ui] file selected', { name: file.name, type: file.type, size: file.size })
     if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type)) {
       setErrorMessage('Unsupported file type. Please use JPEG, PNG, or WebP.')
       setState('error')
@@ -99,29 +101,60 @@ export default function ScanPage() {
 
   async function handleSubmit() {
     if (!selectedFile) return
+    console.log('[scan-ui] submit started', { mode, file: selectedFile.name, size: selectedFile.size })
     setState('processing')
     setStatusIndex(0)
     setSheetResult(null)
     setSingleResult(null)
     setErrorMessage(null)
+    setScanErrors([])
 
     try {
+      const endpointBase = import.meta.env.VITE_API_URL ?? 'https://cardsafehq-api.michaelamarino16.workers.dev'
+      const endpoint = `${endpointBase}/api/scan/sheet`
+      console.log('[scan-ui] endpoint', endpoint)
+
+      const debugFormData = new FormData()
+      debugFormData.append('file', selectedFile)
+      debugFormData.append('mode', mode)
+      console.log('[scan-ui] formData keys', Array.from(debugFormData.keys()))
+
       const data = await api.scanSheet(selectedFile, mode)
+      console.log('[scan-ui] response status', 'success (axios resolved envelope)')
+      console.log('[scan-ui] parsed json', data)
       await queryClient.invalidateQueries({ queryKey: ['collection'] })
 
-      if (mode === 'single') {
-        if (data.card) {
-          setSingleResult(data.card as ScanResultItem)
+      const normalized = data as ScanApiResult
+      const responseMode = normalized.mode ?? mode
+      setScanErrors([
+        ...(normalized.error ? [normalized.error] : []),
+        ...(normalized.errors ?? []).map((entry) =>
+          entry.position ? `Position ${entry.position}: ${entry.error}` : entry.error,
+        ),
+      ])
+
+      if (responseMode === 'single') {
+        if (normalized.card) {
+          setSingleResult(normalized.card as ScanResultItem)
+          setState('done')
+        } else {
+          setErrorMessage(normalized.error ?? 'No single-card result returned from scan API.')
+          setState('error')
         }
       } else {
-        setSheetResult({
-          cards_detected: data.cards_detected ?? 0,
-          collection_items: (data.collection_items ?? []) as ScanResultItem[],
-        })
+        const cards = (normalized.cards ?? []) as ScanResultItem[]
+        setSheetResult({ cards_detected: normalized.cards_detected ?? cards.length, collection_items: cards })
+        setState('done')
       }
-      setState('done')
+      console.log('[scan-ui] result state assigned', {
+        responseMode,
+        sheetCards: normalized.cards?.length ?? 0,
+        hasSingleCard: Boolean(normalized.card),
+      })
     } catch (err) {
+      console.error('[scan-ui] request failed', err)
       setErrorMessage(err instanceof Error ? err.message : 'Scan failed. Please try again.')
+      setScanErrors([])
       setState('error')
     }
   }
@@ -134,13 +167,29 @@ export default function ScanPage() {
     setSheetResult(null)
     setSingleResult(null)
     setErrorMessage(null)
+    setScanErrors([])
     if (fileInputRef.current) fileInputRef.current.value = ''
   }
 
   function handleModeChange(newMode: Mode) {
+    console.log('[scan-ui] mode changed', { from: mode, to: newMode })
     setMode(newMode)
     handleReset()
   }
+
+  useEffect(() => {
+    console.log('[scan-ui] render conditions', {
+      state,
+      mode,
+      hasPreview: Boolean(preview),
+      hasSelectedFile: Boolean(selectedFile),
+      hasSheetResult: Boolean(sheetResult),
+      sheetCount: sheetResult?.collection_items?.length ?? 0,
+      hasSingleResult: Boolean(singleResult),
+      errorMessage,
+      scanErrorsCount: scanErrors.length,
+    })
+  }, [state, mode, preview, selectedFile, sheetResult, singleResult, errorMessage, scanErrors.length])
 
   return (
     <div className="mx-auto max-w-2xl space-y-6">
@@ -230,6 +279,17 @@ export default function ScanPage() {
             </div>
           )}
 
+          {scanErrors.length > 0 && (
+            <div className="glass rounded-[var(--radius-md)] border border-amber-500/30 p-4 text-sm text-amber-300">
+              <p className="font-semibold">Scan warnings</p>
+              <ul className="mt-2 list-disc pl-5">
+                {scanErrors.map((scanError, idx) => (
+                  <li key={`${scanError}-${idx}`}>{scanError}</li>
+                ))}
+              </ul>
+            </div>
+          )}
+
           <div className="flex gap-3">
             {selectedFile && (
               <>
@@ -257,6 +317,17 @@ export default function ScanPage() {
             <p className="font-semibold">{statusMessages[statusIndex]}</p>
             <p className="mt-1 text-xs text-cv-muted">This may take up to 30 seconds</p>
           </div>
+        </div>
+      )}
+
+      {state === 'done' && scanErrors.length > 0 && (
+        <div className="glass rounded-[var(--radius-md)] border border-amber-500/30 p-4 text-sm text-amber-300">
+          <p className="font-semibold">Completed with warnings</p>
+          <ul className="mt-2 list-disc pl-5">
+            {scanErrors.map((scanError, idx) => (
+              <li key={`${scanError}-${idx}`}>{scanError}</li>
+            ))}
+          </ul>
         </div>
       )}
 
