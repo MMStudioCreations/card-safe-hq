@@ -31,10 +31,17 @@ export default function CardCrop({ sheetUrl, bbox, alt, className }: Props) {
     img.crossOrigin = 'anonymous'
 
     img.onload = () => {
-      const cropX = (bbox.x / 100) * img.naturalWidth
-      const cropY = (bbox.y / 100) * img.naturalHeight
-      const cropW = (bbox.width / 100) * img.naturalWidth
-      const cropH = (bbox.height / 100) * img.naturalHeight
+      // Add 3% padding on each side so card edges are never clipped
+      const PAD = 3
+      const rawX = Math.max(0, bbox.x - PAD)
+      const rawY = Math.max(0, bbox.y - PAD)
+      const rawW = Math.min(100 - rawX, bbox.width + PAD * 2)
+      const rawH = Math.min(100 - rawY, bbox.height + PAD * 2)
+
+      const cropX = (rawX / 100) * img.naturalWidth
+      const cropY = (rawY / 100) * img.naturalHeight
+      const cropW = (rawW / 100) * img.naturalWidth
+      const cropH = (rawH / 100) * img.naturalHeight
 
       canvas.width = cropW
       canvas.height = cropH
