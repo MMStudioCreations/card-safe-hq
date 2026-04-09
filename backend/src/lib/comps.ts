@@ -23,12 +23,20 @@ function buildSearchQuery(card: Card & {
   variation?: string | null;
   manufacturer?: string | null;
 }): string {
+  const isPokemon = (card.game || '').toLowerCase().includes('poke') ||
+                    (card.game || '').toLowerCase().includes('tcg');
+
   const parts = [
     card.player_name || card.card_name,
-    card.year ? String(card.year) : null,
+    // For Pokémon, card_number is the strongest disambiguator — put it right
+    // after the name so eBay's relevance ranking sees it early.
+    isPokemon && card.card_number ? card.card_number : null,
     card.set_name,
-    card.card_number,
-    card.variation || card.rarity,
+    // For non-Pokémon cards keep year + variation in the query
+    !isPokemon && card.year ? String(card.year) : null,
+    !isPokemon ? (card.variation || card.rarity) : null,
+    // Anchor Pokémon queries to the TCG product category
+    isPokemon ? 'Pokemon TCG' : null,
   ]
     .filter((v): v is string => v != null && v.trim().length > 0)
     .map((v) => v.trim());

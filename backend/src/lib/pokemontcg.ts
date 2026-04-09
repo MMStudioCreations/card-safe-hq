@@ -75,6 +75,20 @@ async function ptcgFetch(apiKey: string, path: string): Promise<unknown> {
   }
 }
 
+// Fetch a single card by its exact PTCG ID (e.g. "sv3pt5-123") — always precise
+export async function getCardById(
+  apiKey: string,
+  ptcgId: string,
+): Promise<PokemonTCGCard | null> {
+  try {
+    const data = await ptcgFetch(apiKey, `/cards/${encodeURIComponent(ptcgId)}`) as any;
+    return data?.data ?? null;
+  } catch (err) {
+    console.error('getCardById failed:', err);
+    return null;
+  }
+}
+
 // Search for a card by name + number to get set info and TCGPlayer prices
 export async function searchPokemonCard(
   apiKey: string,
