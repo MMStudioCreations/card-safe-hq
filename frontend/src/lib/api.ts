@@ -174,6 +174,19 @@ export type TradeItem = {
 
 export type TradeDetail = TradeRow & { items: TradeItem[] }
 
+export type SealedProduct = {
+  id: number
+  name: string
+  set_name: string | null
+  set_id: string | null
+  product_type: string
+  tcgplayer_url: string | null
+  market_price_cents: number | null
+  release_date: string | null
+  tcgplayer_product_id: number | null
+  created_at: string
+}
+
 export type Notification = {
   id: number
   type: string
@@ -534,6 +547,9 @@ export const api = {
     http.post<never, { url: string }>('/api/billing/checkout', { plan }),
   createPortalSession: () =>
     http.post<never, { url: string }>('/api/billing/portal'),
+  // ── Sealed products catalog ────────────────────────────────────────────────────
+  listSealedProducts: (params?: { q?: string; type?: string; set?: string; limit?: number; offset?: number }) =>
+    http.get<never, { products: SealedProduct[]; total: number }>('/api/sealed-products', { params }),
   // ── TCGCSV live price refresh ─────────────────────────────────────────────────
   refreshSealedPrice: (tcgplayerProductId: number) =>
     http.post<never, { price_cents: number | null }>('/api/prices/refresh', {

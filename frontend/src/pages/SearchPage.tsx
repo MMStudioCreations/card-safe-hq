@@ -1,7 +1,8 @@
 import { useMemo, useState } from 'react'
 import { ExternalLink, RefreshCw } from 'lucide-react'
-import { useMutation } from '@tanstack/react-query'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { api } from '../lib/api'
+import type { SealedProduct } from '../lib/api'
 
 // Full sealed product type label map — expanded from TCGCSV product detection
 const TYPE_LABELS: Record<string, string> = {
@@ -29,35 +30,28 @@ const TYPE_LABELS: Record<string, string> = {
   other: 'Sealed Product',
 }
 
-export type SealedProduct = {
-  id: number
-  name: string
-  set_name: string | null
-  set_id: string | null
-  product_type: string
-  tcgplayer_url: string | null
-  market_price_cents: number | null
-  release_date: string | null
-  tcgplayer_product_id: number | null
-  created_at: string
-}
-
-type Props = {
-  products?: SealedProduct[]
-  isLoading?: boolean
-}
-
-export default function SearchPage({ products = [], isLoading = false }: Props) {
+export default function SearchPage() {
+  const queryClient = useQueryClient()
   const [search, setSearch] = useState('')
   const [typeFilter, setTypeFilter] = useState('all')
   const [setFilter, setFilter] = useState('')
   const [refreshingId, setRefreshingId] = useState<number | null>(null)
 
+  const { data, isLoading } = useQuery({
+    queryKey: ['sealed-products'],
+    queryFn: () => api.listSealedProducts({ limit: 500 }),
+    staleTime: 1000 * 60 * 5,
+  })
+  const products: SealedProduct[] = data?.products ?? []
+
   const refreshPrice = useMutation({
     mutationFn: (product: SealedProduct) =>
       api.refreshSealedPrice(product.tcgplayer_product_id!),
     onMutate: (product) => setRefreshingId(product.id),
-    onSettled: () => setRefreshingId(null),
+    onSettled: () => {
+      setRefreshingId(null)
+      void queryClient.invalidateQueries({ queryKey: ['sealed-products'] })
+    },
   })
 
   // Derive unique set names for the set filter dropdown

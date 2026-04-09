@@ -487,6 +487,27 @@ export default {
         return withCors(await handleCreatePortal(env, request), request, env);
       }
 
+      // List sealed products catalog (with optional search/type/set filters)
+      if (method === 'GET' && pathname === '/api/sealed-products') {
+        const url = new URL(request.url)
+        const search = url.searchParams.get('q') ?? ''
+        const type = url.searchParams.get('type') ?? ''
+        const setName = url.searchParams.get('set') ?? ''
+        const limit = Math.min(Number(url.searchParams.get('limit') ?? '200'), 500)
+        const offset = Number(url.searchParams.get('offset') ?? '0')
+
+        let query = 'SELECT * FROM sealed_products WHERE 1=1'
+        const params: (string | number)[] = []
+        if (search) { query += ' AND (name LIKE ? OR set_name LIKE ?)'; params.push(`%${search}%`, `%${search}%`) }
+        if (type)   { query += ' AND product_type = ?'; params.push(type) }
+        if (setName){ query += ' AND set_name = ?'; params.push(setName) }
+        query += ' ORDER BY set_name ASC, name ASC LIMIT ? OFFSET ?'
+        params.push(limit, offset)
+
+        const rows = await env.DB.prepare(query).bind(...params).all()
+        return withCors(ok({ products: rows.results ?? [], total: rows.results?.length ?? 0 }), request, env)
+      }
+
       // Refresh price for a sealed product or card from TCGCSV
       if (method === 'POST' && pathname === '/api/prices/refresh') {
         const body = await request.json() as { tcgplayer_product_id: number; type: 'sealed' | 'card' }

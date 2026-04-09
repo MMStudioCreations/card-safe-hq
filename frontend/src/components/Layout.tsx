@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, type ReactNode } from 'react'
 import { NavLink, useNavigate, Link } from 'react-router-dom'
-import { Camera, FolderKanban, Images, Layers, LogOut, Bell, ArrowLeftRight } from 'lucide-react'
+import { Camera, FolderKanban, Images, Layers, LogOut, Bell, ArrowLeftRight, Package } from 'lucide-react'
 import { useQueryClient, useQuery, useMutation } from '@tanstack/react-query'
 import { api } from '../lib/api'
 import { useAuth, useCollection } from '../lib/hooks'
@@ -14,6 +14,7 @@ const links = [
   { to: '/upload', label: 'Upload', icon: Images },
   { to: '/deck', label: 'Deck Builder', icon: Layers },
   { to: '/trades', label: 'Trades', icon: ArrowLeftRight },
+  { to: '/sealed', label: 'Sealed', icon: Package },
 ]
 
 export default function Layout({ children }: Props) {
@@ -196,7 +197,7 @@ export default function Layout({ children }: Props) {
       <main className="flex-1 overflow-y-auto w-full max-w-screen-sm mx-auto">{children}</main>
 
       {/* Mobile nav */}
-      <nav className="glass fixed inset-x-2 bottom-2 z-30 mx-auto grid max-w-[980px] grid-cols-5 gap-0.5 px-1 py-1.5 sm:hidden" style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}>
+      <nav className="glass fixed inset-x-2 bottom-2 z-30 mx-auto grid max-w-[980px] grid-cols-6 gap-0.5 px-1 py-1.5 sm:hidden" style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}>
         {links.map((link) => {
           const Icon = link.icon
           const isTrades = link.to === '/trades'
