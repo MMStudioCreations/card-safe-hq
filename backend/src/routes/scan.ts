@@ -491,23 +491,18 @@ All 9 positions are REQUIRED. Do not stop at 7 or 8.`;
         const ebayClientId = env.EBAY_CLIENT_ID;
         const ebayClientSecret = env.EBAY_CLIENT_SECRET;
         const capturedCardId = cardId;
-        // Build full collector number e.g. "197/182"
-        const setTotalFromGpt = collector_number?.includes('/')
-          ? collector_number.split('/')[1]?.trim()
-          : null
-        const fullCollectorNumber = setTotalFromGpt
-          ? `${tcgCard?.number ?? finalNumber}/${setTotalFromGpt}`
-          : (tcgCard?.number ?? finalNumber)
+        // Get set total from catalogCard for full number format
+        const catalogSetTotal = (catalogCard as any)?.set_printed_total ?? tcgCard?.set.printedTotal
+        const cardNumFull = catalogSetTotal
+          ? `${tcgCard?.number ?? finalNumber}/${catalogSetTotal}`
+          : (tcgCard?.number ?? finalNumber ?? '')
 
         const ebayIdent = {
-          card_number: fullCollectorNumber,
           player_name: tcgCard?.name ?? cardName,
-          card_name: null,
-          year: null,
+          card_number: cardNumFull,           // e.g. "197/182"
           set_name: tcgCard?.set.name ?? setName,
-          variation: tcgCard?.rarity ?? null,
-          game: 'Pokemon',
-          ptcg_set_name: tcgCard?.set.name ?? null,
+          variation: tcgCard?.rarity ?? null, // e.g. "Illustration Rare"
+          year: null,
         };
         fetchEbayComps(ebayClientId, ebayClientSecret, ebayIdent).then(async (comps) => {
           for (const comp of comps) {

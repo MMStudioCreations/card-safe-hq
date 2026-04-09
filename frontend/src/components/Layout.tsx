@@ -193,10 +193,10 @@ export default function Layout({ children }: Props) {
         </div>
       </header>
 
-      <main>{children}</main>
+      <main className="flex-1 overflow-y-auto w-full max-w-screen-sm mx-auto">{children}</main>
 
       {/* Mobile nav */}
-      <nav className="glass fixed inset-x-2 bottom-2 z-30 mx-auto grid max-w-[980px] grid-cols-5 gap-0.5 px-1 py-1.5 sm:hidden">
+      <nav className="glass fixed inset-x-2 bottom-2 z-30 mx-auto grid max-w-[980px] grid-cols-5 gap-0.5 px-1 py-1.5 sm:hidden" style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}>
         {links.map((link) => {
           const Icon = link.icon
           const isTrades = link.to === '/trades'

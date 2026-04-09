@@ -643,8 +643,24 @@ export default function CardDetailPage() {
               )}
 
               {compsTab === 'sold' ? (
-                soldListings.length ? (
-                  soldListings.map((sale, i) => {
+                <>
+                  {/* Last Sold Price — this is the card's value */}
+                  <div className="mb-4">
+                    <p className="text-xs text-cv-muted uppercase tracking-wide mb-1">Last Sold</p>
+                    <p className="text-2xl font-bold text-white">
+                      {mostRecentSold
+                        ? `$${(mostRecentSold.sold_price_cents / 100).toFixed(2)}`
+                        : 'No sales data'
+                      }
+                    </p>
+                    {mostRecentSold && (
+                      <p className="text-xs text-cv-muted">
+                        {new Date(mostRecentSold.sold_date).toLocaleDateString()}
+                      </p>
+                    )}
+                  </div>
+                  {soldListings.filter(c => c.source === 'ebay_sold' || !c.source).length ? (
+                  soldListings.filter(c => c.source === 'ebay_sold' || !c.source).map((sale, i) => {
                     const isAboveAvg = avgPrice != null && sale.sold_price_cents >= avgPrice
                     const isBelowAvg = avgPrice != null && sale.sold_price_cents < avgPrice
                     return (
@@ -684,7 +700,8 @@ export default function CardDetailPage() {
                   })
                 ) : (
                   <p className="text-sm text-cv-muted">No sold comps yet.</p>
-                )
+                )}
+                </>
               ) : activeListings.length ? (
                 activeListings.map((listing, i) => (
                   <div
