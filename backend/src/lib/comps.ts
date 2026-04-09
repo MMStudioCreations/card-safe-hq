@@ -16,6 +16,32 @@ export interface SalesCompProvider {
   fetchActiveListings(card: Card, env: Env): Promise<NormalizedComp[]>;
 }
 
+// Keywords that indicate a listing is NOT a single card — used both in the
+// eBay query string (as exclusions) and as a post-fetch title filter.
+const LOT_KEYWORDS = [
+  'lot', 'bundle', 'choose your card', 'pick your card', 'complete your set',
+  'evo line', 'evolution line', 'commons', 'uncommons', 'bulk', 'collection',
+  'mixed', 'assorted', 'random', 'mystery', 'grab bag', 'wholesale',
+  'singles sv', 'singles sv0', // "Surging Sparks Singles SV08" style titles
+];
+
+// Build the negative keyword string for the eBay q= parameter.
+// eBay supports -keyword and -"multi word" exclusions inline.
+function buildExclusions(): string {
+  return [
+    '-lot',
+    '-bundle',
+    '-"choose your card"',
+    '-"pick your card"',
+    '-"complete your set"',
+    '-"evo line"',
+    '-"evolution line"',
+    '-bulk',
+    '-wholesale',
+    '-"grab bag"',
+  ].join(' ');
+}
+
 function buildSearchQuery(card: Card & {
   player_name?: string | null;
   year?: number | null;
@@ -26,23 +52,38 @@ function buildSearchQuery(card: Card & {
   const isPokemon = (card.game || '').toLowerCase().includes('poke') ||
                     (card.game || '').toLowerCase().includes('tcg');
 
-  const parts = [
-    card.player_name || card.card_name,
-    // For Pokémon, card_number is the strongest disambiguator — put it right
-    // after the name so eBay's relevance ranking sees it early.
-    isPokemon && card.card_number ? card.card_number : null,
-    card.set_name,
-    // For non-Pokémon cards keep year + variation in the query
-    !isPokemon && card.year ? String(card.year) : null,
-    !isPokemon ? (card.variation || card.rarity) : null,
-    // Anchor Pokémon queries to the TCG product category
-    isPokemon ? 'Pokemon TCG' : null,
-  ]
-    .filter((v): v is string => v != null && v.trim().length > 0)
-    .map((v) => v.trim());
+  const parts: (string | null | undefined)[] = [];
 
-  const query = parts.join(' ');
-  return query.length > 100 ? query.slice(0, 100).trimEnd() : query;
+  if (isPokemon) {
+    // Pokémon: "CardName CardNumber/Total SetName" is the most precise eBay query.
+    // We intentionally omit "Pokemon TCG" as a suffix because it can push the
+    // card_number out of eBay's relevance window on longer names.
+    parts.push(card.card_name);
+    if (card.card_number) parts.push(card.card_number);
+    if (card.set_name) parts.push(card.set_name);
+    // Include variation (e.g. "Reverse Holo", "Full Art") only when present
+    // so graded/holo variants are separated from base prints.
+    if (card.variation && card.variation.toLowerCase() !== 'standard') {
+      parts.push(card.variation);
+    }
+  } else {
+    // Sports / other: player + year + set + variation
+    parts.push(card.player_name ?? card.card_name);
+    if (card.year) parts.push(String(card.year));
+    if (card.set_name) parts.push(card.set_name);
+    if (card.variation || card.rarity) parts.push(card.variation ?? card.rarity ?? null);
+    if (card.card_number) parts.push(card.card_number);
+  }
+
+  const positive = parts
+    .filter((v): v is string => v != null && v.trim().length > 0)
+    .map((v) => v.trim())
+    .join(' ');
+
+  // Append exclusion keywords — keep total query under 350 chars (eBay limit).
+  const exclusions = buildExclusions();
+  const full = `${positive} ${exclusions}`;
+  return full.length > 350 ? full.slice(0, 350).trimEnd() : full;
 }
 
 async function getEbayToken(clientId: string, clientSecret: string): Promise<string> {
@@ -137,6 +178,16 @@ async function searchEbayAPI(
         if (!priceStr || !item.title || !item.itemWebUrl) return null;
         const priceNum = parseFloat(priceStr);
         if (!isFinite(priceNum) || priceNum <= 0) return null;
+
+        // Post-fetch filter: drop listings whose titles contain lot/bundle keywords
+        // that slipped past eBay's query-level exclusions.
+        const titleLower = item.title.toLowerCase();
+        const isLotOrBundle = LOT_KEYWORDS.some((kw) => titleLower.includes(kw));
+        if (isLotOrBundle) {
+          console.log('[eBay] filtered out lot/bundle listing:', item.title);
+          return null;
+        }
+
         return {
           source,
           title: item.title,
