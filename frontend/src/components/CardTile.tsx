@@ -51,7 +51,7 @@ export default function CardTile({ collectionItem }: Props) {
       sheetUrl={`${apiBase}/api/images/${encodeURIComponent(collectionItem.front_image_url!)}`}
       bbox={bbox}
       alt={displayName}
-      className="w-full h-full object-cover rounded-t"
+      className="w-full h-full object-contain"
     />
   ) : collectionItem.front_image_url ? (
     <img
