@@ -164,29 +164,29 @@ export default function DashboardPage() {
   return (
     <div className="space-y-4 page-enter">
       {/* Stats bar */}
-      <section className="glass p-4">
-        <div className="grid gap-3 grid-cols-2 sm:grid-cols-4 lg:grid-cols-5">
-          <div>
+      <section className="glass p-4 w-full">
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 w-full">
+          <div className="bg-cv-surface rounded-lg p-3 text-center">
             <p className="text-xs text-cv-muted">Total Cards</p>
-            <p className="text-2xl font-bold">{totals.count}</p>
+            <p className="text-lg font-bold text-white">{totals.count}</p>
           </div>
-          <div>
+          <div className="bg-cv-surface rounded-lg p-3 text-center">
             <p className="text-xs text-cv-muted">Portfolio Value</p>
-            <p className="gradient-text text-2xl font-bold">${(totals.totalValue / 100).toFixed(2)}</p>
+            <p className="gradient-text text-lg font-bold">${(totals.totalValue / 100).toFixed(2)}</p>
           </div>
-          <div>
+          <div className="bg-cv-surface rounded-lg p-3 text-center">
             <p className="text-xs text-cv-muted">Avg Card Value</p>
-            <p className="text-2xl font-bold">${(totals.avgValue / 100).toFixed(2)}</p>
+            <p className="text-lg font-bold text-white">${(totals.avgValue / 100).toFixed(2)}</p>
           </div>
-          <div>
+          <div className="bg-cv-surface rounded-lg p-3 text-center">
             <p className="text-xs text-cv-muted">Graded Cards</p>
-            <p className="text-2xl font-bold">{totals.gradedCount}</p>
+            <p className="text-lg font-bold text-white">{totals.gradedCount}</p>
           </div>
-          <div>
+          <div className="bg-cv-surface rounded-lg p-3 text-center sm:col-span-4">
             <p className="text-xs text-cv-muted">Most Valuable</p>
             {totals.mostValuable ? (
               <>
-                <p className="truncate text-sm font-bold">{totals.mostValuable.name}</p>
+                <p className="truncate text-sm font-bold text-white">{totals.mostValuable.name}</p>
                 <p className="text-xs text-cv-muted">${(totals.mostValuable.value / 100).toFixed(2)}</p>
               </>
             ) : <p className="text-sm text-cv-muted">—</p>}
@@ -316,7 +316,7 @@ export default function DashboardPage() {
           )}
         </section>
       ) : (
-        <section className="grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-4">
+        <section className="grid grid-cols-2 gap-3 px-4 py-3 max-w-screen-sm mx-auto w-full md:grid-cols-3 lg:grid-cols-4">
           {filtered.map((item) => (
             selectMode ? (
               <div

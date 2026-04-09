@@ -33,6 +33,16 @@ export default function CardTile({ collectionItem }: Props) {
     || 'Other'
   ).toLowerCase()
 
+  const displayValueCents =
+    (collectionItem as any).latest_sold_price_cents ??
+    collectionItem.estimated_value_cents ??
+    0
+
+  const displayValue = (displayValueCents / 100).toLocaleString('en-US', {
+    style: 'currency',
+    currency: 'USD',
+  })
+
   // Build bbox from stored columns
   const bbox = (collectionItem.bbox_x != null && collectionItem.bbox_y != null)
     ? { x: collectionItem.bbox_x, y: collectionItem.bbox_y, width: collectionItem.bbox_width ?? 28, height: collectionItem.bbox_height ?? 28 }
@@ -85,9 +95,7 @@ export default function CardTile({ collectionItem }: Props) {
           <span className={`badge border-0 ${sportMap[displaySport] ?? 'bg-violet-500/20 text-violet-100'}`}>
             {collectionItem.sport || collectionItem.game || collectionItem.card?.sport || collectionItem.card?.game || 'Other'}
           </span>
-          <span className="badge">
-            ${((((collectionItem as any).latest_sold_price_cents ?? collectionItem.estimated_value_cents ?? 0) / 100) || 0).toFixed(2)}
-          </span>
+          <span className="badge">{displayValue}</span>
           <span className="badge">{collectionItem.condition_note || 'Raw'}</span>
           {collectionItem.product_type && collectionItem.product_type !== 'single_card' && (
             <span className="badge bg-amber-500/20 text-amber-200">

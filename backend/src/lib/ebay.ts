@@ -104,50 +104,42 @@ export async function searchSoldListings(
 // For sports: player_name + year + set_name is the strongest combo
 
 export interface EbayCardIdent {
-  card_name: string | null;
-  card_number: string | null;
-  set_name: string | null;
-  variation: string | null;
-  year: number | null;
-  player_name: string | null;   // sports cards
-  game: string | null;          // "Pokemon" | "Baseball" | etc.
-  ptcg_set_name: string | null; // canonical set name from PTCG API if confirmed
+  player_name?: string | null;
+  card_number?: string | null;
+  set_name?: string | null;
+  variation?: string | null;
+  year?: number | null;
+  card_name?: string | null;
+  game?: string | null;
+  ptcg_set_name?: string | null;
 }
 
-export function buildSearchQuery(ident: EbayCardIdent): string {
-  const isPokemon = ident.game?.toLowerCase() === 'pokemon';
-  const resolvedSetName = ident.ptcg_set_name ?? ident.set_name;
+export function buildSearchQuery(card: EbayCardIdent): string {
+  const parts: string[] = []
 
-  let parts: (string | number | null | undefined)[];
+  if (card.player_name) parts.push(card.player_name)
+  if (card.set_name) parts.push(card.set_name)
 
-  if (isPokemon) {
-    // Pokémon: name + number + rarity is extremely precise on eBay
-    // e.g. "Chi-Yu ex 252/193 Obsidian Flames Illustration Rare Pokemon Card"
-    parts = [
-      ident.player_name ?? ident.card_name,
-      ident.card_number,
-      resolvedSetName,
-      ident.variation,
-      'Pokemon Card',
-    ];
-  } else {
-    // Sports/other: player + year + set + variation
-    // e.g. "Mike Trout 2023 Topps Chrome Refractor"
-    parts = [
-      ident.player_name ?? ident.card_name,
-      ident.year,
-      resolvedSetName,
-      ident.variation,
-      ident.card_number,
-    ];
+  // Include full collector number with set total (e.g. "197/182" not "197")
+  // This is critical for filtering out common variants
+  if (card.card_number) parts.push(card.card_number)
+
+  // Include rarity for illustration rares and above
+  // This eliminates common/uncommon comps from results
+  const highRarities = [
+    'Illustration Rare',
+    'Special Illustration Rare',
+    'Hyper Rare',
+    'Ultra Rare',
+    'Double Rare',
+  ]
+  if (card.variation && highRarities.some(r => card.variation!.includes(r))) {
+    parts.push(card.variation)
   }
 
-  const query = parts
-    .map((v) => String(v ?? '').trim())
-    .filter((v) => v.length > 0)
-    .join(' ');
-
-  return query.length > 200 ? query.slice(0, 200).trimEnd() : query;
+  parts.push('Pokemon Card')
+  const query = parts.filter(Boolean).join(' ')
+  return query.length > 200 ? query.slice(0, 200).trimEnd() : query
 }
 
 // ─── Main Export ──────────────────────────────────────────────────────────────
