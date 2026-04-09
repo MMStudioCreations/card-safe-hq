@@ -1,0 +1,22 @@
+name: Sync Sealed Products from TCGCSV
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '0 3 * * 0'
+jobs:
+  sync:
+    name: Sync sealed products catalog
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Run sealed product sync
+        run: node backend/scripts/sync_sealed_products.mjs
+        env:
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          D1_DATABASE_ID: ${{ secrets.D1_DATABASE_ID }}
