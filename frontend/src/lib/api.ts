@@ -507,4 +507,27 @@ export const api = {
   }) => http.post<never, { added: boolean }>('/api/wishlist', payload),
   removeWishlistItem: (ptcgId: string) =>
     http.delete<never, { removed: boolean }>(`/api/wishlist/${encodeURIComponent(ptcgId)}`),
+
+  // ── Email auth ────────────────────────────────────────────────────────────────
+  verifyEmail: (token: string) =>
+    http.post<never, { verified: boolean }>('/api/auth/verify-email', { token }),
+  resendVerification: () =>
+    http.post<never, { sent: boolean }>('/api/auth/resend-verification'),
+  forgotPassword: (email: string) =>
+    http.post<never, { sent: boolean }>('/api/auth/forgot-password', { email }),
+  resetPassword: (token: string, password: string) =>
+    http.post<never, { reset: boolean }>('/api/auth/reset-password', { token, password }),
+
+  // ── Billing (Stripe) ───────────────────────────────────────────────────────────
+  getBillingStatus: () =>
+    http.get<never, {
+      tier: 'free' | 'pro';
+      status: string | null;
+      current_period_end: string | null;
+      cancel_at_period_end: boolean;
+    }>('/api/billing/status'),
+  createCheckoutSession: (plan: 'monthly' | 'yearly') =>
+    http.post<never, { url: string }>('/api/billing/checkout', { plan }),
+  createPortalSession: () =>
+    http.post<never, { url: string }>('/api/billing/portal'),
 }

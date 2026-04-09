@@ -66,7 +66,14 @@ export default function Layout({ children }: Props) {
       <header className="glass sticky top-3 z-20 mb-6 p-4">
         <div className="flex items-center justify-between gap-3">
           <div className="flex items-center gap-3">
-            <div className="h-11 w-11 rounded-[var(--radius-md)] bg-[linear-gradient(135deg,var(--primary),var(--secondary))]" />
+            <div className="relative h-11 w-11 shrink-0 overflow-hidden rounded-[var(--radius-md)]" style={{ background: 'linear-gradient(145deg, #0D1A24 0%, #131C26 100%)', border: '1px solid rgba(0,229,255,0.28)', boxShadow: '0 0 14px rgba(0,229,255,0.18)' }}>
+              <svg viewBox="0 0 44 44" className="absolute inset-0 h-full w-full" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M22 5L8 11v10c0 9.2 5.8 17.8 14 20.6C30.2 38.8 36 30.2 36 21V11L22 5z" stroke="#00E5FF" strokeWidth="1.6" strokeLinejoin="round" fill="rgba(0,229,255,0.06)"/>
+                <rect x="15" y="16" width="14" height="11" rx="2.5" stroke="#C9A84C" strokeWidth="1.4" fill="rgba(201,168,76,0.09)"/>
+                <circle cx="22" cy="21.5" r="2" fill="#C9A84C"/>
+              </svg>
+              <span className="absolute bottom-1 inset-x-0 text-center text-[7px] font-black tracking-widest" style={{ color: '#F0F6FF' }}>CS</span>
+            </div>
             <div>
               <h1 className="text-lg font-bold">Card Safe HQ</h1>
               <p className="text-xs text-cv-muted">The command center for card collectors</p>
@@ -171,6 +178,14 @@ export default function Layout({ children }: Props) {
             <span className="rounded-full bg-cv-surface px-3 py-2 text-xs text-cv-muted">
               {user?.username || user?.email}
             </span>
+            <NavLink
+              to="/billing"
+              className={({ isActive }) =>
+                `btn-ghost text-xs ${isActive ? 'text-[#C9A84C]' : ''}`
+              }
+            >
+              Billing
+            </NavLink>
             <button className="btn-ghost" onClick={handleLogout} type="button">
               <LogOut className="mr-2 h-4 w-4" /> Logout
             </button>
@@ -180,8 +195,8 @@ export default function Layout({ children }: Props) {
 
       <main>{children}</main>
 
-      {/* Mobile nav — 5 items now */}
-      <nav className="glass fixed inset-x-3 bottom-3 z-30 mx-auto grid max-w-[980px] grid-cols-5 gap-1 p-2 sm:hidden">
+      {/* Mobile nav */}
+      <nav className="glass fixed inset-x-2 bottom-2 z-30 mx-auto grid max-w-[980px] grid-cols-5 gap-0.5 px-1 py-1.5 sm:hidden">
         {links.map((link) => {
           const Icon = link.icon
           const isTrades = link.to === '/trades'
@@ -191,11 +206,11 @@ export default function Layout({ children }: Props) {
               to={link.to}
               end={link.to === '/'}
               className={({ isActive }) =>
-                `relative flex flex-col items-center rounded-[var(--radius-md)] px-1 py-2 text-xs ${isActive ? 'bg-cv-surfaceStrong text-cv-text' : 'text-cv-muted'}`
+                `relative flex flex-col items-center gap-0.5 rounded-[var(--radius-sm)] px-1 py-1.5 text-[10px] font-medium transition-colors ${isActive ? 'text-[#00E5FF]' : 'text-cv-muted'}`
               }
             >
               <div className="relative">
-                <Icon className="mb-1 h-4 w-4" />
+                <Icon className="h-[18px] w-[18px]" />
                 {isTrades && unreadCount > 0 && (
                   <span className="absolute -right-1 -top-1 flex h-3.5 w-3.5 items-center justify-center rounded-full bg-[var(--primary)] text-[8px] font-bold text-white">
                     {unreadCount > 9 ? '9+' : unreadCount}

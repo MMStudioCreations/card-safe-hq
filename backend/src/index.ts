@@ -43,6 +43,18 @@ import {
   markNotificationRead,
 } from './routes/trades';
 import { handleRecrop } from './routes/recrop';
+import {
+  handleVerifyEmail,
+  handleResendVerification,
+  handleForgotPassword,
+  handleResetPassword,
+} from './routes/email-auth';
+import {
+  handleBillingStatus,
+  handleCreateCheckout,
+  handleCreatePortal,
+  handleStripeWebhook,
+} from './routes/billing';
 
 function parseId(pathname: string): number | null {
   const id = Number(pathname.split('/').pop());
@@ -170,6 +182,28 @@ export default {
 
       if (method === 'POST' && pathname === '/api/auth/logout') return withCors(await handleLogout(env, request), request, env);
       if (method === 'GET' && pathname === '/api/me') return withCors(await handleMe(env, request), request, env);
+
+      // ── Email verification & password reset ────────────────────────────────
+      if (method === 'POST' && pathname === '/api/auth/verify-email') {
+        return withCors(await handleVerifyEmail(env, request), request, env);
+      }
+      if (method === 'POST' && pathname === '/api/auth/resend-verification') {
+        return withCors(await handleResendVerification(env, request), request, env);
+      }
+      if (method === 'POST' && pathname === '/api/auth/forgot-password') {
+        const ip = request.headers.get('CF-Connecting-IP') ?? 'unknown';
+        const allowed = await checkRateLimit(env, `forgot:${ip}`, 5, 3600); // 5 per hour
+        if (!allowed) {
+          return withCors(new Response(JSON.stringify({ ok: false, error: 'Too many requests. Try again later.' }), {
+            status: 429,
+            headers: { 'content-type': 'application/json', 'Retry-After': '3600' },
+          }), request, env);
+        }
+        return withCors(await handleForgotPassword(env, request), request, env);
+      }
+      if (method === 'POST' && pathname === '/api/auth/reset-password') {
+        return withCors(await handleResetPassword(env, request), request, env);
+      }
 
       if (method === 'GET' && pathname === '/api/cards') return withCors(await listCards(env, request), request, env);
       if (method === 'POST' && pathname === '/api/cards') return withCors(await createCard(env, request), request, env);
@@ -436,6 +470,21 @@ export default {
         const id = parseId(pathname.replace('/read', ''));
         if (!id) return withCors(badRequest('Invalid notification id'), request, env);
         if (method === 'PATCH') return withCors(await markNotificationRead(env, request, user, id), request, env);
+      }
+
+      // ── Billing routes ────────────────────────────────────────────────────────────────
+      // Stripe webhook — no auth, raw body needed
+      if (method === 'POST' && pathname === '/api/billing/webhook') {
+        return await handleStripeWebhook(env, request);
+      }
+      if (method === 'GET' && pathname === '/api/billing/status') {
+        return withCors(await handleBillingStatus(env, request), request, env);
+      }
+      if (method === 'POST' && pathname === '/api/billing/checkout') {
+        return withCors(await handleCreateCheckout(env, request), request, env);
+      }
+      if (method === 'POST' && pathname === '/api/billing/portal') {
+        return withCors(await handleCreatePortal(env, request), request, env);
       }
 
       return withCors(notFound('Route not found'), request, env);

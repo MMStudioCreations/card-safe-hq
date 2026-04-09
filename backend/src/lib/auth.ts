@@ -1,10 +1,16 @@
 import type { Env, User } from '../types';
 import { queryOne, run } from './db';
 import { unauthorized } from './json';
+import { hashPassword } from './auth-utils';
+import { sendVerificationEmail } from './email';
 
 const COOKIE_NAME = 'cv_session';
 const SESSION_DAYS = 30;
-const PBKDF2_ITERATIONS = 100_000;
+
+function generateVerificationToken(): string {
+  const bytes = crypto.getRandomValues(new Uint8Array(32));
+  return Array.from(bytes).map((b) => b.toString(16).padStart(2, '0')).join('');
+}
 
 interface UserRow extends User {
   password_hash: string;
@@ -27,6 +33,18 @@ export async function registerUser(env: Env, input: { email: string; password: s
   if (!user) {
     throw new Error('Unable to create user');
   }
+
+  // Send email verification
+  try {
+    const token = generateVerificationToken();
+    const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
+    await run(env.DB, 'INSERT INTO email_verification_tokens (token, user_id, expires_at) VALUES (?, ?, ?)', [token, user.id, expiresAt]);
+    await sendVerificationEmail(env, user.email, token);
+  } catch (err) {
+    // Non-fatal — user can request resend later
+    console.warn('[register] Failed to send verification email', err);
+  }
+
   return user;
 }
 
@@ -138,23 +156,7 @@ function clearSessionCookie(): string {
   return `${COOKIE_NAME}=; Path=/; HttpOnly; Secure; SameSite=None; Max-Age=0`;
 }
 
-async function hashPassword(password: string): Promise<string> {
-  const encoder = new TextEncoder();
-  const salt = crypto.getRandomValues(new Uint8Array(16));
-  const key = await crypto.subtle.importKey('raw', encoder.encode(password), 'PBKDF2', false, ['deriveBits']);
-  const bits = await crypto.subtle.deriveBits(
-    {
-      name: 'PBKDF2',
-      hash: 'SHA-256',
-      salt: salt.buffer as ArrayBuffer,
-      iterations: PBKDF2_ITERATIONS,
-    },
-    key,
-    256,
-  );
-
-  return `pbkdf2$${PBKDF2_ITERATIONS}$${toBase64(salt)}$${toBase64(new Uint8Array(bits))}`;
-}
+// hashPassword is now in auth-utils.ts and imported above
 
 async function verifyPassword(password: string, storedHash: string): Promise<boolean> {
   const [algo, iterString, saltB64, hashB64] = storedHash.split('$');

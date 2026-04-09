@@ -322,7 +322,7 @@ export default function CardDetailPage() {
             Back
           </button>
         </div>
-        <div className="w-full rounded-[var(--radius-md)] overflow-hidden bg-zinc-900" style={{ aspectRatio: '2.5/3.5' }}>
+        <div className="w-full rounded-[var(--radius-md)] overflow-hidden bg-zinc-900" style={{ aspectRatio: '2.5/3.5', maxHeight: '52vh' }}>
           {isSheet && detailBbox && sheetImageUrl ? (
             <CardCrop
               sheetUrl={sheetImageUrl}
