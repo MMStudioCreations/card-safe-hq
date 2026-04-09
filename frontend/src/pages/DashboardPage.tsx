@@ -368,7 +368,7 @@ export default function DashboardPage() {
           )}
         </section>
       ) : (
-        <section className="grid grid-cols-2 gap-3 px-4 py-3 max-w-screen-sm mx-auto w-full md:grid-cols-3 lg:grid-cols-4">
+        <section className="grid grid-cols-2 gap-3 px-1 py-3 w-full md:grid-cols-3 lg:grid-cols-4">
           {filtered.map((item) => (
             selectMode ? (
               <div

@@ -44,25 +44,29 @@ export default function CardTile({ collectionItem }: Props) {
     currency: 'USD',
   })
 
-  // Build bbox from stored columns
+  // Build bbox from stored columns — only present for legacy sheet-backed items
   const bbox = (collectionItem.bbox_x != null && collectionItem.bbox_y != null)
     ? { x: collectionItem.bbox_x, y: collectionItem.bbox_y, width: collectionItem.bbox_width ?? 28, height: collectionItem.bbox_height ?? 28 }
     : null
 
   const apiBase = import.meta.env.VITE_API_URL
+
+  // Determine if this is a legacy sheet reference that needs canvas cropping
+  // New scans store a per-card crop directly, so bbox will be null
   const isSheet = collectionItem.front_image_url?.includes('sheets/')
+  const needsCrop = isSheet && bbox != null
 
   // Image priority:
-  // 1. Sheet + bbox → canvas crop (most cards after scan)
-  // 2. Crop key → direct img (if backend crop ever worked)
-  // 3. image_url from cards table → official pokemontcg.io CDN art
+  // 1. Pre-cropped card image (new scans: cards/... path, no bbox needed)
+  // 2. Legacy sheet + bbox → canvas crop via CardCrop
+  // 3. Official pokemontcg.io CDN art from cards table
   // 4. Placeholder
-  const imageSection = isSheet && bbox ? (
+  const imageSection = needsCrop ? (
     <CardCrop
       sheetUrl={`${apiBase}/api/images/${encodeURIComponent(collectionItem.front_image_url!)}`}
-      bbox={bbox}
+      bbox={bbox!}
       alt={displayName}
-      className="w-full h-full object-contain"
+      className="w-full h-full"
     />
   ) : collectionItem.front_image_url ? (
     <img
@@ -83,16 +87,16 @@ export default function CardTile({ collectionItem }: Props) {
   )
 
   return (
-    <button className="glass text-left p-3" onClick={() => navigate(`/card/${collectionItem.id}`)} type="button">
+    <button className="glass text-left p-3 w-full" onClick={() => navigate(`/card/${collectionItem.id}`)} type="button">
       <div className="w-full rounded-[var(--radius-md)] overflow-hidden bg-zinc-900" style={{ aspectRatio: '2.5/3.5' }}>
         {imageSection}
       </div>
-      <div className="mt-3 space-y-2">
-        <h3 className="line-clamp-2 text-sm font-bold">{displayName}</h3>
-        <p className="text-xs text-cv-muted">
+      <div className="mt-3 space-y-1.5">
+        <h3 className="line-clamp-2 text-sm font-bold leading-tight">{displayName}</h3>
+        <p className="text-xs text-cv-muted truncate">
           {[displayYear, displaySet].filter(Boolean).join(' · ') || 'Unknown set'}
         </p>
-        <div className="flex flex-wrap gap-1.5 text-xs">
+        <div className="flex flex-wrap gap-1 text-xs">
           <span className={`badge border-0 ${sportMap[displaySport] ?? 'bg-violet-500/20 text-violet-100'}`}>
             {collectionItem.sport || collectionItem.game || collectionItem.card?.sport || collectionItem.card?.game || 'Other'}
           </span>
@@ -104,7 +108,6 @@ export default function CardTile({ collectionItem }: Props) {
             const delta = prevCents && currentCents ? currentCents - prevCents : null
             const deltaPct = delta && prevCents ? ((delta / prevCents) * 100).toFixed(1) : null
             if (delta === null || deltaPct === null) return null
-            // Sanity check: skip delta if prices are from different card variants (>10x ratio)
             const priceRatio = prevCents && currentCents
               ? Math.max(currentCents, prevCents) / Math.min(currentCents, prevCents)
               : null
