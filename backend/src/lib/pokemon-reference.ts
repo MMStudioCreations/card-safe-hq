@@ -36,6 +36,30 @@ export async function lookupCardInCatalog(
     if (r) return r
   }
 
+  // Layer 1b: fuzzy number — try ±3 on the parsed number
+  // Handles single-digit OCR misreads on illustration rares
+  if (cardName && numOnly && /^\d+$/.test(numOnly)) {
+    const numInt = parseInt(numOnly)
+    const candidates = await db.prepare(
+      `SELECT * FROM pokemon_catalog
+       WHERE card_name = ?
+         AND CAST(card_number AS INTEGER) BETWEEN ? AND ?
+       ORDER BY ABS(CAST(card_number AS INTEGER) - ?) ASC
+       LIMIT 5`
+    ).bind(cardName, numInt - 3, numInt + 3, numInt).all<CatalogCard>()
+
+    if (candidates.results.length === 1) {
+      console.log(`[catalog] fuzzy number match: ${cardName} #${numOnly} → #${candidates.results[0].card_number} (${candidates.results[0].set_name})`)
+      return candidates.results[0]
+    }
+    // If multiple candidates, prefer the one whose number is closest
+    if (candidates.results.length > 1) {
+      const closest = candidates.results[0] // already sorted by ABS distance
+      console.log(`[catalog] fuzzy number (multi): ${cardName} #${numOnly} → #${closest.card_number} (${closest.set_name})`)
+      return closest
+    }
+  }
+
   // Layer 2: number only (handles misread names)
   if (numOnly && collectorNumber?.includes('/')) {
     const total = collectorNumber.split('/')[1]?.trim()

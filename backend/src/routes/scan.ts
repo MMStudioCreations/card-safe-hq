@@ -252,34 +252,34 @@ export async function handleSheetScan(env: Env, request: Request, user: User): P
   // Step 3: Crop each position using fixed grid math.
   // Step 4: Upload crop to R2 and INSERT collection item.
 
-  const FULL_SHEET_PROMPT = `You are analyzing a high-resolution scan of a
-9-pocket Pokemon card binder page. The cards are arranged in a 3x3 grid.
+  const FULL_SHEET_PROMPT = `You are analyzing a 9-pocket Pokemon card binder page.
+Cards are in a 3x3 grid — 3 columns, 3 rows, positions 1-9 left-to-right top-to-bottom.
 
-Examine the FULL image carefully. For each of the 9 card positions
-(left to right, top to bottom, positions 1-9):
+YOU MUST RETURN EXACTLY 9 ENTRIES — one per position. Never skip a position.
+If a slot is empty or unclear, still return it with null values.
 
-Read the text printed on each card:
-- Card name: large bold text at the TOP of each card
-- Collector number: small text at the BOTTOM of each card (format: "168/162")
-- HP: number at top-right of each card
+For each card READ THE ACTUAL PRINTED TEXT:
+- card_name: large bold text at the TOP of the card
+- collector_number: small text at BOTTOM RIGHT, format like "204/191" or "073/064"
+  READ THIS CAREFULLY — it is the most important field
+- hp: number near top right
 
-You MUST return all 9 positions. If a slot appears empty return null values.
-
-Return ONLY this JSON:
+Return ONLY valid JSON:
 {
   "cards": [
-    {
-      "position": 1,
-      "card_name": "exact name printed at top",
-      "collector_number": "168/162",
-      "hp": 50
-    },
-    ... 9 total entries
+    { "position": 1, "card_name": "Mesprit", "collector_number": "204/191", "hp": 70 },
+    { "position": 2, "card_name": "Tyranitar", "collector_number": "222/183", "hp": 180 },
+    { "position": 3, ... },
+    { "position": 4, ... },
+    { "position": 5, ... },
+    { "position": 6, ... },
+    { "position": 7, ... },
+    { "position": 8, ... },
+    { "position": 9, ... }
   ]
 }
 
-Read what is literally printed. Do not guess from artwork.
-The collector number is critical — read it exactly.`;
+All 9 positions are REQUIRED. Do not stop at 7 or 8.`;
 
   interface SheetCardResult {
     position: number;
@@ -350,6 +350,7 @@ The collector number is critical — read it exactly.`;
   }
   for (let p = 1; p <= 9; p++) {
     if (!cardsByPosition.has(p)) {
+      console.warn(`[scan] GPT-4o did not return position ${p} — filling with null`);
       cardsByPosition.set(p, { position: p, card_name: null, collector_number: null, hp: null });
     }
   }
