@@ -148,8 +148,10 @@ export async function lookupCardInCatalog(
     }
   }
 
-  // Layer 3: name only — with rarity-aware sort for high-number / prefixed cards
-  if (cardName) {
+  // Layer 3: name only — only when NO collector number was provided.
+  // When a collector_number exists, number-based layers already ran and failed;
+  // falling back to name-only risks matching the wrong card variant (e.g. "Tirtouga" → wrong set).
+  if (cardName && !collectorNumber) {
     const r = await db.prepare(
       `SELECT * FROM pokemon_catalog
        WHERE card_name = ?

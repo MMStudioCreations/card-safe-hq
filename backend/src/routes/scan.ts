@@ -277,22 +277,21 @@ CRITICAL RULES:
 - Never return fewer than 9 entries under any circumstances.
 - The bottom row (positions 7, 8, 9) must always be included.
 
-Return ONLY this exact JSON structure, nothing else:
+Return ONLY this exact JSON structure. Replace every null below with the ACTUAL values you read from the card image:
 {
   "cards": [
-    { "position": 1, "card_name": "ExampleName", "collector_number": "200/191", "hp": 110 },
-    { "position": 2, "card_name": "ExampleName", "collector_number": "GG39/GG70", "hp": 170 },
+    { "position": 1, "card_name": null, "collector_number": null, "hp": null },
+    { "position": 2, "card_name": null, "collector_number": null, "hp": null },
     { "position": 3, "card_name": null, "collector_number": null, "hp": null },
-    { "position": 4, "card_name": "ExampleName", "collector_number": "NNN/NNN", "hp": 100 },
-    { "position": 5, "card_name": "ExampleName", "collector_number": "NNN/NNN", "hp": 330 },
-    { "position": 6, "card_name": "ExampleName", "collector_number": "NNN/NNN", "hp": 90 },
-    { "position": 7, "card_name": "ExampleName", "collector_number": "NNN/NNN", "hp": 120 },
-    { "position": 8, "card_name": "ExampleName", "collector_number": "NNN/NNN", "hp": 170 },
-    { "position": 9, "card_name": "ExampleName", "collector_number": "NNN/NNN", "hp": 150 }
+    { "position": 4, "card_name": null, "collector_number": null, "hp": null },
+    { "position": 5, "card_name": null, "collector_number": null, "hp": null },
+    { "position": 6, "card_name": null, "collector_number": null, "hp": null },
+    { "position": 7, "card_name": null, "collector_number": null, "hp": null },
+    { "position": 8, "card_name": null, "collector_number": null, "hp": null },
+    { "position": 9, "card_name": null, "collector_number": null, "hp": null }
   ]
 }
-
-The above is a FORMAT EXAMPLE ONLY. Read actual cards in each position.`;
+Fill in ALL 9 positions with real values from the image. Do NOT leave any position as null unless the slot is genuinely empty.`;
 
   interface SheetCardResult {
     position: number;

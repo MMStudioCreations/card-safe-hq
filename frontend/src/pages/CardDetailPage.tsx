@@ -303,7 +303,7 @@ export default function CardDetailPage() {
   const headerPriceCents = mostRecentSold?.sold_price_cents ?? displayPriceCents
 
   return (
-    <div className="grid gap-4 lg:grid-cols-[340px,1fr]">
+    <div className="grid gap-4 px-4 pb-8 lg:grid-cols-[340px,1fr]">
       {/* ── Card Image ── */}
       <section className="glass p-4">
         <div className="mb-3 flex gap-2">
