@@ -366,7 +366,7 @@ All 9 positions are REQUIRED. Do not stop at 7 or 8.`;
       const numOnly = collector_number?.split('/')[0]?.trim() ?? null;
 
       // ── Step 2: D1 catalog lookup ──
-      const catalogCard = await lookupCardInCatalog(env.DB, card_name, collector_number);
+      const catalogCard = await lookupCardInCatalog(env.DB, card_name, collector_number, gptCard.hp ?? null);
       console.log(`[scan] pos ${position}: ${card_name} ${collector_number} → catalog: ${catalogCard?.card_name} (${catalogCard?.set_name})`);
 
       // Map catalogCard to the tcgCard shape the rest of the code expects

@@ -21,6 +21,7 @@ export async function lookupCardInCatalog(
   db: D1Database,
   cardName: string | null,
   collectorNumber: string | null,
+  hp?: number | null,
 ): Promise<CatalogCard | null> {
 
   // Parse number — strip total e.g. "196/197" → "196"
@@ -72,6 +73,38 @@ export async function lookupCardInCatalog(
          ORDER BY pc.rowid DESC LIMIT 1`
       ).bind(numOnly, parseInt(total)).first<CatalogCard>()
       if (r) return r
+    }
+  }
+
+  // Layer 2b: number + HP — for Japanese cards or cards where GPT-4o can't read the name.
+  // HP is printed in large text near the top-right and is reliably read even on foreign cards.
+  if (numOnly && hp != null && hp > 0) {
+    const hpStr = String(hp)
+    // Try exact number + HP match first
+    const exact = await db.prepare(
+      `SELECT * FROM pokemon_catalog
+       WHERE card_number = ? AND hp = ?
+       ORDER BY rowid DESC LIMIT 2`
+    ).bind(numOnly, hpStr).all<CatalogCard>()
+    if (exact.results.length === 1) {
+      console.log(`[catalog] number+HP match: #${numOnly} HP${hp} → ${exact.results[0].card_name} (${exact.results[0].set_name})`)
+      return exact.results[0]
+    }
+    if (exact.results.length > 1) return exact.results[0]
+    // Fuzzy: number ±2 + HP (handles OCR off-by-one on collector number)
+    if (/^\d+$/.test(numOnly)) {
+      const numInt = parseInt(numOnly)
+      const fuzzy = await db.prepare(
+        `SELECT * FROM pokemon_catalog
+         WHERE CAST(card_number AS INTEGER) BETWEEN ? AND ?
+           AND hp = ?
+         ORDER BY ABS(CAST(card_number AS INTEGER) - ?) ASC
+         LIMIT 3`
+      ).bind(numInt - 2, numInt + 2, hpStr, numInt).all<CatalogCard>()
+      if (fuzzy.results.length >= 1) {
+        console.log(`[catalog] fuzzy number+HP match: #${numOnly} HP${hp} → ${fuzzy.results[0].card_name} (${fuzzy.results[0].set_name})`)
+        return fuzzy.results[0]
+      }
     }
   }
 

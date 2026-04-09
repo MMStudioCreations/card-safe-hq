@@ -547,6 +547,22 @@ export const api = {
     http.post<never, { url: string }>('/api/billing/checkout', { plan }),
   createPortalSession: () =>
     http.post<never, { url: string }>('/api/billing/portal'),
+  // ── Universal search (cards + sealed products) ─────────────────────────────────────
+  universalSearch: (q: string, category?: 'all' | 'cards' | 'sealed', limit?: number) =>
+    http.get<never, {
+      cards: Array<{
+        ptcg_id: string; card_name: string; card_number: string; set_name: string
+        series: string | null; rarity: string | null; supertype: string | null
+        subtypes: string | null; hp: string | null
+        image_small: string | null; image_large: string | null
+        tcgplayer_url: string | null; tcgplayer_market_cents: number | null
+      }>
+      sealed: Array<{
+        id: number; name: string; set_name: string; product_type: string
+        tcgplayer_url: string | null; market_price_cents: number | null
+        release_date: string | null; tcgplayer_product_id: number | null
+      }>
+    }>('/api/search', { params: { q, category: category ?? 'all', limit: limit ?? 40 } }),
   // ── Sealed products catalog ────────────────────────────────────────────────────
   listSealedProducts: (params?: { q?: string; type?: string; set?: string; limit?: number; offset?: number }) =>
     http.get<never, { products: SealedProduct[]; total: number }>('/api/sealed-products', { params }),

@@ -529,6 +529,54 @@ export default {
         return withCors(ok(prices), request, env)
       }
 
+      // Universal search — cards from pokemon_catalog + sealed products
+      if (method === 'GET' && pathname === '/api/search') {
+        const url = new URL(request.url)
+        const q = (url.searchParams.get('q') ?? '').trim()
+        const category = url.searchParams.get('category') ?? 'all' // 'all' | 'cards' | 'sealed'
+        const limit = Math.min(Number(url.searchParams.get('limit') ?? '40'), 100)
+        if (!q || q.length < 2) return withCors(ok({ cards: [], sealed: [] }), request, env)
+        const like = `%${q}%`
+
+        let cards: unknown[] = []
+        let sealed: unknown[] = []
+
+        if (category === 'all' || category === 'cards') {
+          const cardRows = await env.DB.prepare(
+            `SELECT ptcg_id, card_name, card_number, set_name, series, rarity,
+                    supertype, subtypes, hp, image_small, image_large,
+                    tcgplayer_url, tcgplayer_market_cents
+             FROM pokemon_catalog
+             WHERE card_name LIKE ? OR set_name LIKE ?
+             ORDER BY
+               CASE WHEN card_name = ? THEN 0
+                    WHEN card_name LIKE ? THEN 1
+                    ELSE 2 END,
+               card_name ASC
+             LIMIT ?`
+          ).bind(like, like, q, `${q}%`, Math.ceil(limit * 0.7)).all()
+          cards = cardRows.results ?? []
+        }
+
+        if (category === 'all' || category === 'sealed') {
+          const sealedRows = await env.DB.prepare(
+            `SELECT id, name, set_name, product_type, tcgplayer_url,
+                    market_price_cents, release_date, tcgplayer_product_id
+             FROM sealed_products
+             WHERE name LIKE ? OR set_name LIKE ?
+             ORDER BY
+               CASE WHEN name = ? THEN 0
+                    WHEN name LIKE ? THEN 1
+                    ELSE 2 END,
+               name ASC
+             LIMIT ?`
+          ).bind(like, like, q, `${q}%`, Math.ceil(limit * 0.5)).all()
+          sealed = sealedRows.results ?? []
+        }
+
+        return withCors(ok({ cards, sealed }), request, env)
+      }
+
       return withCors(notFound('Route not found'), request, env);
     } catch (err) {
       console.error('Unhandled worker error', err);

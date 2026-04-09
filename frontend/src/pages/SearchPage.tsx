@@ -1,10 +1,8 @@
-import { useMemo, useState } from 'react'
-import { ExternalLink, RefreshCw } from 'lucide-react'
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useEffect, useRef, useState } from 'react'
+import { ExternalLink, Package, Search, X } from 'lucide-react'
 import { api } from '../lib/api'
-import type { SealedProduct } from '../lib/api'
 
-// Full sealed product type label map — expanded from TCGCSV product detection
+// ── Type labels for sealed products ──────────────────────────────────────────
 const TYPE_LABELS: Record<string, string> = {
   booster_box: 'Booster Box',
   elite_trainer_box: 'Elite Trainer Box',
@@ -30,170 +28,325 @@ const TYPE_LABELS: Record<string, string> = {
   other: 'Sealed Product',
 }
 
+type Category = 'all' | 'cards' | 'sealed'
+
+type CardResult = {
+  ptcg_id: string
+  card_name: string
+  card_number: string
+  set_name: string
+  series: string | null
+  rarity: string | null
+  supertype: string | null
+  subtypes: string | null
+  hp: string | null
+  image_small: string | null
+  image_large: string | null
+  tcgplayer_url: string | null
+  tcgplayer_market_cents: number | null
+}
+
+type SealedResult = {
+  id: number
+  name: string
+  set_name: string
+  product_type: string
+  tcgplayer_url: string | null
+  market_price_cents: number | null
+  release_date: string | null
+  tcgplayer_product_id: number | null
+}
+
+function formatPrice(cents: number | null | undefined): string {
+  if (!cents) return '—'
+  return `$${(cents / 100).toFixed(2)}`
+}
+
 export default function SearchPage() {
-  const queryClient = useQueryClient()
-  const [search, setSearch] = useState('')
-  const [typeFilter, setTypeFilter] = useState('all')
-  const [selectedSet, setSelectedSet] = useState('')
-  const [refreshingId, setRefreshingId] = useState<number | null>(null)
+  const [query, setQuery] = useState('')
+  const [category, setCategory] = useState<Category>('all')
+  const [cards, setCards] = useState<CardResult[]>([])
+  const [sealed, setSealed] = useState<SealedResult[]>([])
+  const [loading, setLoading] = useState(false)
+  const [searched, setSearched] = useState(false)
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const inputRef = useRef<HTMLInputElement>(null)
 
-  const { data, isLoading } = useQuery({
-    queryKey: ['sealed-products'],
-    queryFn: () => api.listSealedProducts({ limit: 500 }),
-    staleTime: 1000 * 60 * 5,
-  })
-  const products: SealedProduct[] = data?.products ?? []
-
-  const refreshPrice = useMutation({
-    mutationFn: (product: SealedProduct) =>
-      api.refreshSealedPrice(product.tcgplayer_product_id!),
-    onMutate: (product) => setRefreshingId(product.id),
-    onSettled: () => {
-      setRefreshingId(null)
-      void queryClient.invalidateQueries({ queryKey: ['sealed-products'] })
-    },
-  })
-
-  // Derive unique set names for the set filter dropdown
-  const setNames = useMemo(() => {
-    const names = new Set<string>()
-    products.forEach((p) => { if (p.set_name) names.add(p.set_name) })
-    return Array.from(names).sort()
-  }, [products])
-
-  const filtered = useMemo(() => {
-    let result = products
-    if (search.trim()) {
-      const q = search.toLowerCase()
-      result = result.filter(
-        (p) =>
-          p.name.toLowerCase().includes(q) ||
-          (p.set_name ?? '').toLowerCase().includes(q),
-      )
+  useEffect(() => {
+    if (debounceRef.current) clearTimeout(debounceRef.current)
+    if (query.trim().length < 2) {
+      setCards([])
+      setSealed([])
+      setSearched(false)
+      return
     }
-    if (typeFilter !== 'all') {
-      result = result.filter((p) => p.product_type === typeFilter)
-    }
-    if (selectedSet) {
-      result = result.filter((p) => p.set_name === selectedSet)
-    }
-  }, [products, search, typeFilter, selectedSet])
+    debounceRef.current = setTimeout(async () => {
+      setLoading(true)
+      try {
+        const result = await api.universalSearch(query.trim(), category, 60)
+        setCards(result.cards ?? [])
+        setSealed(result.sealed ?? [])
+        setSearched(true)
+      } catch {
+        setCards([])
+        setSealed([])
+        setSearched(true)
+      } finally {
+        setLoading(false)
+      }
+    }, 350)
+    return () => { if (debounceRef.current) clearTimeout(debounceRef.current) }
+  }, [query, category])
 
-  if (isLoading) {
-    return (
-      <div className="flex items-center justify-center py-20 text-cv-muted text-sm">
-        Loading sealed products…
-      </div>
-    )
-  }
+  const totalResults = cards.length + sealed.length
 
   return (
-    <div className="space-y-4 page-enter">
-      <h2 className="text-lg font-bold">Sealed Products</h2>
+    <div style={{ maxWidth: 700, margin: '0 auto', padding: '0 12px 80px' }}>
+      {/* ── Header ── */}
+      <div style={{ paddingTop: 20, paddingBottom: 12 }}>
+        <h1 style={{ fontSize: 22, fontWeight: 700, margin: 0, color: 'var(--text-primary)' }}>
+          Search
+        </h1>
+        <p style={{ fontSize: 13, color: 'var(--text-secondary)', margin: '4px 0 0' }}>
+          Find any Pokémon card or sealed product
+        </p>
+      </div>
 
-      {/* Filters */}
-      <div className="glass p-4 space-y-3">
+      {/* ── Search bar ── */}
+      <div style={{
+        position: 'relative',
+        marginBottom: 12,
+        background: 'var(--glass-bg)',
+        border: '1px solid var(--glass-border)',
+        borderRadius: 14,
+        display: 'flex',
+        alignItems: 'center',
+        padding: '0 14px',
+        gap: 10,
+      }}>
+        <Search size={18} color="var(--text-secondary)" style={{ flexShrink: 0 }} />
         <input
-          className="input w-full"
-          placeholder="Search by name or set…"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
+          ref={inputRef}
+          type="text"
+          value={query}
+          onChange={e => setQuery(e.target.value)}
+          placeholder="Search by name, set, year…"
+          autoFocus
+          style={{
+            flex: 1,
+            background: 'transparent',
+            border: 'none',
+            outline: 'none',
+            fontSize: 16,
+            color: 'var(--text-primary)',
+            padding: '14px 0',
+          }}
         />
-        <div className="flex gap-2 flex-wrap">
-          <select
-            className="input flex-1 min-w-[160px]"
-            value={typeFilter}
-            onChange={(e) => setTypeFilter(e.target.value)}
+        {query && (
+          <button
+            onClick={() => { setQuery(''); inputRef.current?.focus() }}
+            style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 4, color: 'var(--text-secondary)' }}
           >
-            <option value="all">All Types</option>
-            {Object.entries(TYPE_LABELS).map(([k, v]) => (
-              <option key={k} value={k}>{v}</option>
-            ))}
-          </select>
-          <select
-            className="input flex-1 min-w-[160px]"
-            value={selectedSet}
-            onChange={(e) => setSelectedSet(e.target.value)}
-          >
-            <option value="">All Sets</option>
-            {setNames.map((s) => (
-              <option key={s} value={s}>{s}</option>
-            ))}
-          </select>
-        </div>
-        {filtered.length !== products.length && (
-          <p className="text-xs text-cv-muted">
-            Showing {filtered.length} of {products.length} products
-            <button
-              className="ml-2 text-[var(--primary)] hover:underline"
-              type="button"
-              onClick={() => { setSearch(''); setTypeFilter('all'); setSelectedSet('') }}
-            >
-              Clear filters
-            </button>
-          </p>
+            <X size={16} />
+          </button>
         )}
       </div>
 
-      {/* Product grid */}
-      {filtered.length === 0 ? (
-        <p className="text-sm text-cv-muted text-center py-10">No sealed products found.</p>
-      ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-          {filtered.map((product) => (
-            <div key={product.id} className="glass p-4 space-y-2">
-              <div className="flex items-start justify-between gap-2">
-                <h3 className="text-sm font-semibold leading-snug line-clamp-2">{product.name}</h3>
-                {product.tcgplayer_url && (
-                  <a
-                    href={product.tcgplayer_url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="shrink-0 text-cv-muted hover:text-[var(--primary)] transition"
-                    title="View on TCGPlayer"
-                  >
-                    <ExternalLink size={14} />
-                  </a>
-                )}
-              </div>
+      {/* ── Category filter ── */}
+      <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
+        {(['all', 'cards', 'sealed'] as Category[]).map(cat => (
+          <button
+            key={cat}
+            onClick={() => setCategory(cat)}
+            style={{
+              padding: '6px 14px',
+              borderRadius: 20,
+              border: '1px solid var(--glass-border)',
+              background: category === cat ? 'var(--accent, #6366f1)' : 'var(--glass-bg)',
+              color: category === cat ? '#fff' : 'var(--text-secondary)',
+              fontSize: 13,
+              fontWeight: category === cat ? 600 : 400,
+              cursor: 'pointer',
+              transition: 'all 0.15s',
+            }}
+          >
+            {cat === 'all' ? 'All Types' : cat === 'cards' ? 'Cards' : 'Sealed'}
+          </button>
+        ))}
+      </div>
 
-              {product.set_name && (
-                <p className="text-xs text-cv-muted">{product.set_name}</p>
+      {/* ── Loading ── */}
+      {loading && (
+        <div style={{ textAlign: 'center', padding: 40, color: 'var(--text-secondary)', fontSize: 14 }}>
+          Searching…
+        </div>
+      )}
+
+      {/* ── Empty state ── */}
+      {!loading && !searched && (
+        <div style={{ textAlign: 'center', padding: 60, color: 'var(--text-secondary)' }}>
+          <Search size={40} style={{ opacity: 0.3, marginBottom: 12 }} />
+          <p style={{ fontSize: 15, margin: 0 }}>Type at least 2 characters to search</p>
+        </div>
+      )}
+
+      {/* ── No results ── */}
+      {!loading && searched && totalResults === 0 && (
+        <div style={{ textAlign: 'center', padding: 60, color: 'var(--text-secondary)' }}>
+          <p style={{ fontSize: 15, margin: 0 }}>No results for <strong>"{query}"</strong></p>
+          <p style={{ fontSize: 13, marginTop: 6 }}>Try a different name or set</p>
+        </div>
+      )}
+
+      {/* ── Results ── */}
+      {!loading && totalResults > 0 && (
+        <div>
+          <p style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 12 }}>
+            {totalResults} result{totalResults !== 1 ? 's' : ''}
+            {cards.length > 0 && sealed.length > 0 && ` (${cards.length} card${cards.length !== 1 ? 's' : ''}, ${sealed.length} sealed)`}
+          </p>
+
+          {/* Card results */}
+          {cards.length > 0 && (
+            <div>
+              {category === 'all' && (
+                <p style={{ fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: 1, color: 'var(--text-secondary)', marginBottom: 8 }}>
+                  Cards
+                </p>
               )}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 20 }}>
+                {cards.map(card => (
+                  <div key={card.ptcg_id} style={{
+                    display: 'flex',
+                    gap: 14,
+                    background: 'var(--glass-bg)',
+                    border: '1px solid var(--glass-border)',
+                    borderRadius: 14,
+                    padding: 12,
+                    alignItems: 'center',
+                  }}>
+                    {/* Card image */}
+                    <div style={{ flexShrink: 0, width: 56, height: 78, borderRadius: 6, overflow: 'hidden', background: 'rgba(255,255,255,0.05)' }}>
+                      {card.image_small ? (
+                        <img
+                          src={card.image_small}
+                          alt={card.card_name}
+                          style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                          loading="lazy"
+                        />
+                      ) : (
+                        <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 20 }}>🃏</div>
+                      )}
+                    </div>
 
-              <div className="flex flex-wrap gap-1.5 text-xs">
-                <span className="badge badge-info">
-                  {TYPE_LABELS[product.product_type] ?? 'Sealed Product'}
-                </span>
-                {product.release_date && (
-                  <span className="badge">{product.release_date}</span>
-                )}
-              </div>
+                    {/* Card info */}
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <p style={{ margin: 0, fontWeight: 700, fontSize: 15, color: 'var(--text-primary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                        {card.card_name}
+                      </p>
+                      <p style={{ margin: '2px 0 0', fontSize: 12, color: 'var(--text-secondary)' }}>
+                        {card.set_name}{card.card_number ? ` · #${card.card_number}` : ''}
+                      </p>
+                      <div style={{ display: 'flex', gap: 6, marginTop: 6, flexWrap: 'wrap', alignItems: 'center' }}>
+                        {card.rarity && (
+                          <span style={{ fontSize: 11, padding: '2px 8px', borderRadius: 20, background: 'rgba(99,102,241,0.15)', color: '#818cf8', fontWeight: 500 }}>
+                            {card.rarity}
+                          </span>
+                        )}
+                        {card.supertype && (
+                          <span style={{ fontSize: 11, padding: '2px 8px', borderRadius: 20, background: 'rgba(16,185,129,0.12)', color: '#34d399', fontWeight: 500 }}>
+                            {card.supertype}
+                          </span>
+                        )}
+                        <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-primary)', marginLeft: 'auto' }}>
+                          {formatPrice(card.tcgplayer_market_cents)}
+                        </span>
+                      </div>
+                    </div>
 
-              <div className="flex items-center justify-between">
-                <span className="text-sm font-bold text-[var(--primary)]">
-                  {product.market_price_cents != null
-                    ? `$${(product.market_price_cents / 100).toFixed(2)}`
-                    : 'No price'}
-                </span>
-                {product.tcgplayer_product_id != null && (
-                  <button
-                    type="button"
-                    className="btn-ghost text-xs flex items-center gap-1 text-cv-muted hover:text-[var(--primary)]"
-                    disabled={refreshingId === product.id}
-                    onClick={() => refreshPrice.mutate(product)}
-                    title="Refresh live price from TCGCSV"
-                  >
-                    <RefreshCw
-                      size={12}
-                      className={refreshingId === product.id ? 'animate-spin' : ''}
-                    />
-                    Refresh
-                  </button>
-                )}
+                    {/* TCGPlayer link */}
+                    {card.tcgplayer_url && (
+                      <a
+                        href={card.tcgplayer_url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        style={{ flexShrink: 0, color: 'var(--text-secondary)', padding: 4 }}
+                      >
+                        <ExternalLink size={16} />
+                      </a>
+                    )}
+                  </div>
+                ))}
               </div>
             </div>
-          ))}
+          )}
+
+          {/* Sealed results */}
+          {sealed.length > 0 && (
+            <div>
+              {category === 'all' && (
+                <p style={{ fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: 1, color: 'var(--text-secondary)', marginBottom: 8 }}>
+                  Sealed Products
+                </p>
+              )}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                {sealed.map(product => (
+                  <div key={product.id} style={{
+                    display: 'flex',
+                    gap: 14,
+                    background: 'var(--glass-bg)',
+                    border: '1px solid var(--glass-border)',
+                    borderRadius: 14,
+                    padding: 12,
+                    alignItems: 'center',
+                  }}>
+                    {/* Sealed icon */}
+                    <div style={{
+                      flexShrink: 0, width: 56, height: 56, borderRadius: 10,
+                      background: 'rgba(245,158,11,0.12)',
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    }}>
+                      <Package size={26} color="#f59e0b" />
+                    </div>
+
+                    {/* Sealed info */}
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <p style={{
+                        margin: 0, fontWeight: 700, fontSize: 14, color: 'var(--text-primary)',
+                        overflow: 'hidden', textOverflow: 'ellipsis',
+                        display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical',
+                      } as React.CSSProperties}>
+                        {product.name}
+                      </p>
+                      <p style={{ margin: '2px 0 0', fontSize: 12, color: 'var(--text-secondary)' }}>
+                        {product.set_name}
+                      </p>
+                      <div style={{ display: 'flex', gap: 6, marginTop: 6, alignItems: 'center' }}>
+                        <span style={{ fontSize: 11, padding: '2px 8px', borderRadius: 20, background: 'rgba(245,158,11,0.15)', color: '#f59e0b', fontWeight: 500 }}>
+                          {TYPE_LABELS[product.product_type] ?? product.product_type}
+                        </span>
+                        <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-primary)', marginLeft: 'auto' }}>
+                          {formatPrice(product.market_price_cents)}
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* TCGPlayer link */}
+                    {product.tcgplayer_url && (
+                      <a
+                        href={product.tcgplayer_url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        style={{ flexShrink: 0, color: 'var(--text-secondary)', padding: 4 }}
+                      >
+                        <ExternalLink size={16} />
+                      </a>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
       )}
     </div>
