@@ -251,34 +251,38 @@ export async function handleSheetScan(env: Env, request: Request, user: User): P
   // Step 3: Crop each position using fixed grid math.
   // Step 4: Upload crop to R2 and INSERT collection item.
 
-  const FULL_SHEET_PROMPT = `You are analyzing a 9-pocket Pokemon card binder page.
-Cards are in a 3x3 grid — 3 columns, 3 rows, positions 1-9 left-to-right top-to-bottom.
+  const FULL_SHEET_PROMPT = `You are a Pokemon card scanner. This image shows a 3x3 grid of 9 Pokemon cards.
 
-YOU MUST RETURN EXACTLY 9 ENTRIES — one per position. Never skip a position.
-If a slot is empty or unclear, still return it with null values.
+Grid layout — positions are numbered left-to-right, top-to-bottom:
+  [1][2][3]
+  [4][5][6]
+  [7][8][9]
 
-For each card READ THE ACTUAL PRINTED TEXT:
-- card_name: large bold text at the TOP of the card
-- collector_number: small text at BOTTOM RIGHT, format like "204/191" or "073/064"
-  READ THIS CAREFULLY — it is the most important field
-- hp: number near top right
+For EVERY one of the 9 positions you MUST read and return:
+- card_name: the large bold Pokémon name printed at the TOP of the card (e.g. "Blastoise ex", "Pikachu", "Lumineon V")
+- collector_number: the small number printed at the BOTTOM RIGHT corner of the card, in format "NNN/NNN" (e.g. "200/165", "073/064", "221/091") — this is the MOST important field, read it carefully
+- hp: the HP number printed near the top right of the card (e.g. 110, 330, 170)
 
-Return ONLY valid JSON:
+RULES:
+1. You MUST return all 9 positions. No exceptions. Do not stop early.
+2. If a slot appears empty or you cannot read a value, use null for that field — but still include the position.
+3. Do NOT use "..." or skip any position.
+4. Return ONLY a JSON object with a "cards" array of exactly 9 objects.
+
+Required JSON format (fill in real values for ALL 9):
 {
   "cards": [
-    { "position": 1, "card_name": "Mesprit", "collector_number": "204/191", "hp": 70 },
-    { "position": 2, "card_name": "Tyranitar", "collector_number": "222/183", "hp": 180 },
-    { "position": 3, ... },
-    { "position": 4, ... },
-    { "position": 5, ... },
-    { "position": 6, ... },
-    { "position": 7, ... },
-    { "position": 8, ... },
-    { "position": 9, ... }
+    { "position": 1, "card_name": "NAME", "collector_number": "NNN/NNN", "hp": 110 },
+    { "position": 2, "card_name": "NAME", "collector_number": "NNN/NNN", "hp": 90 },
+    { "position": 3, "card_name": "NAME", "collector_number": "NNN/NNN", "hp": 110 },
+    { "position": 4, "card_name": "NAME", "collector_number": "NNN/NNN", "hp": 100 },
+    { "position": 5, "card_name": "NAME", "collector_number": "NNN/NNN", "hp": 330 },
+    { "position": 6, "card_name": "NAME", "collector_number": "NNN/NNN", "hp": 90 },
+    { "position": 7, "card_name": "NAME", "collector_number": "NNN/NNN", "hp": 120 },
+    { "position": 8, "card_name": "NAME", "collector_number": "NNN/NNN", "hp": 170 },
+    { "position": 9, "card_name": "NAME", "collector_number": "NNN/NNN", "hp": 150 }
   ]
-}
-
-All 9 positions are REQUIRED. Do not stop at 7 or 8.`;
+}`;
 
   interface SheetCardResult {
     position: number;
@@ -303,7 +307,7 @@ All 9 positions are REQUIRED. Do not stop at 7 or 8.`;
       },
       body: JSON.stringify({
         model: 'gpt-4o',
-        max_tokens: 1000,
+        max_tokens: 2000,
         messages: [
           {
             role: 'user',
@@ -341,15 +345,80 @@ All 9 positions are REQUIRED. Do not stop at 7 or 8.`;
   }
 
   console.log('[scan] GPT-4o full sheet result:', JSON.stringify(sheetCards));
-
   // Build position map — fill any missing positions with nulls
   const cardsByPosition = new Map<number, SheetCardResult>();
   for (const c of sheetCards) {
     if (c.position >= 1 && c.position <= 9) cardsByPosition.set(c.position, c);
   }
+  // ── Retry: if fewer than 9 positions returned, ask GPT-4o again for the missing ones ──
+  const missingPositions = [];
+  for (let p = 1; p <= 9; p++) {
+    if (!cardsByPosition.has(p)) missingPositions.push(p);
+  }
+  if (missingPositions.length > 0 && missingPositions.length < 9) {
+    console.warn(`[scan] Retrying GPT-4o for missing positions: ${missingPositions.join(', ')}`);
+    const retryPrompt = `You are a Pokemon card scanner. This image shows a 3x3 grid of 9 Pokemon cards.
+
+Grid layout — positions are numbered left-to-right, top-to-bottom:
+  [1][2][3]
+  [4][5][6]
+  [7][8][9]
+
+I only need the cards at these specific positions: ${missingPositions.join(', ')}
+
+For each requested position, read:
+- card_name: large bold Pokémon name at the TOP of the card
+- collector_number: small number at BOTTOM RIGHT in format "NNN/NNN"
+- hp: HP number near top right
+
+Return ONLY a JSON object with a "cards" array containing ONLY the requested positions:
+{ "cards": [ { "position": N, "card_name": "NAME", "collector_number": "NNN/NNN", "hp": 100 } ] }`;
+    try {
+      const retryController = new AbortController();
+      const retryTimeout = setTimeout(() => retryController.abort(), 30_000);
+      const retryResponse = await fetch('https://api.openai.com/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${env.OPENAI_API_KEY}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          model: 'gpt-4o',
+          max_tokens: 800,
+          messages: [{
+            role: 'user',
+            content: [
+              { type: 'image_url', image_url: { url: `data:${file.type};base64,${sheetBase64}`, detail: 'high' } },
+              { type: 'text', text: retryPrompt },
+            ],
+          }],
+          response_format: { type: 'json_object' },
+        }),
+        signal: retryController.signal,
+      });
+      clearTimeout(retryTimeout);
+      if (retryResponse.ok) {
+        const retryData = await retryResponse.json() as { choices: Array<{ message: { content: string } }> };
+        const retryText = retryData.choices?.[0]?.message?.content ?? '';
+        const retryJson = retryText.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '').trim();
+        const retryParsed = JSON.parse(retryJson) as { cards: SheetCardResult[] };
+        if (Array.isArray(retryParsed.cards)) {
+          for (const c of retryParsed.cards) {
+            if (c.position >= 1 && c.position <= 9 && !cardsByPosition.has(c.position)) {
+              console.log(`[scan] Retry filled position ${c.position}: ${c.card_name}`);
+              cardsByPosition.set(c.position, c);
+            }
+          }
+        }
+      }
+    } catch (retryErr) {
+      console.error('[scan] Retry GPT-4o call failed:', retryErr);
+    }
+  }
+  // Fill any still-missing positions with nulls
   for (let p = 1; p <= 9; p++) {
     if (!cardsByPosition.has(p)) {
-      console.warn(`[scan] GPT-4o did not return position ${p} — filling with null`);
+      console.warn(`[scan] Position ${p} still missing after retry — filling with null`);
       cardsByPosition.set(p, { position: p, card_name: null, collector_number: null, hp: null });
     }
   }
