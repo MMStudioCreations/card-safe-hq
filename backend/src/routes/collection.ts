@@ -57,7 +57,7 @@ export async function listCollection(env: Env, user: User, request: Request): Pr
     `SELECT ci.*,
             ci.bbox_x, ci.bbox_y, ci.bbox_width, ci.bbox_height,
             c.game, c.set_name, c.card_name, c.card_number, c.rarity,
-            c.sport, c.player_name, c.year, c.variation, c.manufacturer,
+            c.sport, c.player_name, c.year, c.variation, c.manufacturer, c.image_url,
             (
               SELECT sold_price_cents
               FROM sales_comps

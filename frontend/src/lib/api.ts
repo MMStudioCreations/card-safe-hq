@@ -61,6 +61,7 @@ export type CollectionItem = {
   manufacturer?: string | null
   game?: string | null
   card_number?: string | null
+  image_url?: string | null
   // sealed product fields
   product_type?: 'single_card' | 'booster_pack' | 'booster_box' | 'etb' | 'tin' | 'bundle' | 'promo_pack' | 'other_sealed' | null
   product_name?: string | null
