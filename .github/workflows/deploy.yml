@@ -21,6 +21,12 @@ jobs:
       - name: Install backend dependencies
         working-directory: backend
         run: npm install
+      - name: Mark pre-existing migrations as applied
+        run: node backend/scripts/mark_migrations_applied.mjs
+        env:
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          D1_DATABASE_ID: ${{ secrets.D1_DATABASE_ID }}
       - name: Run D1 migrations
         uses: cloudflare/wrangler-action@v3
         with:
