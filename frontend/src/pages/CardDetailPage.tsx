@@ -209,6 +209,9 @@ export default function CardDetailPage() {
     quantity: item?.quantity || 1,
     condition_note: item?.condition_note || '',
     estimated_value_cents: item?.estimated_value_cents || 0,
+    card_name: item?.card_name || '',
+    set_name: item?.set_name || '',
+    card_number: item?.card_number || '',
   })
 
   const image = useMemo(
@@ -308,14 +311,22 @@ export default function CardDetailPage() {
       <section className="glass p-4">
         <div className="mb-3 flex gap-2">
           <button
-            className={showFront ? 'btn-primary text-sm' : 'btn-secondary text-sm'}
+            className={`px-4 py-1.5 rounded-full text-sm font-medium transition-colors ${
+              showFront
+                ? 'bg-[var(--primary)] text-[#080C10]'
+                : 'bg-cv-surface border border-cv-border text-cv-muted'
+            }`}
             onClick={() => setShowFront(true)}
             type="button"
           >
             Front
           </button>
           <button
-            className={!showFront ? 'btn-primary text-sm' : 'btn-secondary text-sm'}
+            className={`px-4 py-1.5 rounded-full text-sm font-medium transition-colors ${
+              !showFront
+                ? 'bg-[var(--primary)] text-[#080C10]'
+                : 'bg-cv-surface border border-cv-border text-cv-muted'
+            }`}
             onClick={() => setShowFront(false)}
             type="button"
             disabled={!item.back_image_url}
@@ -323,38 +334,38 @@ export default function CardDetailPage() {
             Back
           </button>
         </div>
-        <div className="w-full max-w-xs mx-auto">
+        <div className="rounded-2xl overflow-hidden shadow-xl mx-auto" style={{ maxWidth: '320px' }}>
           {isSheet && detailBbox && sheetImageUrl ? (
             <CardCrop
               sheetUrl={sheetImageUrl}
               bbox={detailBbox}
               alt={item.card_name || item.player_name || 'Card'}
-              className="w-full h-auto object-contain rounded-2xl shadow-lg"
+              className="w-full h-auto object-contain"
             />
           ) : sheetImageUrl ? (
             <img
-              className="w-full h-auto object-contain rounded-2xl shadow-lg"
-              style={{ aspectRatio: '2.5 / 3.5' }}
+              className="w-full h-auto object-contain"
+              style={{ aspectRatio: '2.5 / 3.5', display: 'block' }}
               src={sheetImageUrl}
               alt={item.card_name || item.player_name || 'Card'}
             />
           ) : item?.image_url ? (
             <img
-              className="w-full h-auto object-contain rounded-2xl shadow-lg"
-              style={{ aspectRatio: '2.5 / 3.5' }}
+              className="w-full h-auto object-contain"
+              style={{ aspectRatio: '2.5 / 3.5', display: 'block' }}
               src={item.image_url}
               alt={item.card_name || item.player_name || 'Card'}
             />
           ) : (
-            <div className="w-full rounded-2xl shadow-lg bg-[linear-gradient(135deg,var(--primary),var(--secondary))]" style={{ aspectRatio: '2.5 / 3.5' }} />
+            <div className="w-full bg-[linear-gradient(135deg,var(--primary),var(--secondary))]" style={{ aspectRatio: '2.5 / 3.5' }} />
           )}
         </div>
       </section>
 
       <section className="space-y-4">
         {/* ── Card Info ── */}
-        <article className="glass p-4">
-          <div className="flex items-start justify-between gap-4">
+        <article className="glass p-4 overflow-visible">
+          <div className="flex items-start justify-between gap-2 flex-wrap">
             <div className="min-w-0">
               {editingName ? (
                 <div className="flex items-center gap-2 mb-1">
@@ -413,15 +424,15 @@ export default function CardDetailPage() {
                 {item.condition_note && <span className="badge">{item.condition_note}</span>}
               </div>
             </div>
-            <div className="shrink-0 text-right">
+            <div className="text-right flex-shrink-0">
               <p className="text-xs text-cv-muted mb-1">
                 {mostRecentSold
-                  ? `Last eBay Sale · ${new Date(mostRecentSold.sold_date).toLocaleDateString()}`
+                  ? `Last eBay Sale · ${new Date(mostRecentSold.sold_date).toLocaleDateString('en-US', { month: 'numeric', day: 'numeric', year: 'numeric' })}`
                   : item.estimated_value_cents
                   ? 'Est. Value'
                   : 'No Value Set'}
               </p>
-              <p className="text-3xl font-bold">
+              <p className="text-2xl font-bold">
                 {headerPriceCents
                   ? `$${(headerPriceCents / 100).toFixed(2)}`
                   : '—'}
@@ -437,7 +448,34 @@ export default function CardDetailPage() {
           <p className="mt-2 text-sm text-cv-muted">Qty: {item.quantity || 1}</p>
 
           {editing ? (
-            <div className="mt-4 space-y-2">
+            <div className="mt-4 space-y-3">
+              <div>
+                <label className="text-xs text-cv-muted">Card Name</label>
+                <input
+                  className="input mt-1"
+                  value={draft.card_name}
+                  onChange={(e) => setDraft((old) => ({ ...old, card_name: e.target.value }))}
+                  placeholder="Card name"
+                />
+              </div>
+              <div>
+                <label className="text-xs text-cv-muted">Set Name</label>
+                <input
+                  className="input mt-1"
+                  value={draft.set_name}
+                  onChange={(e) => setDraft((old) => ({ ...old, set_name: e.target.value }))}
+                  placeholder="Set name"
+                />
+              </div>
+              <div>
+                <label className="text-xs text-cv-muted">Card Number</label>
+                <input
+                  className="input mt-1"
+                  value={draft.card_number}
+                  onChange={(e) => setDraft((old) => ({ ...old, card_number: e.target.value }))}
+                  placeholder="Card number"
+                />
+              </div>
               <input
                 className="input"
                 type="number"
@@ -471,7 +509,17 @@ export default function CardDetailPage() {
             </div>
           ) : (
             <div className="mt-4 flex gap-2">
-              <button className="btn-secondary" onClick={() => setEditing(true)} type="button">
+              <button className="btn-secondary" onClick={() => {
+                setDraft({
+                  quantity: item.quantity || 1,
+                  condition_note: item.condition_note || '',
+                  estimated_value_cents: item.estimated_value_cents || 0,
+                  card_name: item.card_name || '',
+                  set_name: item.set_name || '',
+                  card_number: item.card_number || '',
+                })
+                setEditing(true)
+              }} type="button">
                 Edit
               </button>
               <button

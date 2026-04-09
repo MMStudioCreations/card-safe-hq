@@ -104,6 +104,11 @@ export default function CardTile({ collectionItem }: Props) {
             const delta = prevCents && currentCents ? currentCents - prevCents : null
             const deltaPct = delta && prevCents ? ((delta / prevCents) * 100).toFixed(1) : null
             if (delta === null || deltaPct === null) return null
+            // Sanity check: skip delta if prices are from different card variants (>10x ratio)
+            const priceRatio = prevCents && currentCents
+              ? Math.max(currentCents, prevCents) / Math.min(currentCents, prevCents)
+              : null
+            if (priceRatio !== null && priceRatio >= 10) return null
             return (
               <div className={`flex items-center gap-1 text-xs mt-0.5 ${
                 delta >= 0 ? 'text-green-400' : 'text-red-400'

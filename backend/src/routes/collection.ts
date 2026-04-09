@@ -192,6 +192,29 @@ export async function updateCollectionItem(env: Env, request: Request, user: Use
       [quantity, conditionNote, estimatedGrade, estimatedValue, frontImageUrl, backImageUrl, productType, productName, purchasePrice, id, user.id],
     );
 
+    // If card identity fields changed, update the cards table and clear stale comps
+    if ((body.card_name || body.set_name || body.card_number) && existing.card_id) {
+      const updates: string[] = [];
+      const params: unknown[] = [];
+      if (body.card_name !== undefined) {
+        updates.push('card_name = ?');
+        params.push(asString(body.card_name, 'card_name', 500));
+      }
+      if (body.set_name !== undefined) {
+        updates.push('set_name = ?');
+        params.push(asString(body.set_name, 'set_name', 500));
+      }
+      if (body.card_number !== undefined) {
+        updates.push('card_number = ?');
+        params.push(asString(body.card_number, 'card_number', 50));
+      }
+      if (updates.length > 0) {
+        params.push(existing.card_id);
+        await run(env.DB, `UPDATE cards SET ${updates.join(', ')} WHERE id = ?`, params);
+        await run(env.DB, 'DELETE FROM sales_comps WHERE card_id = ?', [existing.card_id]);
+      }
+    }
+
     const updated = await queryOne(env.DB, 'SELECT * FROM collection_items WHERE id = ? AND user_id = ?', [id, user.id]);
     return ok(updated);
   } catch (err) {
