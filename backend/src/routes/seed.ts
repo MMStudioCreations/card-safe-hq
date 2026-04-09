@@ -3,7 +3,13 @@
  *
  * Seeds the pokemon_catalog table with every card from every Pokémon TCG set.
  * Runs incrementally — already-seeded sets are skipped unless ?force=1 is passed.
- * Designed to be called once (or periodically) by an admin to keep the catalog fresh.
+ *
+ * As of migration 0008, the full catalog (20,000+ cards, all 172 sets) is
+ * pre-populated via SQL migration on first deploy.  This endpoint is now used
+ * primarily to:
+ *   1. Pick up NEW sets released after the migration was generated.
+ *   2. Force-refresh a specific set's prices (?set=<setId>&force=1).
+ *   3. Force-refresh ALL sets (?force=1) — useful after a bulk price update.
  *
  * The catalog is used by the vision/identification pipeline to do exact lookups
  * by card number + set instead of relying solely on AI guessing.
@@ -95,7 +101,6 @@ async function seedSet(
     const BATCH = 50;
     for (let i = 0; i < cards.length; i += BATCH) {
       const chunk = cards.slice(i, i + BATCH);
-      // Use individual awaited upserts (D1 batch has size limits)
       for (const card of chunk) {
         await upsertCard(db, card);
       }
@@ -106,7 +111,7 @@ async function seedSet(
     page++;
   }
 
-  // Mark set as seeded
+  // Mark set as seeded / update count
   await run(
     db,
     `INSERT INTO pokemon_catalog_sets (set_id, set_name, total_cards, seeded_at)
@@ -141,16 +146,19 @@ export async function seedPokemonCatalog(
   const force = url.searchParams.get('force') === '1';
   const setFilter = url.searchParams.get('set'); // optional: seed only one set
   const allSets = url.searchParams.get('all') === '1'; // include vintage sets
+  // ?new_only=1 — only seed sets not yet in pokemon_catalog_sets (default behaviour
+  // after migration 0008 pre-populated everything)
+  const newOnly = url.searchParams.get('new_only') !== '0'; // default true
 
   try {
-    // Get all sets (modern by default, all if ?all=1)
+    // Get all sets from the PTCG API
     const sets = await getAllSets(env.POKEMON_TCG_API_KEY, !allSets);
 
     if (sets.length === 0) {
       return badRequest('No sets returned from PTCG API — check POKEMON_TCG_API_KEY');
     }
 
-    // Get already-seeded set IDs
+    // Get already-seeded set IDs (populated by migration 0008 or previous runs)
     const seededRows = await queryAll<{ set_id: string }>(
       env.DB,
       'SELECT set_id FROM pokemon_catalog_sets',
@@ -161,13 +169,16 @@ export async function seedPokemonCatalog(
     // Filter to only the sets we need to seed
     const toSeed = sets.filter((s) => {
       if (setFilter && s.id !== setFilter) return false;
+      // Skip sets already seeded by migration unless force=1
       if (!force && seededIds.has(s.id)) return false;
       return true;
     });
 
     if (toSeed.length === 0) {
       return ok({
-        message: 'All sets already seeded. Pass ?force=1 to re-seed.',
+        message: seededIds.size > 0
+          ? `Catalog is up to date — ${seededIds.size} sets already seeded (including migration 0008 pre-seed). Pass ?force=1 to refresh prices, or ?set=<setId>&force=1 to refresh a single set.`
+          : 'All sets already seeded. Pass ?force=1 to re-seed.',
         total_sets: sets.length,
         already_seeded: seededIds.size,
         seeded_now: 0,
@@ -250,8 +261,10 @@ export async function lookupPokemonCard(env: Env, request: Request): Promise<Res
   const params: (string | number)[] = [];
 
   if (number) {
-    conditions.push('card_number = ?');
-    params.push(number);
+    // Match both "123" and "123/197" formats stored in the catalog
+    const bare = number.replace(/\/.*$/, '').trim();
+    conditions.push('(card_number = ? OR card_number LIKE ?)');
+    params.push(number, `${bare}/%`);
   }
   if (setId) {
     conditions.push('set_id = ?');
