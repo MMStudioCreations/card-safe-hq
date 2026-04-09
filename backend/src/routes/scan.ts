@@ -4,6 +4,7 @@ import { badRequest, ok, serverError } from '../lib/json';
 import { fetchEbayComps } from '../lib/ebay';
 import { identifyCard as visionIdentifyCard, correctCardSet } from '../lib/vision';
 import { lookupCardInCatalog } from '../lib/pokemon-reference';
+import { cropCardFromSheet } from '../lib/crop';
 
 const ALLOWED_MIME_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp']);
 const MAX_FILE_SIZE = 20 * 1024 * 1024; // 20 MB
@@ -17,7 +18,7 @@ const NON_NAME_WORDS = [
 function mimeToExt(mime: string): string {
   switch (mime) {
     case 'image/jpeg': return 'jpg';
-    case 'image/png':  return 'png';
+    case 'image/png': return 'png';
     case 'image/webp': return 'webp';
     default: return 'jpg';
   }
@@ -43,7 +44,8 @@ interface TCGCard {
 }
 
 // ─── Fixed-grid bbox for a standard 9-pocket binder page (3×3 grid) ──────────
-// Approximate card cell boundaries as percentages — accounts for binder page margins.
+// Used as fallback when GPT-4o bbox detection does not return a position.
+// Approximate card cell boundaries — accounts for binder page margins and pocket borders.
 function getFixedBbox(position: number) {
   const col = (position - 1) % 3;
   const row = Math.floor((position - 1) / 3);
@@ -120,7 +122,8 @@ export async function handleSheetScan(env: Env, request: Request, user: User): P
     const game = ident.game ?? ident.sport ?? 'Unknown';
     const setName = ident.set_name_override ?? ident.ptcg_set_name ?? ident.set_name;
     const yearValue = ident.year && Number.isFinite(ident.year) ? ident.year : null;
-    const externalRef = ident.ptcg_id ??
+    const externalRef =
+      ident.ptcg_id ??
       ([ident.manufacturer, ident.year, ident.card_number].filter(Boolean).join(':') || null);
 
     const existingCard = await queryOne<{ id: number }>(
@@ -242,22 +245,29 @@ export async function handleSheetScan(env: Env, request: Request, user: User): P
 
   // ─── Sheet scan path ──────────────────────────────────────────────────────
   //
-  // APPROACH (v4):
+  // APPROACH (v3 — merged best of both branches):
   //
   // Step 1: Send FULL sheet to GPT-4o with a highly specific card-name-reading
-  //         prompt. Returns card_name + collector_number for all 9 positions.
+  //         prompt. GPT-4o returns card_name + collector_number for all 9 slots.
   //         A retry pass fires for any positions that came back empty.
   //
-  // Step 2: For each of the 9 positions, send the FULL sheet image to GPT-4o
-  //         with a focused prompt that tells it exactly which grid position to
-  //         read (e.g. "top-left card", "middle-center card"). This avoids the
-  //         need for server-side image cropping (OffscreenCanvas is not available
-  //         in Cloudflare Workers). The name hint from Step 1 is included in the
-  //         prompt so GPT can confirm rather than guess.
+  // Step 2: GPT-4o bbox detection pass — locate each slot's actual pixel region
+  //         in the photo. Falls back to fixed-grid math for any missed position.
   //
-  // Step 3: Catalog lookup + DB insert per card. The sheet key is stored as
-  //         front_image_url along with the bbox so CardCrop can render the card
-  //         on the frontend.
+  // Step 3: Crop each slot server-side (lib/crop.ts, upscaled ≥800px short side).
+  //         Upload each crop as its own JPEG to R2.
+  //
+  // Step 4: Identify each crop individually via visionIdentifyCard.
+  //         Seed the vision call with the card_name hint from Step 1 so the
+  //         model can focus on confirming the collector number and set.
+  //
+  // Step 5: Catalog lookup + DB insert per card.
+  //
+  // Benefits:
+  // - Full-sheet pass gives accurate card names (dedicated prompt, retry logic)
+  // - Per-crop pass gives accurate collector numbers (full resolution per card)
+  // - Bottom-row cards are never missed (each slot processed independently)
+  // - front_image_url is a clean per-card JPEG, not a full sheet reference
 
   // ── Step 1: GPT-4o full-sheet card name identification ──
   const FULL_SHEET_PROMPT = `You are analyzing a 9-pocket Pokémon card binder page. The page has a strict 3-column × 3-row grid — exactly 9 card slots.
@@ -297,7 +307,7 @@ CRITICAL RULES:
 - Never return fewer than 9 entries under any circumstances.
 - The bottom row (positions 7, 8, 9) must always be included.
 
-Return ONLY this exact JSON structure:
+Return ONLY this exact JSON structure. Replace every null below with the ACTUAL values you read from the card image:
 {
   "cards": [
     { "position": 1, "card_name": null, "collector_number": null, "hp": null },
@@ -371,14 +381,14 @@ Fill in ALL 9 positions with real values from the image. Do NOT leave any positi
     clearTimeout(gptTimeout);
   }
 
-  // Debug logging
+  // Debug logging of initial GPT-4o response
   console.log('[scan] === GPT-4o Full Sheet Response ===');
   for (const card of sheetCards) {
     console.log(`[scan] pos${card.position}: name="${card.card_name}" number="${card.collector_number}" hp=${card.hp}`);
   }
   console.log(`[scan] Missing positions: ${
-    [1,2,3,4,5,6,7,8,9]
-      .filter(p => !sheetCards.find(c => c.position === p))
+    [1, 2, 3, 4, 5, 6, 7, 8, 9]
+      .filter((p) => !sheetCards.find((c) => c.position === p))
       .join(', ') || 'none'
   }`);
 
@@ -424,7 +434,7 @@ Also read:
 Return ONLY a JSON object:
 {
   "cards": [
-    ${missingPositions.map(p => `{ "position": ${p}, "card_name": null, "collector_number": null, "hp": null }`).join(',\n    ')}
+    ${missingPositions.map((p) => `{ "position": ${p}, "card_name": null, "collector_number": null, "hp": null }`).join(',\n    ')}
   ]
 }
 Replace each null with the actual value from the card.`;
@@ -481,83 +491,225 @@ Replace each null with the actual value from the card.`;
     }
   }
 
-  // ── Step 2: Process each of the 9 positions ──
-  // For each position, use the card_name + collector_number from Step 1 directly.
-  // The sheet image is stored with bbox coordinates so CardCrop can render it on
-  // the frontend. No server-side image cropping is needed (OffscreenCanvas is not
-  // available in Cloudflare Workers).
+  // ── Step 2: GPT-4o bbox detection pass ──
+  // Locate each card slot's actual pixel region in the photo.
+  const BBOX_DETECTION_PROMPT = `You are analyzing a 9-pocket Pokémon card binder page photo. The page has a 3-column × 3-row grid of card slots (positions 1–9, left→right, top→bottom).
 
+Your job: locate each card slot in the image and return its bounding box as a percentage of the full image dimensions.
+
+For EVERY position 1–9:
+- x: left edge of the card slot as a percentage of image width (0–100)
+- y: top edge of the card slot as a percentage of image height (0–100)
+- width: width of the card slot as a percentage of image width (0–100)
+- height: height of the card slot as a percentage of image height (0–100)
+
+Rules:
+- Include ALL 9 positions. If a slot appears empty, still return its bounding box.
+- Make the bounding box tight around the card (including the card border), not the pocket border.
+- Percentages must be numbers, not strings.
+
+Return ONLY a JSON object in this exact format:
+{
+  "slots": [
+    { "position": 1, "x": 3.5, "y": 4.0, "width": 28.0, "height": 30.0 },
+    { "position": 2, "x": 36.0, "y": 4.0, "width": 28.0, "height": 30.0 },
+    { "position": 3, "x": 69.0, "y": 4.0, "width": 28.0, "height": 30.0 },
+    { "position": 4, "x": 3.5, "y": 36.0, "width": 28.0, "height": 30.0 },
+    { "position": 5, "x": 36.0, "y": 36.0, "width": 28.0, "height": 30.0 },
+    { "position": 6, "x": 69.0, "y": 36.0, "width": 28.0, "height": 30.0 },
+    { "position": 7, "x": 3.5, "y": 68.0, "width": 28.0, "height": 30.0 },
+    { "position": 8, "x": 36.0, "y": 68.0, "width": 28.0, "height": 30.0 },
+    { "position": 9, "x": 69.0, "y": 68.0, "width": 28.0, "height": 30.0 }
+  ]
+}`;
+
+  interface SlotBbox {
+    position: number;
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+  }
+
+  const detectedBboxes = new Map<number, SlotBbox>();
+
+  try {
+    const bboxController = new AbortController();
+    const bboxTimeout = setTimeout(() => bboxController.abort(), 45_000);
+
+    const bboxResponse = await fetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${env.OPENAI_API_KEY}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        model: 'gpt-4o',
+        max_tokens: 1000,
+        messages: [
+          {
+            role: 'user',
+            content: [
+              {
+                type: 'image_url',
+                image_url: {
+                  url: `data:${file.type};base64,${sheetBase64}`,
+                  detail: 'high',
+                },
+              },
+              { type: 'text', text: BBOX_DETECTION_PROMPT },
+            ],
+          },
+        ],
+        response_format: { type: 'json_object' },
+      }),
+      signal: bboxController.signal,
+    });
+
+    clearTimeout(bboxTimeout);
+
+    if (bboxResponse.ok) {
+      const bboxData = await bboxResponse.json() as { choices: Array<{ message: { content: string } }> };
+      const rawText = bboxData.choices?.[0]?.message?.content ?? '';
+      const jsonText = rawText.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '').trim();
+      const parsed = JSON.parse(jsonText) as { slots: SlotBbox[] };
+      if (Array.isArray(parsed.slots)) {
+        for (const slot of parsed.slots) {
+          if (
+            slot.position >= 1 && slot.position <= 9 &&
+            typeof slot.x === 'number' &&
+            typeof slot.y === 'number' &&
+            typeof slot.width === 'number' &&
+            typeof slot.height === 'number' &&
+            slot.width > 1 &&
+            slot.height > 1
+          ) {
+            detectedBboxes.set(slot.position, slot);
+          }
+        }
+      }
+      console.log(`[scan] GPT-4o detected ${detectedBboxes.size} slot bboxes`);
+    } else {
+      const errBody = await bboxResponse.text();
+      console.error('[scan] GPT-4o bbox detection error:', bboxResponse.status, errBody);
+    }
+  } catch (err) {
+    console.error('[scan] GPT-4o bbox detection failed:', err);
+  }
+
+  // Fill any missing positions with fixed-grid fallback
+  for (let p = 1; p <= 9; p++) {
+    if (!detectedBboxes.has(p)) {
+      console.warn(`[scan] pos ${p}: no GPT-4o bbox — using fixed-grid fallback`);
+      const fb = getFixedBbox(p);
+      detectedBboxes.set(p, { position: p, ...fb });
+    }
+  }
+
+  // ── Steps 3–5: Crop each slot, identify individually, insert ──
   const collectionItems: Record<string, unknown>[] = [];
   const errors: Array<{ position: number; error: string }> = [];
 
   for (let position = 1; position <= 9; position++) {
     try {
-      const hint = cardsByPosition.get(position) ?? null;
+      const bbox = detectedBboxes.get(position)!;
+      const sheetHint = cardsByPosition.get(position) ?? null;
 
-      // Sanity-check: reject names that are clearly non-name words
-      const rawName = hint?.card_name ?? null;
-      const cardName = rawName && NON_NAME_WORDS.some(w => rawName.toLowerCase() === w) ? null : rawName;
-      const collectorNumber = hint?.collector_number ?? null;
+      // Step 3: Crop the slot from the sheet
+      const cropBuffer = await cropCardFromSheet(fileBuffer, file.type, {
+        x: bbox.x,
+        y: bbox.y,
+        width: bbox.width,
+        height: bbox.height,
+      });
 
-      // Skip genuinely empty/unreadable slots
+      if (!cropBuffer) {
+        console.warn(`[scan] pos ${position}: crop failed — skipping`);
+        continue;
+      }
+
+      // Upload the crop to R2 as a standalone card image
+      const cropKey = `cards/${user.id}/${timestamp}-sheet-pos${position}.jpg`;
+      try {
+        await env.BUCKET.put(cropKey, cropBuffer, {
+          httpMetadata: { contentType: 'image/jpeg' },
+        });
+      } catch (uploadErr) {
+        console.error(`[scan] pos ${position}: R2 crop upload failed:`, uploadErr);
+      }
+
+      // Step 4: Identify the cropped card image individually
+      const cropBase64 = arrayBufferToBase64(cropBuffer);
+      const cropDataUrl = `data:image/jpeg;base64,${cropBase64}`;
+
+      let ident;
+      try {
+        ident = await visionIdentifyCard(env, cropDataUrl);
+      } catch (identErr) {
+        console.error(`[scan] pos ${position}: vision identification failed:`, identErr);
+        continue;
+      }
+
+      const rawName = sheetHint?.card_name ?? ident.card_name ?? ident.player_name ?? null;
+      const cardName = rawName && NON_NAME_WORDS.some((w) => rawName.toLowerCase() === w) ? null : rawName;
+      const collectorNumber = ident.card_number ?? sheetHint?.collector_number ?? null;
+
       if (!cardName && !collectorNumber) {
         console.log(`[scan] pos ${position}: no card identified — skipping insert`);
         continue;
       }
 
-      console.log(`[scan] pos ${position}: name="${cardName}" number="${collectorNumber}"`);
+      console.log(`[scan] pos ${position}: resolved name="${cardName}" number="${collectorNumber}"`);
 
-      // Catalog lookup
-      const catalogCard = await lookupCardInCatalog(
-        env.DB,
-        cardName,
-        collectorNumber,
-        hint?.hp ?? null,
-      );
-      console.log(`[scan] pos ${position}: catalog → ${catalogCard?.card_name ?? 'no match'} (${catalogCard?.set_name ?? ''})`);
+      const catalogCard = await lookupCardInCatalog(env.DB, cardName, collectorNumber, null);
+      console.log(`[scan] pos ${position}: ${cardName} ${collectorNumber} → catalog: ${catalogCard?.card_name} (${catalogCard?.set_name})`);
 
       if (!catalogCard && cardName) {
-        console.warn(`[scan] pos ${position}: "${cardName}" not found in catalog — storing as-is`);
+        console.warn(`[scan] pos ${position}: "${cardName}" not found in catalog — storing as-is; user can correct via Edit.`);
       }
 
-      const tcgCard: TCGCard | null = catalogCard ? {
-        id: catalogCard.ptcg_id,
-        name: catalogCard.card_name,
-        number: catalogCard.card_number,
-        set: {
-          id: catalogCard.set_id,
-          name: catalogCard.set_name,
-          series: catalogCard.series ?? '',
-        },
-        rarity: catalogCard.rarity ?? '',
-        images: {
-          small: catalogCard.image_small ?? '',
-          large: catalogCard.image_large ?? '',
-        },
-        tcgplayer: catalogCard.tcgplayer_url ? {
-          url: catalogCard.tcgplayer_url,
-          prices: catalogCard.tcgplayer_market_cents ? {
-            holofoil: { market: catalogCard.tcgplayer_market_cents / 100 }
-          } : undefined,
-        } : undefined,
-      } : null;
+      const tcgCard: TCGCard | null = catalogCard
+        ? {
+            id: catalogCard.ptcg_id,
+            name: catalogCard.card_name,
+            number: catalogCard.card_number,
+            set: {
+              id: catalogCard.set_id,
+              name: catalogCard.set_name,
+              series: catalogCard.series ?? '',
+            },
+            rarity: catalogCard.rarity ?? '',
+            images: {
+              small: catalogCard.image_small ?? '',
+              large: catalogCard.image_large ?? '',
+            },
+            tcgplayer: catalogCard.tcgplayer_url
+              ? {
+                  url: catalogCard.tcgplayer_url,
+                  prices: catalogCard.tcgplayer_market_cents
+                    ? {
+                        holofoil: {
+                          market: catalogCard.tcgplayer_market_cents / 100,
+                        },
+                      }
+                    : undefined,
+                }
+              : undefined,
+          }
+        : null;
 
       const resolvedCardName = tcgCard?.name ?? cardName ?? 'Unknown Card';
-      const game = 'Pokemon';
-      const setName = tcgCard?.set.name ?? null;
+      const game = ident.game ?? 'Pokemon';
+      const setName = tcgCard?.set.name ?? ident.ptcg_set_name ?? ident.set_name ?? null;
       const numOnly = collectorNumber?.split('/')[0]?.trim() ?? null;
       const finalNumber = tcgCard?.number ?? numOnly ?? null;
-      const externalRef: string | null = tcgCard?.id ?? null;
+      const externalRef: string | null = tcgCard?.id ?? ident.ptcg_id ?? null;
       const marketPrice = tcgCard?.tcgplayer?.prices
         ? Object.values(tcgCard.tcgplayer.prices)[0]?.market ?? null
-        : null;
+        : (ident.price_market_cents ? ident.price_market_cents / 100 : null);
       const estimatedValueCents = marketPrice ? Math.round(marketPrice * 100) : 0;
-      const confidence = tcgCard ? 95 : 50;
+      const confidence = tcgCard ? 95 : (ident.confidence ?? 50);
 
-      // Fixed-grid bbox for this position (used by CardCrop on the frontend)
-      const fixedBbox = getFixedBbox(position);
-
-      // Upsert card record
       const existingCard = await queryOne<{ id: number }>(
         env.DB,
         `SELECT id FROM cards
@@ -583,8 +735,8 @@ Replace each null with the actual value from the card.`;
            WHERE id = ?`,
           [
             setName,
-            tcgCard?.rarity ?? null,
-            tcgCard?.images.large ?? tcgCard?.images.small ?? null,
+            tcgCard?.rarity ?? ident.ptcg_rarity ?? null,
+            tcgCard?.images.large ?? tcgCard?.images.small ?? ident.ptcg_image_large ?? null,
             externalRef,
             cardId,
           ],
@@ -601,8 +753,8 @@ Replace each null with the actual value from the card.`;
             setName ?? null,
             resolvedCardName,
             finalNumber,
-            tcgCard?.rarity ?? null,
-            tcgCard?.images.large ?? tcgCard?.images.small ?? null,
+            tcgCard?.rarity ?? ident.ptcg_rarity ?? null,
+            tcgCard?.images.large ?? tcgCard?.images.small ?? ident.ptcg_image_large ?? null,
             externalRef,
             null, null, null, null, null,
           ],
@@ -616,24 +768,13 @@ Replace each null with the actual value from the card.`;
         cardId = newCard.id;
       }
 
-      // Insert collection item — store sheet key + bbox so CardCrop can render it
       await run(
         env.DB,
         `INSERT INTO collection_items
-           (user_id, card_id, quantity, condition_note, estimated_value_cents,
+           (user_id, card_id, quantity, condition_note, estimated_grade, estimated_value_cents,
             front_image_url, bbox_x, bbox_y, bbox_width, bbox_height, product_type)
-         VALUES (?, ?, 1, ?, ?, ?, ?, ?, ?, ?, 'single_card')`,
-        [
-          user.id,
-          cardId,
-          null,
-          estimatedValueCents,
-          sheetKey,
-          fixedBbox.x,
-          fixedBbox.y,
-          fixedBbox.width,
-          fixedBbox.height,
-        ],
+         VALUES (?, ?, 1, ?, ?, ?, ?, NULL, NULL, NULL, NULL, 'single_card')`,
+        [user.id, cardId, ident.condition_notes ?? null, null, estimatedValueCents, cropKey],
       );
 
       const newItem = await queryOne<{ id: number }>(
@@ -652,14 +793,14 @@ Replace each null with the actual value from the card.`;
         [collectionItemId, null, null, null, null, null, confidence, null],
       );
 
-      // eBay comps in background (non-blocking)
       if (env.EBAY_CLIENT_ID && env.EBAY_CLIENT_SECRET) {
         const ebayClientId = env.EBAY_CLIENT_ID;
         const ebayClientSecret = env.EBAY_CLIENT_SECRET;
         const capturedCardId = cardId;
         const catalogSetTotal = (catalogCard as any)?.set_printed_total ?? null;
-        const cardNumFull = collectorNumber
-          ?? (catalogSetTotal
+        const cardNumFull =
+          collectorNumber ??
+          (catalogSetTotal
             ? `${tcgCard?.number ?? finalNumber}/${catalogSetTotal}`
             : (tcgCard?.number ?? finalNumber ?? ''));
 
@@ -670,18 +811,24 @@ Replace each null with the actual value from the card.`;
           variation: tcgCard?.rarity ?? null,
           year: null,
         };
-        fetchEbayComps(ebayClientId, ebayClientSecret, ebayIdent).then(async (comps) => {
-          for (const comp of comps) {
-            try {
-              await run(env.DB,
-                `INSERT INTO sales_comps
-                   (card_id, source, title, sold_price_cents, sold_date, sold_platform, listing_url, condition_text)
-                 VALUES (?, 'ebay_sold', ?, ?, ?, 'eBay', ?, ?)`,
-                [capturedCardId, comp.title, comp.sold_price_cents, comp.sold_date, comp.listing_url, comp.condition_text],
-              );
-            } catch (compErr) { console.error('Failed to save comp:', compErr); }
-          }
-        }).catch((err) => console.error('eBay comps background task failed:', err));
+
+        fetchEbayComps(ebayClientId, ebayClientSecret, ebayIdent)
+          .then(async (comps) => {
+            for (const comp of comps) {
+              try {
+                await run(
+                  env.DB,
+                  `INSERT INTO sales_comps
+                     (card_id, source, title, sold_price_cents, sold_date, sold_platform, listing_url, condition_text)
+                   VALUES (?, 'ebay_sold', ?, ?, ?, 'eBay', ?, ?)`,
+                  [capturedCardId, comp.title, comp.sold_price_cents, comp.sold_date, comp.listing_url, comp.condition_text],
+                );
+              } catch (compErr) {
+                console.error('Failed to save comp:', compErr);
+              }
+            }
+          })
+          .catch((err) => console.error('eBay comps background task failed:', err));
       }
 
       const fullItem = await queryOne<Record<string, unknown>>(
@@ -697,20 +844,20 @@ Replace each null with the actual value from the card.`;
       if (fullItem) {
         collectionItems.push({
           ...fullItem,
-          sheet_url: sheetKey,
-          bbox: fixedBbox,
+          sheet_url: cropKey,
+          bbox: null,
           ptcg_confirmed: tcgCard != null,
-          ptcg_id: tcgCard?.id ?? null,
-          ptcg_set_name: tcgCard?.set.name ?? null,
+          ptcg_id: tcgCard?.id ?? ident.ptcg_id ?? null,
+          ptcg_set_name: tcgCard?.set.name ?? ident.ptcg_set_name ?? null,
           ptcg_set_series: tcgCard?.set.series ?? null,
-          ptcg_image_large: tcgCard?.images.large ?? null,
+          ptcg_image_large: tcgCard?.images.large ?? ident.ptcg_image_large ?? null,
           ptcg_tcgplayer_url: tcgCard?.tcgplayer?.url ?? null,
           price_market_cents: marketPrice ? Math.round(marketPrice * 100) : null,
-          price_low_cents: null,
-          price_high_cents: null,
-          price_psa9_cents: null,
-          price_psa10_cents: null,
-          price_source: marketPrice ? 'tcgplayer' : null,
+          price_low_cents: ident.price_low_cents ?? null,
+          price_high_cents: ident.price_high_cents ?? null,
+          price_psa9_cents: ident.price_psa9_cents ?? null,
+          price_psa10_cents: ident.price_psa10_cents ?? null,
+          price_source: marketPrice ? 'tcgplayer' : (ident.price_source ?? null),
           identification_confidence: confidence,
         });
       }
@@ -744,7 +891,6 @@ export async function handleSetCorrection(env: Env, request: Request, user: User
     return badRequest('collection_item_id and new_set_name are required');
   }
 
-  // Verify the collection item belongs to this user
   const item = await queryOne<{
     id: number;
     card_id: number;
@@ -761,7 +907,6 @@ export async function handleSetCorrection(env: Env, request: Request, user: User
 
   if (!item) return badRequest('Collection item not found');
 
-  // Re-run identification with new set name
   const corrected = await correctCardSet(
     env,
     item.card_name,
@@ -769,7 +914,6 @@ export async function handleSetCorrection(env: Env, request: Request, user: User
     body.new_set_name.trim(),
   );
 
-  // Update the card record with corrected data
   await run(
     env.DB,
     `UPDATE cards SET
@@ -788,7 +932,6 @@ export async function handleSetCorrection(env: Env, request: Request, user: User
     ],
   );
 
-  // Update collection item estimated value if we got new pricing
   if (corrected.price_market_cents) {
     await run(
       env.DB,
