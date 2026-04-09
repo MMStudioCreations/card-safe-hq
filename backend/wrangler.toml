@@ -7,6 +7,7 @@ account_id = "ba8de8decc22986f0cc7a0541902bc94"
 binding = "DB"
 database_name = "card-vault-db"
 database_id = "ed48e805-d198-4f01-9d09-f45649ad4f9f"
+migrations_dir = "migrations"
 
 [[r2_buckets]]
 binding = "BUCKET"
