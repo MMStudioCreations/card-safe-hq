@@ -120,26 +120,30 @@ export function buildSearchQuery(card: EbayCardIdent): string {
   if (card.player_name) parts.push(card.player_name)
   if (card.set_name) parts.push(card.set_name)
 
-  // Include full collector number with set total (e.g. "197/182" not "197")
-  // This is critical for filtering out common variants
+  // Full collector number with set total narrows to exact variant
+  // e.g. "GG39/GG70" or "197/182" — eliminates wrong set matches
   if (card.card_number) parts.push(card.card_number)
 
-  // Include rarity for illustration rares and above
-  // This eliminates common/uncommon comps from results
+  // Include rarity for special variants to eliminate common/uncommon results
   const highRarities = [
     'Illustration Rare',
     'Special Illustration Rare',
     'Hyper Rare',
     'Ultra Rare',
-    'Double Rare',
+    'Rare Ultra',
+    'Rare Rainbow',
+    'Rare Holo V',
+    'Rare Holo VMAX',
+    'Rare Holo GX',
   ]
-  if (card.variation && highRarities.some(r => card.variation!.includes(r))) {
+  if (card.variation && highRarities.some(r =>
+    card.variation!.toLowerCase().includes(r.toLowerCase())
+  )) {
     parts.push(card.variation)
   }
 
   parts.push('Pokemon Card')
-  const query = parts.filter(Boolean).join(' ')
-  return query.length > 200 ? query.slice(0, 200).trimEnd() : query
+  return parts.filter(Boolean).join(' ')
 }
 
 // ─── Main Export ──────────────────────────────────────────────────────────────

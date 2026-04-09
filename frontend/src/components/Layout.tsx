@@ -194,7 +194,14 @@ export default function Layout({ children }: Props) {
         </div>
       </header>
 
-      <main className="flex-1 overflow-y-auto w-full max-w-screen-sm mx-auto">{children}</main>
+      <main
+        className="flex-1 overflow-y-auto"
+        style={{ paddingBottom: 'calc(5rem + env(safe-area-inset-bottom))' }}
+      >
+        <div className="max-w-lg mx-auto w-full">
+          {children}
+        </div>
+      </main>
 
       {/* Mobile nav */}
       <nav className="glass fixed inset-x-2 bottom-2 z-30 mx-auto grid max-w-[980px] grid-cols-6 gap-0.5 px-1 py-1.5 sm:hidden" style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}>

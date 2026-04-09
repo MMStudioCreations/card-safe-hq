@@ -251,38 +251,48 @@ export async function handleSheetScan(env: Env, request: Request, user: User): P
   // Step 3: Crop each position using fixed grid math.
   // Step 4: Upload crop to R2 and INSERT collection item.
 
-  const FULL_SHEET_PROMPT = `You are a Pokemon card scanner. This image shows a 3x3 grid of 9 Pokemon cards.
+  const FULL_SHEET_PROMPT = `You are analyzing a 9-pocket Pokémon card binder page. The page has a strict 3-column × 3-row grid — exactly 9 card slots.
 
-Grid layout — positions are numbered left-to-right, top-to-bottom:
-  [1][2][3]
-  [4][5][6]
-  [7][8][9]
+YOUR ONLY JOB: Read the printed text on each card. Do not describe artwork.
 
-For EVERY one of the 9 positions you MUST read and return:
-- card_name: the large bold Pokémon name printed at the TOP of the card (e.g. "Blastoise ex", "Pikachu", "Lumineon V")
-- collector_number: the small number printed at the BOTTOM RIGHT corner of the card, in format "NNN/NNN" (e.g. "200/165", "073/064", "221/091") — this is the MOST important field, read it carefully
-- hp: the HP number printed near the top right of the card (e.g. 110, 330, 170)
+For EVERY card position (1-9, left→right, top→bottom):
 
-RULES:
-1. You MUST return all 9 positions. No exceptions. Do not stop early.
-2. If a slot appears empty or you cannot read a value, use null for that field — but still include the position.
-3. Do NOT use "..." or skip any position.
-4. Return ONLY a JSON object with a "cards" array of exactly 9 objects.
+1. card_name — Large bold text at the very TOP of the card (e.g. "Lumineon V", "Blastoise ex", "Palafin"). Include "ex", "V", "VMAX", "GX" if printed.
 
-Required JSON format (fill in real values for ALL 9):
+2. collector_number — Small text at BOTTOM of card.
+   Standard format: "200/191" or "40/172"
+   Special formats — read these EXACTLY as printed including letter prefixes:
+   - Galarian Gallery: "GG39/GG70" (keep the GG prefix)
+   - Trainer Gallery: "TG25/TG30" (keep the TG prefix)
+   - Black Star Promos: "SWSH250" or "SV050" (no slash, keep letters)
+   - Promo stamped: "SVP036" format
+   If you see letters before the number, include them.
+   READ BOTH PARTS CAREFULLY. Common misreads: 0→6, 1→7, 4→1. Double-check.
+
+3. hp — Number near top-right corner.
+
+CRITICAL RULES:
+- You MUST return ALL 9 entries. Positions 7, 8, 9 are REQUIRED.
+- If a slot is empty, return null values for that position — do not skip it.
+- Never return fewer than 9 entries under any circumstances.
+- The bottom row (positions 7, 8, 9) must always be included.
+
+Return ONLY this exact JSON structure, nothing else:
 {
   "cards": [
-    { "position": 1, "card_name": "NAME", "collector_number": "NNN/NNN", "hp": 110 },
-    { "position": 2, "card_name": "NAME", "collector_number": "NNN/NNN", "hp": 90 },
-    { "position": 3, "card_name": "NAME", "collector_number": "NNN/NNN", "hp": 110 },
-    { "position": 4, "card_name": "NAME", "collector_number": "NNN/NNN", "hp": 100 },
-    { "position": 5, "card_name": "NAME", "collector_number": "NNN/NNN", "hp": 330 },
-    { "position": 6, "card_name": "NAME", "collector_number": "NNN/NNN", "hp": 90 },
-    { "position": 7, "card_name": "NAME", "collector_number": "NNN/NNN", "hp": 120 },
-    { "position": 8, "card_name": "NAME", "collector_number": "NNN/NNN", "hp": 170 },
-    { "position": 9, "card_name": "NAME", "collector_number": "NNN/NNN", "hp": 150 }
+    { "position": 1, "card_name": "ExampleName", "collector_number": "200/191", "hp": 110 },
+    { "position": 2, "card_name": "ExampleName", "collector_number": "GG39/GG70", "hp": 170 },
+    { "position": 3, "card_name": null, "collector_number": null, "hp": null },
+    { "position": 4, "card_name": "ExampleName", "collector_number": "NNN/NNN", "hp": 100 },
+    { "position": 5, "card_name": "ExampleName", "collector_number": "NNN/NNN", "hp": 330 },
+    { "position": 6, "card_name": "ExampleName", "collector_number": "NNN/NNN", "hp": 90 },
+    { "position": 7, "card_name": "ExampleName", "collector_number": "NNN/NNN", "hp": 120 },
+    { "position": 8, "card_name": "ExampleName", "collector_number": "NNN/NNN", "hp": 170 },
+    { "position": 9, "card_name": "ExampleName", "collector_number": "NNN/NNN", "hp": 150 }
   ]
-}`;
+}
+
+The above is a FORMAT EXAMPLE ONLY. Read actual cards in each position.`;
 
   interface SheetCardResult {
     position: number;
@@ -307,7 +317,7 @@ Required JSON format (fill in real values for ALL 9):
       },
       body: JSON.stringify({
         model: 'gpt-4o',
-        max_tokens: 2000,
+        max_tokens: 2500,
         messages: [
           {
             role: 'user',
@@ -564,16 +574,18 @@ Return ONLY a JSON object with a "cards" array containing ONLY the requested pos
         const ebayClientId = env.EBAY_CLIENT_ID;
         const ebayClientSecret = env.EBAY_CLIENT_SECRET;
         const capturedCardId = cardId;
-        // Get set total from catalogCard for full number format
-        const catalogSetTotal = (catalogCard as any)?.set_printed_total ?? tcgCard?.set.printedTotal
-        const cardNumFull = catalogSetTotal
-          ? `${tcgCard?.number ?? finalNumber}/${catalogSetTotal}`
-          : (tcgCard?.number ?? finalNumber ?? '')
+        // Prefer the raw GPT collector_number (e.g. "197/182") since it includes the set total.
+        // Fall back to catalog number + set total if GPT number is missing.
+        const catalogSetTotal = (catalogCard as any)?.set_printed_total ?? (tcgCard?.set as any)?.printedTotal
+        const cardNumFull = collector_number
+          ?? (catalogSetTotal
+            ? `${tcgCard?.number ?? finalNumber}/${catalogSetTotal}`
+            : (tcgCard?.number ?? finalNumber ?? ''))
 
         const ebayIdent = {
           player_name: tcgCard?.name ?? cardName,
-          card_number: cardNumFull,           // e.g. "197/182"
-          set_name: tcgCard?.set.name ?? setName,
+          card_number: cardNumFull,           // e.g. "197/182" or "GG39/GG70"
+          set_name: tcgCard?.set?.name ?? setName,
           variation: tcgCard?.rarity ?? null, // e.g. "Illustration Rare"
           year: null,
         };

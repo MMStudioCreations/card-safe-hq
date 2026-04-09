@@ -299,7 +299,8 @@ export default function CardDetailPage() {
   const mostRecentSold = soldListings.length > 0
     ? [...soldListings].sort((a, b) => new Date(b.sold_date).getTime() - new Date(a.sold_date).getTime())[0]
     : null
-  const headerPriceCents = mostRecentSold?.sold_price_cents ?? item.estimated_value_cents
+  const displayPriceCents = item.latest_sold_price_cents ?? item.estimated_value_cents ?? 0
+  const headerPriceCents = mostRecentSold?.sold_price_cents ?? displayPriceCents
 
   return (
     <div className="grid gap-4 lg:grid-cols-[340px,1fr]">
@@ -322,28 +323,30 @@ export default function CardDetailPage() {
             Back
           </button>
         </div>
-        <div className="w-full rounded-[var(--radius-md)] overflow-hidden bg-zinc-900" style={{ aspectRatio: '2.5/3.5', maxHeight: '52vh' }}>
+        <div className="w-full max-w-xs mx-auto">
           {isSheet && detailBbox && sheetImageUrl ? (
             <CardCrop
               sheetUrl={sheetImageUrl}
               bbox={detailBbox}
               alt={item.card_name || item.player_name || 'Card'}
-              className="w-full h-full object-contain"
+              className="w-full h-auto object-contain rounded-2xl shadow-lg"
             />
           ) : sheetImageUrl ? (
             <img
-              className="w-full h-full object-contain object-center"
+              className="w-full h-auto object-contain rounded-2xl shadow-lg"
+              style={{ aspectRatio: '2.5 / 3.5' }}
               src={sheetImageUrl}
               alt={item.card_name || item.player_name || 'Card'}
             />
           ) : item?.image_url ? (
             <img
-              className="w-full h-full object-contain object-center"
+              className="w-full h-auto object-contain rounded-2xl shadow-lg"
+              style={{ aspectRatio: '2.5 / 3.5' }}
               src={item.image_url}
               alt={item.card_name || item.player_name || 'Card'}
             />
           ) : (
-            <div className="h-full w-full bg-[linear-gradient(135deg,var(--primary),var(--secondary))]" />
+            <div className="w-full rounded-2xl shadow-lg bg-[linear-gradient(135deg,var(--primary),var(--secondary))]" style={{ aspectRatio: '2.5 / 3.5' }} />
           )}
         </div>
       </section>
@@ -395,9 +398,18 @@ export default function CardDetailPage() {
                   .join(' · ')}
               </p>
               <div className="mt-2 flex flex-wrap gap-2 text-xs">
-                <span className="badge">{item.sport ?? item.card?.sport ?? item.game ?? item.card?.game ?? 'Other'}</span>
-                <span className="badge">{item.variation ?? item.card?.variation ?? 'Base'}</span>
-                <span className="badge">{item.manufacturer ?? item.card?.manufacturer ?? 'Unknown'}</span>
+                {(() => {
+                  const game = item.sport ?? item.card?.sport ?? item.game ?? item.card?.game
+                  return game && game !== 'Unknown' && game !== 'Other' ? <span className="badge">{game}</span> : null
+                })()}
+                {(() => {
+                  const rarity = item.variation ?? item.card?.variation
+                  return rarity && rarity !== 'Unknown' && rarity !== 'Base' ? <span className="badge">{rarity}</span> : null
+                })()}
+                {(() => {
+                  const setN = item.set_name ?? item.card?.set_name
+                  return setN && setN !== 'Unknown' ? <span className="badge">{setN}</span> : null
+                })()}
                 {item.condition_note && <span className="badge">{item.condition_note}</span>}
               </div>
             </div>

@@ -24,10 +24,14 @@ export async function lookupCardInCatalog(
   hp?: number | null,
 ): Promise<CatalogCard | null> {
 
-  // Parse number — strip total e.g. "196/197" → "196"
-  const numOnly = collectorNumber?.split('/')[0]?.trim() ?? null
+  // Parse number — preserve letter prefixes (GG39, TG25, SWSH250, etc.)
+  // "GG39/GG70" → rawFirst = "GG39", setTotal = "70"
+  // "200/191"   → rawFirst = "200",  setTotal = "191"
+  const rawFirst = collectorNumber?.split('/')[0]?.trim() ?? null
+  const numOnly = rawFirst
+  const setTotal = collectorNumber?.split('/')[1]?.trim()?.replace(/^[A-Z]+/, '') ?? null
 
-  // Layer 1: name + number (most precise)
+  // Layer 1: name + number exact match (most precise)
   if (cardName && numOnly) {
     const r = await db.prepare(
       `SELECT * FROM pokemon_catalog
@@ -37,7 +41,43 @@ export async function lookupCardInCatalog(
     if (r) return r
   }
 
-  // Layer 1b: fuzzy number — try ±3 on the parsed number
+  // Layer 1b: alphanumeric prefix normalization
+  // Handles GPT misreading "GG39" as "39", or "TG25" as "25", and vice versa
+  if (cardName && numOnly) {
+
+    // Case A: GPT returned plain digits but actual number has a prefix
+    // e.g. GPT says "39", actual is "GG39"
+    if (/^\d+$/.test(numOnly)) {
+      const prefixes = ['GG', 'TG', 'SWSH', 'SV', 'SVP', 'DP', 'BW', 'XY', 'SM']
+      for (const prefix of prefixes) {
+        const prefixed = `${prefix}${numOnly}`
+        const r = await db.prepare(
+          `SELECT * FROM pokemon_catalog
+           WHERE card_name = ? AND card_number = ? LIMIT 1`
+        ).bind(cardName, prefixed).first<CatalogCard>()
+        if (r) {
+          console.log(`[catalog] prefix-added: ${cardName} #${numOnly} → #${prefixed} (${r.set_name})`)
+          return r
+        }
+      }
+    }
+
+    // Case B: GPT returned prefixed number correctly e.g. "GG39"
+    // but exact match in Layer 1 failed — try stripping prefix
+    if (/^[A-Z]{2,4}\d+$/.test(numOnly)) {
+      const stripped = numOnly.replace(/^[A-Z]+/, '')
+      const r = await db.prepare(
+        `SELECT * FROM pokemon_catalog
+         WHERE card_name = ? AND card_number = ? LIMIT 1`
+      ).bind(cardName, stripped).first<CatalogCard>()
+      if (r) {
+        console.log(`[catalog] prefix-stripped: ${cardName} #${numOnly} → #${stripped} (${r.set_name})`)
+        return r
+      }
+    }
+  }
+
+  // Layer 1c: fuzzy number — try ±3 on the parsed number (plain digits only)
   // Handles single-digit OCR misreads on illustration rares
   if (cardName && numOnly && /^\d+$/.test(numOnly)) {
     const numInt = parseInt(numOnly)
@@ -63,7 +103,7 @@ export async function lookupCardInCatalog(
 
   // Layer 2: number only (handles misread names)
   if (numOnly && collectorNumber?.includes('/')) {
-    const total = collectorNumber.split('/')[1]?.trim()
+    const total = setTotal
     if (total) {
       // card_number in DB is stored without total, but set total helps narrow
       const r = await db.prepare(
@@ -108,14 +148,49 @@ export async function lookupCardInCatalog(
     }
   }
 
-  // Layer 3: name only — most recent version
+  // Layer 3: name only — with rarity-aware sort for high-number / prefixed cards
   if (cardName) {
     const r = await db.prepare(
       `SELECT * FROM pokemon_catalog
        WHERE card_name = ?
-       ORDER BY rowid DESC LIMIT 1`
-    ).bind(cardName).first<CatalogCard>()
-    if (r) return r
+       ORDER BY rowid DESC LIMIT 20`
+    ).bind(cardName).all<CatalogCard>()
+
+    if (r.results.length === 0) return null
+
+    // For high-number or prefixed cards (GG, TG, SWSH, 150+), prefer high-rarity variants
+    const isHighNumber = numOnly && (
+      /^[A-Z]/.test(numOnly) ||                                   // GG39, TG25, SWSH250
+      parseInt(numOnly.replace(/\D/g, '')) >= 150                 // 150+ plain numbers
+    )
+
+    if (isHighNumber) {
+      const RARITY_PRIORITY: Record<string, number> = {
+        'Special Illustration Rare': 10,
+        'Hyper Rare': 9,
+        'Ultra Rare': 8,
+        'Illustration Rare': 7,
+        'Rare Ultra': 7,
+        'Rare Holo V': 6,
+        'Rare Rainbow': 6,
+        'Double Rare': 5,
+        'Rare Holo': 4,
+        'Rare': 3,
+        'Shiny Rare': 3,
+        'Uncommon': 2,
+        'Common': 1,
+      }
+      const sorted = [...r.results].sort((a, b) => {
+        const pa = RARITY_PRIORITY[a.rarity ?? ''] ?? 0
+        const pb = RARITY_PRIORITY[b.rarity ?? ''] ?? 0
+        return pb - pa
+      })
+      console.log(`[catalog] name-only high: ${cardName} #${numOnly} → ${sorted[0].ptcg_id} ${sorted[0].rarity}`)
+      return sorted[0]
+    }
+
+    // Standard: return most recent
+    return r.results[0]
   }
 
   return null
