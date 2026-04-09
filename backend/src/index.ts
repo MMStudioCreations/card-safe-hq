@@ -229,6 +229,93 @@ export default {
         if (method === 'POST') return withCors(await createCollectionItem(env, request, user), request, env);
       }
 
+      // ── CSV export ────────────────────────────────────────────────────────
+      if (method === 'GET' && pathname === '/api/collection/export') {
+        const user = await requireAuth(env, request);
+        if (user instanceof Response) return withCors(user, request, env);
+
+        const items = await env.DB.prepare(`
+          SELECT
+            c.card_name, c.set_name, c.card_number, c.rarity,
+            c.game, ci.quantity, ci.condition_note,
+            ci.estimated_value_cents,
+            (
+              SELECT sold_price_cents FROM sales_comps
+              WHERE card_id = ci.card_id AND source = 'ebay_sold'
+              ORDER BY created_at DESC LIMIT 1
+            ) as latest_sold_price_cents,
+            c.external_ref,
+            ci.created_at
+          FROM collection_items ci
+          LEFT JOIN cards c ON ci.card_id = c.id
+          WHERE ci.user_id = ?
+          ORDER BY ci.created_at DESC
+        `).bind(user.id).all();
+
+        const rows = (items.results ?? []) as any[];
+        const headers = [
+          'Card Name', 'Set Name', 'Card Number', 'Rarity', 'Game',
+          'Quantity', 'Condition', 'Estimated Value (USD)',
+          'Last Sold (USD)', 'TCG ID', 'Added Date',
+        ];
+        const csvRows = rows.map(r => [
+          r.card_name ?? '',
+          r.set_name ?? '',
+          r.card_number ?? '',
+          r.rarity ?? '',
+          r.game ?? '',
+          r.quantity ?? 1,
+          r.condition_note ?? 'Raw',
+          r.estimated_value_cents ? (r.estimated_value_cents / 100).toFixed(2) : '0.00',
+          r.latest_sold_price_cents ? (r.latest_sold_price_cents / 100).toFixed(2) : '0.00',
+          r.external_ref ?? '',
+          r.created_at ?? '',
+        ].map(v => `"${String(v).replace(/"/g, '""')}"`).join(','));
+        const csv = [headers.join(','), ...csvRows].join('\n');
+
+        return new Response(csv, {
+          headers: {
+            'Content-Type': 'text/csv',
+            'Content-Disposition': 'attachment; filename="card-safe-hq-collection.csv"',
+            'Access-Control-Allow-Origin': getAllowedOrigin(request, env),
+            'Access-Control-Allow-Credentials': 'true',
+          },
+        });
+      }
+
+      // ── Market movers ─────────────────────────────────────────────────────
+      if (method === 'GET' && pathname === '/api/collection/movers') {
+        const user = await requireAuth(env, request);
+        if (user instanceof Response) return withCors(user, request, env);
+
+        const movers = await env.DB.prepare(`
+          SELECT
+            c.card_name, c.set_name, c.rarity, c.image_url,
+            ci.id as collection_item_id,
+            ci.front_image_url, ci.bbox_x, ci.bbox_y, ci.bbox_width, ci.bbox_height,
+            (
+              SELECT sold_price_cents FROM sales_comps
+              WHERE card_id = ci.card_id AND source = 'ebay_sold'
+              ORDER BY created_at DESC LIMIT 1
+            ) as current_price_cents,
+            (
+              SELECT sold_price_cents FROM sales_comps
+              WHERE card_id = ci.card_id AND source = 'ebay_sold'
+              ORDER BY created_at DESC LIMIT 1 OFFSET 1
+            ) as previous_price_cents
+          FROM collection_items ci
+          LEFT JOIN cards c ON ci.card_id = c.id
+          WHERE ci.user_id = ?
+          HAVING current_price_cents IS NOT NULL
+            AND previous_price_cents IS NOT NULL
+            AND current_price_cents != previous_price_cents
+          ORDER BY ABS(current_price_cents - previous_price_cents) DESC
+          LIMIT 10
+        `).bind(user.id).all();
+
+        return withCors(ok({ movers: movers.results ?? [] }), request, env);
+      }
+
       if (pathname.startsWith('/api/collection/')) {
         const id = parseId(pathname);
         if (!id) return withCors(badRequest('Invalid collection id'), request, env);

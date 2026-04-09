@@ -1,7 +1,8 @@
 import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { CheckSquare, Square, Trash2, X } from 'lucide-react'
+import { CheckSquare, Square, Trash2, X, Eye, EyeOff, Download } from 'lucide-react'
 import CardTile from '../components/CardTile'
+import MarketMovers from '../components/MarketMovers'
 import { useCollection } from '../lib/hooks'
 import { api } from '../lib/api'
 import { useQueryClient } from '@tanstack/react-query'
@@ -37,6 +38,8 @@ export default function DashboardPage() {
   const [categoryFilter, setCategoryFilter] = useState('All')
   const [typeFilter, setTypeFilter] = useState('all')
   const [sort, setSort] = useState('value-desc')
+  const [valuesHidden, setValuesHidden] = useState(false)
+  const [exporting, setExporting] = useState(false)
 
   // Select mode state
   const [selectMode, setSelectMode] = useState(false)
@@ -133,6 +136,26 @@ export default function DashboardPage() {
     setSelectedIds(new Set())
   }
 
+  async function handleExport() {
+    setExporting(true)
+    try {
+      const apiUrl = import.meta.env.VITE_API_URL ?? ''
+      const res = await fetch(`${apiUrl}/api/collection/export`, { credentials: 'include' })
+      if (!res.ok) throw new Error('Export failed')
+      const blob = await res.blob()
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = 'card-safe-hq-collection.csv'
+      a.click()
+      URL.revokeObjectURL(url)
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Export failed')
+    } finally {
+      setExporting(false)
+    }
+  }
+
   async function handleBatchDelete() {
     if (selectedIds.size === 0) return
     if (!confirm(`Delete ${selectedIds.size} item${selectedIds.size > 1 ? 's' : ''}? This cannot be undone.`)) return
@@ -170,13 +193,17 @@ export default function DashboardPage() {
             <p className="text-xs text-cv-muted">Total Cards</p>
             <p className="text-lg font-bold text-white">{totals.count}</p>
           </div>
-          <div className="bg-cv-surface rounded-lg p-3 text-center">
+          <div className="bg-cv-surface rounded-lg p-3 text-center relative">
             <p className="text-xs text-cv-muted">Portfolio Value</p>
-            <p className="gradient-text text-lg font-bold">${(totals.totalValue / 100).toFixed(2)}</p>
+            <p className="gradient-text text-lg font-bold">
+              {valuesHidden ? '••••••' : `$${(totals.totalValue / 100).toFixed(2)}`}
+            </p>
           </div>
           <div className="bg-cv-surface rounded-lg p-3 text-center">
             <p className="text-xs text-cv-muted">Avg Card Value</p>
-            <p className="text-lg font-bold text-white">${(totals.avgValue / 100).toFixed(2)}</p>
+            <p className="text-lg font-bold text-white">
+              {valuesHidden ? '••••' : `$${(totals.avgValue / 100).toFixed(2)}`}
+            </p>
           </div>
           <div className="bg-cv-surface rounded-lg p-3 text-center">
             <p className="text-xs text-cv-muted">Graded Cards</p>
@@ -187,12 +214,37 @@ export default function DashboardPage() {
             {totals.mostValuable ? (
               <>
                 <p className="truncate text-sm font-bold text-white">{totals.mostValuable.name}</p>
-                <p className="text-xs text-cv-muted">${(totals.mostValuable.value / 100).toFixed(2)}</p>
+                <p className="text-xs text-cv-muted">
+                  {valuesHidden ? '••••' : `$${(totals.mostValuable.value / 100).toFixed(2)}`}
+                </p>
               </>
             ) : <p className="text-sm text-cv-muted">—</p>}
           </div>
         </div>
+        {/* Hide/show + Export row */}
+        <div className="mt-3 flex justify-end gap-2">
+          <button
+            type="button"
+            onClick={() => setValuesHidden(v => !v)}
+            className="flex items-center gap-1.5 rounded-[var(--radius-sm)] bg-cv-surface px-3 py-1.5 text-xs text-cv-muted hover:text-cv-text transition"
+          >
+            {valuesHidden ? <Eye className="h-3.5 w-3.5" /> : <EyeOff className="h-3.5 w-3.5" />}
+            {valuesHidden ? 'Show Values' : 'Hide Values'}
+          </button>
+          <button
+            type="button"
+            onClick={handleExport}
+            disabled={exporting}
+            className="flex items-center gap-1.5 rounded-[var(--radius-sm)] bg-cv-surface px-3 py-1.5 text-xs text-cv-muted hover:text-cv-text transition disabled:opacity-40"
+          >
+            <Download className="h-3.5 w-3.5" />
+            {exporting ? 'Exporting…' : 'Export CSV'}
+          </button>
+        </div>
       </section>
+
+      {/* Market Movers */}
+      <MarketMovers valuesHidden={valuesHidden} />
 
       {/* Filters */}
       <section className="glass p-4">

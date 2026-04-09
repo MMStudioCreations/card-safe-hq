@@ -66,13 +66,20 @@ export async function listCollection(env: Env, user: User, request: Request): Pr
               ORDER BY created_at DESC
               LIMIT 1
             ) as latest_sold_price_cents,
-            (
-              SELECT AVG(sold_price_cents)
+            (SELECT AVG(sold_price_cents)
               FROM sales_comps
               WHERE card_id = ci.card_id
                 AND source = 'ebay_sold'
                 AND created_at >= datetime('now', '-30 days')
-            ) as avg_30d_sold_cents
+            ) as avg_30d_sold_cents,
+            (
+              SELECT sold_price_cents
+              FROM sales_comps
+              WHERE card_id = ci.card_id
+                AND source = 'ebay_sold'
+              ORDER BY created_at DESC
+              LIMIT 1 OFFSET 1
+            ) as previous_sold_price_cents
      FROM collection_items ci
      LEFT JOIN cards c ON ci.card_id = c.id
      WHERE ci.user_id = ?

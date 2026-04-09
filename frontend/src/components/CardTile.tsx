@@ -1,4 +1,5 @@
 import { useNavigate } from 'react-router-dom'
+import { TrendingUp, TrendingDown } from 'lucide-react'
 import type { CollectionItem } from '../lib/api'
 import CardCrop from './CardCrop'
 
@@ -97,6 +98,26 @@ export default function CardTile({ collectionItem }: Props) {
           </span>
           <span className="badge">{displayValue}</span>
           <span className="badge">{collectionItem.condition_note || 'Raw'}</span>
+          {(() => {
+            const currentCents = (collectionItem as any).latest_sold_price_cents ?? collectionItem.estimated_value_cents ?? 0
+            const prevCents: number | null = (collectionItem as any).previous_sold_price_cents ?? null
+            const delta = prevCents && currentCents ? currentCents - prevCents : null
+            const deltaPct = delta && prevCents ? ((delta / prevCents) * 100).toFixed(1) : null
+            if (delta === null || deltaPct === null) return null
+            return (
+              <div className={`flex items-center gap-1 text-xs mt-0.5 ${
+                delta >= 0 ? 'text-green-400' : 'text-red-400'
+              }`}>
+                {delta >= 0
+                  ? <TrendingUp className="w-3 h-3" />
+                  : <TrendingDown className="w-3 h-3" />
+                }
+                <span>
+                  {delta >= 0 ? '+' : ''}${(Math.abs(delta) / 100).toFixed(2)} ({deltaPct}%)
+                </span>
+              </div>
+            )
+          })()}
           {collectionItem.product_type && collectionItem.product_type !== 'single_card' && (
             <span className="badge bg-amber-500/20 text-amber-200">
               {{
