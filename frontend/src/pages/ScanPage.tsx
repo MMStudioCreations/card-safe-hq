@@ -318,30 +318,45 @@ export default function ScanPage() {
 
           {sheetResult.collection_items.length > 0 && (
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-              {sheetResult.collection_items.map((item: ScanResultItem) => (
-                <div key={item.id} className="glass rounded-[var(--radius-lg)] overflow-hidden">
-                  {item.sheet_url && item.bbox ? (
-                    <CardCrop
-                      sheetUrl={`${import.meta.env.VITE_API_URL}/api/images/${encodeURIComponent(item.sheet_url)}`}
-                      bbox={item.bbox}
-                      className="w-full object-cover"
-                    />
-                  ) : (
-                    <div className="flex h-40 items-center justify-center bg-cv-surface text-cv-muted text-sm">
-                      No image
+              {sheetResult.collection_items.map((item: ScanResultItem) => {
+                // New scans: front_image_url is a pre-cropped card JPEG (no bbox needed)
+                // Legacy scans: sheet_url + bbox → canvas crop via CardCrop
+                const apiBase = import.meta.env.VITE_API_URL
+                const imageUrl = (item as any).front_image_url ?? item.sheet_url
+                const needsCrop = item.sheet_url && item.bbox && item.sheet_url.includes('sheets/')
+                return (
+                  <div key={item.id} className="glass rounded-[var(--radius-lg)] overflow-hidden">
+                    <div className="w-full bg-zinc-900" style={{ aspectRatio: '2.5/3.5' }}>
+                      {needsCrop ? (
+                        <CardCrop
+                          sheetUrl={`${apiBase}/api/images/${encodeURIComponent(item.sheet_url!)}`}
+                          bbox={item.bbox!}
+                          className="w-full h-full"
+                        />
+                      ) : imageUrl ? (
+                        <img
+                          src={`${apiBase}/api/images/${encodeURIComponent(imageUrl)}`}
+                          alt={item.card_name ?? 'Card'}
+                          className="w-full h-full object-contain object-center"
+                        />
+                      ) : (
+                        <div className="flex h-full items-center justify-center text-cv-muted text-sm">
+                          No image
+                        </div>
+                      )}
                     </div>
-                  )}
-                  <div className="p-3">
-                    <p className="font-semibold text-sm truncate">
-                      {item.card_name || 'Unknown Card'}
-                    </p>
-                    <p className="text-xs text-cv-muted truncate">{item.set_name || 'Unknown set'}</p>
-                    {item.estimated_grade && (
-                      <p className="text-xs mt-1">Grade: {item.estimated_grade}</p>
-                    )}
+                    <div className="p-3">
+                      <p className="font-semibold text-sm truncate">
+                        {item.card_name || 'Unknown Card'}
+                      </p>
+                      <p className="text-xs text-cv-muted truncate">{item.set_name || 'Unknown set'}</p>
+                      {item.estimated_grade && (
+                        <p className="text-xs mt-1">Grade: {item.estimated_grade}</p>
+                      )}
+                    </div>
                   </div>
-                </div>
-              ))}
+                )
+              })}
             </div>
           )}
 

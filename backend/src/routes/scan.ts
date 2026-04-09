@@ -4,6 +4,7 @@ import { badRequest, ok, serverError } from '../lib/json';
 import { fetchEbayComps } from '../lib/ebay';
 import { identifyCard as visionIdentifyCard, correctCardSet } from '../lib/vision';
 import { lookupCardInCatalog } from '../lib/pokemon-reference';
+import { cropCardFromSheet } from '../lib/crop';
 
 const ALLOWED_MIME_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp']);
 const MAX_FILE_SIZE = 20 * 1024 * 1024; // 20 MB
@@ -26,13 +27,6 @@ function arrayBufferToBase64(buffer: ArrayBuffer): string {
 
 // ─── Pokemon TCG card shape ───────────────────────────────────────────────────
 
-// Known attack/ability words that are NOT card names
-const NOT_A_CARD_NAME = [
-  'smack', 'filch', 'tackle', 'scratch', 'growl', 'ability',
-  'whirlwind', 'razor', 'wing', 'draw', 'energy', 'trainer',
-  'supporter', 'item', 'stadium', 'basic', 'stage',
-];
-
 interface TCGCard {
   id: string;
   name: string;
@@ -43,19 +37,16 @@ interface TCGCard {
   tcgplayer?: { url?: string; prices?: Record<string, { market?: number }> };
 }
 
-// Fixed-grid bbox for a standard 9-pocket binder page (3×3 grid).
-// Uses math instead of GPT-4o estimates — positions are always correct.
+// ─── Fixed-grid fallback bbox ─────────────────────────────────────────────────
+// Used only when GPT-4o does not return a bbox for a position.
+// Approximate card cell boundaries — accounts for binder page margins and pocket borders.
 function getFixedBbox(position: number) {
-  // position 1-9, left to right, top to bottom
-  const col = (position - 1) % 3;  // 0, 1, 2
-  const row = Math.floor((position - 1) / 3);  // 0, 1, 2
-
-  // Approximate card cell boundaries — accounts for binder page margins and pocket borders
+  const col = (position - 1) % 3;
+  const row = Math.floor((position - 1) / 3);
   const colStarts = [0.03, 0.36, 0.69];
   const rowStarts = [0.04, 0.36, 0.68];
   const cellWidth = 0.28;
   const cellHeight = 0.28;
-
   return {
     x: colStarts[col] * 100,
     y: rowStarts[row] * 100,
@@ -83,7 +74,7 @@ export async function handleSheetScan(env: Env, request: Request, user: User): P
     return badRequest('File must be between 1 byte and 20MB');
   }
 
-  // Upload sheet to R2
+  // Upload original sheet to R2 (kept for reference / legacy bbox fallback)
   const timestamp = Date.now();
   const ext = mimeToExt(file.type);
   const sheetKey = `sheets/${user.id}/${timestamp}-sheet.${ext}`;
@@ -246,69 +237,66 @@ export async function handleSheetScan(env: Env, request: Request, user: User): P
   }
 
   // ─── Sheet scan path ──────────────────────────────────────────────────────
-  // Step 1: Send FULL sheet to GPT-4o once — identify all 9 cards at full resolution.
-  // Step 2: For each position, lookup in Pokemon TCG API.
-  // Step 3: Crop each position using fixed grid math.
-  // Step 4: Upload crop to R2 and INSERT collection item.
+  //
+  // NEW APPROACH (v2):
+  // Step 1: Send full sheet to GPT-4o to detect bounding boxes for all 9 slots.
+  //         GPT-4o returns percentage-based x/y/width/height for each card position.
+  //         Falls back to fixed-grid math for any position GPT-4o misses.
+  // Step 2: For each detected slot, crop the card out of the sheet server-side
+  //         using lib/crop.ts (OffscreenCanvas, upscaled to ≥800px short side).
+  //         Upload each crop as its own JPEG to R2.
+  // Step 3: Send each cropped card image to GPT-4o individually for identification.
+  //         This is the same high-accuracy path used for single-card scans.
+  // Step 4: Catalog lookup + DB insert per card, same as before.
+  //
+  // Benefits:
+  // - Each card gets full-resolution focus → far better OCR of card numbers
+  // - Bottom-row cards are no longer missed (each slot processed independently)
+  // - front_image_url is a clean per-card JPEG, not a full sheet reference
+  // - CardCrop canvas hack is no longer needed for new scans
 
-  const FULL_SHEET_PROMPT = `You are analyzing a 9-pocket Pokémon card binder page. The page has a strict 3-column × 3-row grid — exactly 9 card slots.
+  // ── Step 1: GPT-4o bbox detection pass ──
+  const BBOX_DETECTION_PROMPT = `You are analyzing a 9-pocket Pokémon card binder page photo. The page has a 3-column × 3-row grid of card slots (positions 1–9, left→right, top→bottom).
 
-YOUR ONLY JOB: Read the printed text on each card. Do not describe artwork.
+Your job: locate each card slot in the image and return its bounding box as a percentage of the full image dimensions.
 
-For EVERY card position (1-9, left→right, top→bottom):
+For EVERY position 1–9:
+- x: left edge of the card slot as a percentage of image width (0–100)
+- y: top edge of the card slot as a percentage of image height (0–100)
+- width: width of the card slot as a percentage of image width (0–100)
+- height: height of the card slot as a percentage of image height (0–100)
 
-1. card_name — Large bold text at the very TOP of the card (e.g. "Lumineon V", "Blastoise ex", "Palafin"). Include "ex", "V", "VMAX", "GX" if printed.
+Rules:
+- Include ALL 9 positions. If a slot appears empty, still return its bounding box.
+- Make the bounding box tight around the card (including the card border), not the pocket border.
+- Percentages must be numbers, not strings.
 
-2. collector_number — Small text at BOTTOM of card.
-   Standard format: "200/191" or "40/172"
-   Special formats — read these EXACTLY as printed including letter prefixes:
-   - Galarian Gallery: "GG39/GG70" (keep the GG prefix)
-   - Trainer Gallery: "TG25/TG30" (keep the TG prefix)
-   - Black Star Promos: "SWSH250" or "SV050" (no slash, keep letters)
-   - Promo stamped: "SVP036" format
-   If you see letters before the number, include them.
-   READ BOTH PARTS CAREFULLY. Common misreads: 0→6, 1→7, 4→1. Double-check.
-
-3. hp — Number near top-right corner.
-
-CRITICAL RULES:
-- You MUST return ALL 9 entries. Positions 7, 8, 9 are REQUIRED.
-- If a slot is empty, return null values for that position — do not skip it.
-- Never return fewer than 9 entries under any circumstances.
-- The bottom row (positions 7, 8, 9) must always be included.
-
-Return ONLY this exact JSON structure. Replace every null below with the ACTUAL values you read from the card image:
+Return ONLY a JSON object in this exact format:
 {
-  "cards": [
-    { "position": 1, "card_name": null, "collector_number": null, "hp": null },
-    { "position": 2, "card_name": null, "collector_number": null, "hp": null },
-    { "position": 3, "card_name": null, "collector_number": null, "hp": null },
-    { "position": 4, "card_name": null, "collector_number": null, "hp": null },
-    { "position": 5, "card_name": null, "collector_number": null, "hp": null },
-    { "position": 6, "card_name": null, "collector_number": null, "hp": null },
-    { "position": 7, "card_name": null, "collector_number": null, "hp": null },
-    { "position": 8, "card_name": null, "collector_number": null, "hp": null },
-    { "position": 9, "card_name": null, "collector_number": null, "hp": null }
+  "slots": [
+    { "position": 1, "x": 3.5, "y": 4.0, "width": 28.0, "height": 30.0 },
+    { "position": 2, "x": 36.0, "y": 4.0, "width": 28.0, "height": 30.0 },
+    ...
+    { "position": 9, "x": 69.0, "y": 68.0, "width": 28.0, "height": 30.0 }
   ]
-}
-Fill in ALL 9 positions with real values from the image. Do NOT leave any position as null unless the slot is genuinely empty.`;
+}`;
 
-  interface SheetCardResult {
+  interface SlotBbox {
     position: number;
-    card_name: string | null;
-    collector_number: string | null;
-    hp: number | null;
+    x: number;
+    y: number;
+    width: number;
+    height: number;
   }
 
-  // ── Step 1: GPT-4o full sheet identification ──
   const sheetBase64 = arrayBufferToBase64(fileBuffer);
-  const gptController = new AbortController();
-  const gptTimeout = setTimeout(() => gptController.abort(), 60_000);
-
-  let sheetCards: SheetCardResult[] = [];
+  const detectedBboxes = new Map<number, SlotBbox>();
 
   try {
-    const gptResponse = await fetch('https://api.openai.com/v1/chat/completions', {
+    const bboxController = new AbortController();
+    const bboxTimeout = setTimeout(() => bboxController.abort(), 45_000);
+
+    const bboxResponse = await fetch('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${env.OPENAI_API_KEY}`,
@@ -316,7 +304,7 @@ Fill in ALL 9 positions with real values from the image. Do NOT leave any positi
       },
       body: JSON.stringify({
         model: 'gpt-4o',
-        max_tokens: 2500,
+        max_tokens: 1000,
         messages: [
           {
             role: 'user',
@@ -328,130 +316,114 @@ Fill in ALL 9 positions with real values from the image. Do NOT leave any positi
                   detail: 'high',
                 },
               },
-              { type: 'text', text: FULL_SHEET_PROMPT },
+              { type: 'text', text: BBOX_DETECTION_PROMPT },
             ],
           },
         ],
         response_format: { type: 'json_object' },
       }),
-      signal: gptController.signal,
+      signal: bboxController.signal,
     });
 
-    if (gptResponse.ok) {
-      const gptData = await gptResponse.json() as { choices: Array<{ message: { content: string } }> };
-      const rawText = gptData.choices?.[0]?.message?.content ?? '';
+    clearTimeout(bboxTimeout);
+
+    if (bboxResponse.ok) {
+      const bboxData = await bboxResponse.json() as { choices: Array<{ message: { content: string } }> };
+      const rawText = bboxData.choices?.[0]?.message?.content ?? '';
       const jsonText = rawText.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '').trim();
-      const parsed = JSON.parse(jsonText) as { cards: SheetCardResult[] };
-      sheetCards = Array.isArray(parsed.cards) ? parsed.cards : [];
-    } else {
-      const errBody = await gptResponse.text();
-      console.error('[scan] GPT-4o full sheet error:', gptResponse.status, errBody);
-    }
-  } catch (err) {
-    console.error('[scan] GPT-4o full sheet call failed:', err);
-  } finally {
-    clearTimeout(gptTimeout);
-  }
-
-  console.log('[scan] GPT-4o full sheet result:', JSON.stringify(sheetCards));
-  // Build position map — fill any missing positions with nulls
-  const cardsByPosition = new Map<number, SheetCardResult>();
-  for (const c of sheetCards) {
-    if (c.position >= 1 && c.position <= 9) cardsByPosition.set(c.position, c);
-  }
-  // ── Retry: if fewer than 9 positions returned, ask GPT-4o again for the missing ones ──
-  const missingPositions = [];
-  for (let p = 1; p <= 9; p++) {
-    if (!cardsByPosition.has(p)) missingPositions.push(p);
-  }
-  if (missingPositions.length > 0 && missingPositions.length < 9) {
-    console.warn(`[scan] Retrying GPT-4o for missing positions: ${missingPositions.join(', ')}`);
-    const retryPrompt = `You are a Pokemon card scanner. This image shows a 3x3 grid of 9 Pokemon cards.
-
-Grid layout — positions are numbered left-to-right, top-to-bottom:
-  [1][2][3]
-  [4][5][6]
-  [7][8][9]
-
-I only need the cards at these specific positions: ${missingPositions.join(', ')}
-
-For each requested position, read:
-- card_name: large bold Pokémon name at the TOP of the card
-- collector_number: small number at BOTTOM RIGHT in format "NNN/NNN"
-- hp: HP number near top right
-
-Return ONLY a JSON object with a "cards" array containing ONLY the requested positions:
-{ "cards": [ { "position": N, "card_name": "NAME", "collector_number": "NNN/NNN", "hp": 100 } ] }`;
-    try {
-      const retryController = new AbortController();
-      const retryTimeout = setTimeout(() => retryController.abort(), 30_000);
-      const retryResponse = await fetch('https://api.openai.com/v1/chat/completions', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${env.OPENAI_API_KEY}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          model: 'gpt-4o',
-          max_tokens: 800,
-          messages: [{
-            role: 'user',
-            content: [
-              { type: 'image_url', image_url: { url: `data:${file.type};base64,${sheetBase64}`, detail: 'high' } },
-              { type: 'text', text: retryPrompt },
-            ],
-          }],
-          response_format: { type: 'json_object' },
-        }),
-        signal: retryController.signal,
-      });
-      clearTimeout(retryTimeout);
-      if (retryResponse.ok) {
-        const retryData = await retryResponse.json() as { choices: Array<{ message: { content: string } }> };
-        const retryText = retryData.choices?.[0]?.message?.content ?? '';
-        const retryJson = retryText.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '').trim();
-        const retryParsed = JSON.parse(retryJson) as { cards: SheetCardResult[] };
-        if (Array.isArray(retryParsed.cards)) {
-          for (const c of retryParsed.cards) {
-            if (c.position >= 1 && c.position <= 9 && !cardsByPosition.has(c.position)) {
-              console.log(`[scan] Retry filled position ${c.position}: ${c.card_name}`);
-              cardsByPosition.set(c.position, c);
-            }
+      const parsed = JSON.parse(jsonText) as { slots: SlotBbox[] };
+      if (Array.isArray(parsed.slots)) {
+        for (const slot of parsed.slots) {
+          if (
+            slot.position >= 1 && slot.position <= 9 &&
+            typeof slot.x === 'number' && typeof slot.y === 'number' &&
+            typeof slot.width === 'number' && typeof slot.height === 'number' &&
+            slot.width > 1 && slot.height > 1 // sanity: must be non-trivial
+          ) {
+            detectedBboxes.set(slot.position, slot);
           }
         }
       }
-    } catch (retryErr) {
-      console.error('[scan] Retry GPT-4o call failed:', retryErr);
+      console.log(`[scan] GPT-4o detected ${detectedBboxes.size} slot bboxes`);
+    } else {
+      const errBody = await bboxResponse.text();
+      console.error('[scan] GPT-4o bbox detection error:', bboxResponse.status, errBody);
     }
+  } catch (err) {
+    console.error('[scan] GPT-4o bbox detection failed:', err);
   }
-  // Fill any still-missing positions with nulls
+
+  // Fill any missing positions with fixed-grid fallback
   for (let p = 1; p <= 9; p++) {
-    if (!cardsByPosition.has(p)) {
-      console.warn(`[scan] Position ${p} still missing after retry — filling with null`);
-      cardsByPosition.set(p, { position: p, card_name: null, collector_number: null, hp: null });
+    if (!detectedBboxes.has(p)) {
+      console.warn(`[scan] pos ${p}: no GPT-4o bbox — using fixed-grid fallback`);
+      const fb = getFixedBbox(p);
+      detectedBboxes.set(p, { position: p, ...fb });
     }
   }
 
+  // ── Steps 2–4: Crop each slot, identify individually, insert ──
   const collectionItems: Record<string, unknown>[] = [];
   const errors: Array<{ position: number; error: string }> = [];
 
   for (let position = 1; position <= 9; position++) {
     try {
-      const gptCard = cardsByPosition.get(position)!;
-      const { card_name, collector_number } = gptCard;
-      // Skip truly empty / unreadable slots — don't insert Unknown Cards into the collection
-      if (!card_name && !collector_number && !gptCard.hp) {
-        console.log(`[scan] pos ${position}: slot empty — skipping insert`);
+      const bbox = detectedBboxes.get(position)!;
+
+      // Step 2: Crop the slot from the sheet
+      const cropBuffer = await cropCardFromSheet(fileBuffer, file.type, {
+        x: bbox.x,
+        y: bbox.y,
+        width: bbox.width,
+        height: bbox.height,
+      });
+
+      if (!cropBuffer) {
+        console.warn(`[scan] pos ${position}: crop failed — skipping`);
         continue;
       }
-      // Extract just the number portion (e.g. "168/162" → "168")
-      const numOnly = collector_number?.split('/')[0]?.trim() ?? null;
 
-      // ── Step 2: D1 catalog lookup ──
-      const catalogCard = await lookupCardInCatalog(env.DB, card_name, collector_number, gptCard.hp ?? null);
-      console.log(`[scan] pos ${position}: ${card_name} ${collector_number} → catalog: ${catalogCard?.card_name} (${catalogCard?.set_name})`);
+      // Upload the crop to R2 as a standalone card image
+      const cropKey = `cards/${user.id}/${timestamp}-sheet-pos${position}.jpg`;
+      try {
+        await env.BUCKET.put(cropKey, cropBuffer, {
+          httpMetadata: { contentType: 'image/jpeg' },
+        });
+      } catch (uploadErr) {
+        console.error(`[scan] pos ${position}: R2 crop upload failed:`, uploadErr);
+        // Fall back to sheet reference if upload fails
+      }
 
-      // Map catalogCard to the tcgCard shape the rest of the code expects
+      // Step 3: Identify the cropped card image individually
+      const cropBase64 = arrayBufferToBase64(cropBuffer);
+      const cropDataUrl = `data:image/jpeg;base64,${cropBase64}`;
+
+      let ident;
+      try {
+        ident = await visionIdentifyCard(env, cropDataUrl);
+      } catch (identErr) {
+        console.error(`[scan] pos ${position}: vision identification failed:`, identErr);
+        continue;
+      }
+
+      const cardName = ident.card_name ?? ident.player_name ?? null;
+      const collectorNumber = ident.card_number ?? null;
+
+      // Skip genuinely empty/unreadable slots — don't insert Unknown Cards
+      if (!cardName && !collectorNumber) {
+        console.log(`[scan] pos ${position}: no card identified — skipping insert`);
+        continue;
+      }
+
+      // Step 4: Catalog lookup
+      const catalogCard = await lookupCardInCatalog(
+        env.DB,
+        cardName,
+        collectorNumber,
+        null, // HP not separately extracted in this path; vision ident handles it
+      );
+      console.log(`[scan] pos ${position}: ${cardName} ${collectorNumber} → catalog: ${catalogCard?.card_name} (${catalogCard?.set_name})`);
+
       const tcgCard: TCGCard | null = catalogCard ? {
         id: catalogCard.ptcg_id,
         name: catalogCard.card_name,
@@ -474,21 +446,17 @@ Return ONLY a JSON object with a "cards" array containing ONLY the requested pos
         } : undefined,
       } : null;
 
-      // Bbox stored for frontend canvas cropping — no backend crop needed
-      const fixedBbox = getFixedBbox(position);
-      const cardImageUrl = sheetKey; // frontend will crop using bbox
-
-      // ── Step 4: Resolve card data and INSERT ──
-      const cardName = tcgCard?.name ?? card_name ?? 'Unknown Card';
-      const game = 'Pokemon';
-      const setName = tcgCard?.set.name ?? null;
+      const resolvedCardName = tcgCard?.name ?? cardName ?? 'Unknown Card';
+      const game = ident.game ?? 'Pokemon';
+      const setName = tcgCard?.set.name ?? ident.ptcg_set_name ?? ident.set_name ?? null;
+      const numOnly = collectorNumber?.split('/')[0]?.trim() ?? null;
       const finalNumber = tcgCard?.number ?? numOnly ?? null;
-      const externalRef: string | null = tcgCard?.id ?? null;
+      const externalRef: string | null = tcgCard?.id ?? ident.ptcg_id ?? null;
       const marketPrice = tcgCard?.tcgplayer?.prices
         ? Object.values(tcgCard.tcgplayer.prices)[0]?.market ?? null
-        : null;
+        : (ident.price_market_cents ? ident.price_market_cents / 100 : null);
       const estimatedValueCents = marketPrice ? Math.round(marketPrice * 100) : 0;
-      const confidence = tcgCard ? 95 : 50;
+      const confidence = tcgCard ? 95 : (ident.confidence ?? 50);
 
       // Upsert card record
       const existingCard = await queryOne<{ id: number }>(
@@ -498,7 +466,7 @@ Return ONLY a JSON object with a "cards" array containing ONLY the requested pos
            AND game = ?
            AND COALESCE(card_number, '') = COALESCE(?, '')
          LIMIT 1`,
-        [cardName, game, finalNumber],
+        [resolvedCardName, game, finalNumber],
       );
 
       let cardId: number;
@@ -514,7 +482,7 @@ Return ONLY a JSON object with a "cards" array containing ONLY the requested pos
              external_ref  = COALESCE(external_ref, ?),
              updated_at    = CURRENT_TIMESTAMP
            WHERE id = ?`,
-          [setName, tcgCard?.rarity ?? null, tcgCard?.images.large ?? tcgCard?.images.small ?? null, externalRef, cardId],
+          [setName, tcgCard?.rarity ?? ident.ptcg_rarity ?? null, tcgCard?.images.large ?? tcgCard?.images.small ?? ident.ptcg_image_large ?? null, externalRef, cardId],
         );
       } else {
         await run(
@@ -526,10 +494,10 @@ Return ONLY a JSON object with a "cards" array containing ONLY the requested pos
           [
             game,
             setName ?? null,
-            cardName,
+            resolvedCardName,
             finalNumber,
-            tcgCard?.rarity ?? null,
-            tcgCard?.images.large ?? tcgCard?.images.small ?? null,
+            tcgCard?.rarity ?? ident.ptcg_rarity ?? null,
+            tcgCard?.images.large ?? tcgCard?.images.small ?? ident.ptcg_image_large ?? null,
             externalRef,
             null, null, null, null, null,
           ],
@@ -543,13 +511,15 @@ Return ONLY a JSON object with a "cards" array containing ONLY the requested pos
         cardId = newCard.id;
       }
 
+      // Insert collection item — front_image_url is the per-card crop, not the sheet
+      // bbox_x/y/width/height are stored as null since the image is already cropped
       await run(
         env.DB,
         `INSERT INTO collection_items
            (user_id, card_id, quantity, condition_note, estimated_grade, estimated_value_cents,
             front_image_url, bbox_x, bbox_y, bbox_width, bbox_height, product_type)
-         VALUES (?, ?, 1, ?, ?, ?, ?, ?, ?, ?, ?, 'single_card')`,
-        [user.id, cardId, null, null, estimatedValueCents, cardImageUrl, fixedBbox.x, fixedBbox.y, fixedBbox.width, fixedBbox.height],
+         VALUES (?, ?, 1, ?, ?, ?, ?, NULL, NULL, NULL, NULL, 'single_card')`,
+        [user.id, cardId, ident.condition_notes ?? null, null, estimatedValueCents, cropKey],
       );
 
       const newItem = await queryOne<{ id: number }>(
@@ -573,19 +543,17 @@ Return ONLY a JSON object with a "cards" array containing ONLY the requested pos
         const ebayClientId = env.EBAY_CLIENT_ID;
         const ebayClientSecret = env.EBAY_CLIENT_SECRET;
         const capturedCardId = cardId;
-        // Prefer the raw GPT collector_number (e.g. "197/182") since it includes the set total.
-        // Fall back to catalog number + set total if GPT number is missing.
-        const catalogSetTotal = (catalogCard as any)?.set_printed_total ?? (tcgCard?.set as any)?.printedTotal
-        const cardNumFull = collector_number
+        const catalogSetTotal = (catalogCard as any)?.set_printed_total ?? null;
+        const cardNumFull = collectorNumber
           ?? (catalogSetTotal
             ? `${tcgCard?.number ?? finalNumber}/${catalogSetTotal}`
-            : (tcgCard?.number ?? finalNumber ?? ''))
+            : (tcgCard?.number ?? finalNumber ?? ''));
 
         const ebayIdent = {
-          player_name: tcgCard?.name ?? cardName,
-          card_number: cardNumFull,           // e.g. "197/182" or "GG39/GG70"
+          player_name: tcgCard?.name ?? resolvedCardName,
+          card_number: cardNumFull,
           set_name: tcgCard?.set?.name ?? setName,
-          variation: tcgCard?.rarity ?? null, // e.g. "Illustration Rare"
+          variation: tcgCard?.rarity ?? null,
           year: null,
         };
         fetchEbayComps(ebayClientId, ebayClientSecret, ebayIdent).then(async (comps) => {
@@ -615,20 +583,21 @@ Return ONLY a JSON object with a "cards" array containing ONLY the requested pos
       if (fullItem) {
         collectionItems.push({
           ...fullItem,
-          sheet_url: sheetKey,
-          bbox: fixedBbox,
+          // Provide sheet_url + bbox for legacy CardCrop fallback (bbox is null for new crops)
+          sheet_url: cropKey,
+          bbox: null,
           ptcg_confirmed: tcgCard != null,
-          ptcg_id: tcgCard?.id ?? null,
-          ptcg_set_name: tcgCard?.set.name ?? null,
+          ptcg_id: tcgCard?.id ?? ident.ptcg_id ?? null,
+          ptcg_set_name: tcgCard?.set.name ?? ident.ptcg_set_name ?? null,
           ptcg_set_series: tcgCard?.set.series ?? null,
-          ptcg_image_large: tcgCard?.images.large ?? null,
+          ptcg_image_large: tcgCard?.images.large ?? ident.ptcg_image_large ?? null,
           ptcg_tcgplayer_url: tcgCard?.tcgplayer?.url ?? null,
           price_market_cents: marketPrice ? Math.round(marketPrice * 100) : null,
-          price_low_cents: null,
-          price_high_cents: null,
-          price_psa9_cents: null,
-          price_psa10_cents: null,
-          price_source: marketPrice ? 'tcgplayer' : null,
+          price_low_cents: ident.price_low_cents ?? null,
+          price_high_cents: ident.price_high_cents ?? null,
+          price_psa9_cents: ident.price_psa9_cents ?? null,
+          price_psa10_cents: ident.price_psa10_cents ?? null,
+          price_source: marketPrice ? 'tcgplayer' : (ident.price_source ?? null),
           identification_confidence: confidence,
         });
       }

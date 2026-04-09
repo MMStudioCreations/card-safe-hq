@@ -219,10 +219,12 @@ export default function CardDetailPage() {
     [item, showFront],
   )
 
+  // Legacy sheet items have bbox stored; new pre-cropped items do not
   const isSheet = image?.includes('sheets/')
   const detailBbox = (item?.bbox_x != null && item?.bbox_y != null)
     ? { x: item.bbox_x, y: item.bbox_y, width: item.bbox_width ?? 28, height: item.bbox_height ?? 28 }
     : null
+  const needsCrop = isSheet && detailBbox != null
 
   const sheetImageUrl = image
     ? `${import.meta.env.VITE_API_URL}/api/images/${encodeURIComponent(image)}`
@@ -335,10 +337,10 @@ export default function CardDetailPage() {
           </button>
         </div>
         <div className="rounded-2xl overflow-hidden shadow-xl mx-auto" style={{ maxWidth: '320px' }}>
-          {isSheet && detailBbox && sheetImageUrl ? (
+          {needsCrop && sheetImageUrl ? (
             <CardCrop
               sheetUrl={sheetImageUrl}
-              bbox={detailBbox}
+              bbox={detailBbox!}
               alt={item.card_name || item.player_name || 'Card'}
               className="w-full h-auto object-contain"
             />

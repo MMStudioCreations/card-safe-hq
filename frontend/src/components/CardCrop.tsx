@@ -31,8 +31,8 @@ export default function CardCrop({ sheetUrl, bbox, alt, className }: Props) {
     img.crossOrigin = 'anonymous'
 
     img.onload = () => {
-      // Add 3% padding on each side so card edges are never clipped
-      const PAD = 3
+      // Add 2% padding on each side so card edges are never clipped
+      const PAD = 2
       const rawX = Math.max(0, bbox.x - PAD)
       const rawY = Math.max(0, bbox.y - PAD)
       const rawW = Math.min(100 - rawX, bbox.width + PAD * 2)
@@ -59,7 +59,12 @@ export default function CardCrop({ sheetUrl, bbox, alt, className }: Props) {
     <canvas
       ref={canvasRef}
       className={className}
-      style={{ display: loaded ? 'block' : 'none' }}
+      style={{
+        display: loaded ? 'block' : 'none',
+        width: '100%',
+        height: '100%',
+        objectFit: 'contain',
+      }}
       aria-label={alt}
     />
   )
