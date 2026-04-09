@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, type ReactNode } from 'react'
 import { NavLink, useNavigate, Link } from 'react-router-dom'
-import { Camera, FolderKanban, Images, Layers, LogOut, Bell, ArrowLeftRight, Package } from 'lucide-react'
+import { Camera, FolderKanban, Images, Layers, LogOut, Bell, ArrowLeftRight, Search } from 'lucide-react'
 import { useQueryClient, useQuery, useMutation } from '@tanstack/react-query'
 import { api } from '../lib/api'
 import { useAuth, useCollection } from '../lib/hooks'
@@ -14,7 +14,7 @@ const links = [
   { to: '/upload', label: 'Upload', icon: Images },
   { to: '/deck', label: 'Deck Builder', icon: Layers },
   { to: '/trades', label: 'Trades', icon: ArrowLeftRight },
-  { to: '/sealed', label: 'Sealed', icon: Package },
+  { to: '/sealed', label: 'Search', icon: Search },
 ]
 
 export default function Layout({ children }: Props) {
