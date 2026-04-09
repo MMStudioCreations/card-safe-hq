@@ -197,6 +197,20 @@ export type Notification = {
   created_at: string
 }
 
+export type ScanApiResult = {
+  mode: 'single' | 'sheet'
+  sheet_url: string | null
+  cards_detected: number
+  card: (CollectionItem & { identification_confidence?: number | null }) | null
+  cards: Array<CollectionItem & {
+    sheet_url?: string
+    bbox?: { x: number; y: number; width: number; height: number } | null
+    identification_confidence?: number | null
+  }>
+  errors: Array<{ position?: number; error: string }>
+  error: string | null
+}
+
 // ── Token storage (localStorage) ─────────────────────────────────────────────
 // Using localStorage instead of relying on cookies fixes iOS PWA sign-in.
 // Apple's ITP blocks third-party cookies in standalone mode, but localStorage
@@ -229,7 +243,10 @@ http.interceptors.request.use((config) => {
 });
 
 (http.interceptors.response.use as any)(
-  (response: { data: ApiEnvelope<unknown> }) => {
+  (response: { data: ApiEnvelope<unknown>; status: number; config?: { url?: string } }) => {
+    if (response.config?.url?.includes('/api/scan/sheet')) {
+      console.log('[scan-ui] raw response status', response.status)
+    }
     const payload = response.data
     if (!payload || typeof payload !== 'object') {
       throw new Error('Invalid API response')
@@ -321,20 +338,7 @@ export const api = {
     const formData = new FormData();
     formData.append('file', file);
     formData.append('mode', mode);
-    return http.post<never, {
-      sheet_url?: string;
-      cards_detected?: number;
-      collection_items?: Array<CollectionItem & {
-        sheet_url?: string;
-        bbox?: { x: number; y: number; width: number; height: number };
-      }>;
-      card?: CollectionItem & {
-        front_image_url?: string;
-        identification_confidence?: number;
-      };
-    }>('/api/scan/sheet', formData, {
-      headers: { 'Content-Type': 'multipart/form-data' },
-    });
+    return http.post<never, ScanApiResult>('/api/scan/sheet', formData);
   },
 
   generateDeck: (payload: { game: string; format: string; strategy?: string; must_include?: number[] }) =>
