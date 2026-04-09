@@ -34,7 +34,7 @@ export default function SearchPage() {
   const queryClient = useQueryClient()
   const [search, setSearch] = useState('')
   const [typeFilter, setTypeFilter] = useState('all')
-  const [setFilter, setFilter] = useState('')
+  const [selectedSet, setSelectedSet] = useState('')
   const [refreshingId, setRefreshingId] = useState<number | null>(null)
 
   const { data, isLoading } = useQuery({
@@ -74,11 +74,10 @@ export default function SearchPage() {
     if (typeFilter !== 'all') {
       result = result.filter((p) => p.product_type === typeFilter)
     }
-    if (setFilter) {
-      result = result.filter((p) => p.set_name === setFilter)
+    if (selectedSet) {
+      result = result.filter((p) => p.set_name === selectedSet)
     }
-    return result
-  }, [products, search, typeFilter, setFilter])
+  }, [products, search, typeFilter, selectedSet])
 
   if (isLoading) {
     return (
@@ -113,8 +112,8 @@ export default function SearchPage() {
           </select>
           <select
             className="input flex-1 min-w-[160px]"
-            value={setFilter}
-            onChange={(e) => setFilter(e.target.value)}
+            value={selectedSet}
+            onChange={(e) => setSelectedSet(e.target.value)}
           >
             <option value="">All Sets</option>
             {setNames.map((s) => (
@@ -128,7 +127,7 @@ export default function SearchPage() {
             <button
               className="ml-2 text-[var(--primary)] hover:underline"
               type="button"
-              onClick={() => { setSearch(''); setTypeFilter('all'); setFilter('') }}
+              onClick={() => { setSearch(''); setTypeFilter('all'); setSelectedSet('') }}
             >
               Clear filters
             </button>
