@@ -257,7 +257,18 @@ YOUR ONLY JOB: Read the printed text on each card. Do not describe artwork.
 
 For EVERY card position (1-9, left→right, top→bottom):
 
-1. card_name — Large bold text at the very TOP of the card (e.g. "Lumineon V", "Blastoise ex", "Palafin"). Include "ex", "V", "VMAX", "GX" if printed.
+1. card_name — The Pokémon's name printed in LARGE BOLD TEXT at the very TOP of the card, above the artwork.
+
+   CRITICAL RULES for reading card names:
+   - Read ONLY the name at the top — ignore all other text on the card
+   - The name is ALWAYS at the top-left or top-center
+   - Include suffixes if printed: 'ex', 'V', 'VMAX', 'VSTAR', 'GX'
+   - Do NOT read attack names (e.g. 'Headbutt', 'Big Bite', 'Waterfall')
+   - Do NOT read ability names (e.g. 'Counterattack', 'Gentle Fin')
+   - Do NOT read the flavor text or card description
+   - The name is usually 1-2 words maximum
+   - Examples of correct names: 'Wugtrio', 'Bruxish', 'Alomomola', 'Blastoise ex', 'Lumineon V', 'Palafin'
+   - If uncertain, look ONLY at the topmost text on the card
 
 2. collector_number — Small text at BOTTOM of card.
    Standard format: "200/191" or "40/172"
@@ -353,31 +364,50 @@ Fill in ALL 9 positions with real values from the image. Do NOT leave any positi
     clearTimeout(gptTimeout);
   }
 
-  console.log('[scan] GPT-4o full sheet result:', JSON.stringify(sheetCards));
+  // ── Fix 4: Detailed debug logging of initial GPT-4o response ──
+  console.log('[scan] === GPT-4o Initial Response ===');
+  for (const card of sheetCards) {
+    console.log(`[scan] pos${card.position}: name="${card.card_name}" number="${card.collector_number}" hp=${card.hp}`);
+  }
+  console.log(`[scan] Missing positions: ${
+    [1,2,3,4,5,6,7,8,9]
+      .filter(p => !sheetCards.find(c => c.position === p))
+      .join(', ') || 'none'
+  }`);
   // Build position map — fill any missing positions with nulls
   const cardsByPosition = new Map<number, SheetCardResult>();
   for (const c of sheetCards) {
     if (c.position >= 1 && c.position <= 9) cardsByPosition.set(c.position, c);
   }
-  // ── Retry: if fewer than 9 positions returned, ask GPT-4o again for the missing ones ──
+  // ── Retry: if any positions are missing or have no card_name, ask GPT-4o again ──
   const missingPositions = [];
   for (let p = 1; p <= 9; p++) {
-    if (!cardsByPosition.has(p)) missingPositions.push(p);
+    if (!cardsByPosition.has(p) || !cardsByPosition.get(p)?.card_name) missingPositions.push(p);
   }
   if (missingPositions.length > 0 && missingPositions.length < 9) {
     console.warn(`[scan] Retrying GPT-4o for missing positions: ${missingPositions.join(', ')}`);
-    const retryPrompt = `You are a Pokemon card scanner. This image shows a 3x3 grid of 9 Pokemon cards.
+    const retryPrompt = `You are looking at a 9-pocket Pokémon card binder page (3×3 grid).
 
 Grid layout — positions are numbered left-to-right, top-to-bottom:
   [1][2][3]
   [4][5][6]
   [7][8][9]
 
-I only need the cards at these specific positions: ${missingPositions.join(', ')}
+I need you to read ONLY the cards at these specific positions: ${missingPositions.join(', ')}
 
-For each requested position, read:
-- card_name: large bold Pokémon name at the TOP of the card
-- collector_number: small number at BOTTOM RIGHT in format "NNN/NNN"
+For each requested position, read ONLY the card name printed at the TOP of the card.
+The card name is the largest bold text at the very top — NOT attack names, ability names, or flavor text.
+
+CRITICAL RULES for reading the card name:
+- Read ONLY the name at the top-left or top-center of the card
+- Do NOT read attack names (e.g. 'Headbutt', 'Big Bite', 'Waterfall', 'Undersea Tunnel')
+- Do NOT read ability names (e.g. 'Counterattack', 'Gentle Fin')
+- Do NOT read flavor text or card descriptions
+- The name is usually 1-2 words maximum
+- Include suffixes if printed: 'ex', 'V', 'VMAX', 'VSTAR', 'GX'
+
+Also read:
+- collector_number: small number at BOTTOM of card in format "NNN/NNN"
 - hp: HP number near top right
 
 Return ONLY a JSON object with a "cards" array containing ONLY the requested positions:
@@ -450,6 +480,17 @@ Return ONLY a JSON object with a "cards" array containing ONLY the requested pos
       // ── Step 2: D1 catalog lookup ──
       const catalogCard = await lookupCardInCatalog(env.DB, card_name, collector_number, gptCard.hp ?? null);
       console.log(`[scan] pos ${position}: ${card_name} ${collector_number} → catalog: ${catalogCard?.card_name} (${catalogCard?.set_name})`);
+
+      // If catalog returned null, check if the name itself exists at all.
+      // A name that doesn't exist in the catalog at all means GPT likely misread it.
+      if (!catalogCard && card_name) {
+        const nameExists = await env.DB.prepare(
+          `SELECT card_name FROM pokemon_catalog WHERE card_name = ? LIMIT 1`
+        ).bind(card_name).first();
+        if (!nameExists) {
+          console.warn(`[scan] pos ${position}: "${card_name}" not found in catalog — likely misread. Storing as-is; user can correct via Edit.`);
+        }
+      }
 
       // Map catalogCard to the tcgCard shape the rest of the code expects
       const tcgCard: TCGCard | null = catalogCard ? {
