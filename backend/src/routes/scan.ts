@@ -47,8 +47,8 @@ interface TCGCard {
 // Used as fallback when GPT-4o bbox detection does not return a position.
 // Approximate card cell boundaries — accounts for binder page margins and pocket borders.
 function getFixedBbox(position: number) {
-  const col = (position - 1) % 3; // 0, 1, 2
-  const row = Math.floor((position - 1) / 3); // 0, 1, 2
+  const col = (position - 1) % 3;
+  const row = Math.floor((position - 1) / 3);
   const colStarts = [0.03, 0.36, 0.69];
   const rowStarts = [0.04, 0.36, 0.68];
   const cellWidth = 0.28;
@@ -639,7 +639,6 @@ Return ONLY a JSON object in this exact format:
       }
 
       // Step 4: Identify the cropped card image individually
-      // The vision call gets the full-resolution crop so it can read the collector number accurately
       const cropBase64 = arrayBufferToBase64(cropBuffer);
       const cropDataUrl = `data:image/jpeg;base64,${cropBase64}`;
 
@@ -651,14 +650,11 @@ Return ONLY a JSON object in this exact format:
         continue;
       }
 
-      // Prefer the full-sheet name hint (more reliable for names) over the crop identification
-      // but prefer the crop's collector number (higher resolution, more accurate)
       const rawName = sheetHint?.card_name ?? ident.card_name ?? ident.player_name ?? null;
       // Sanity-check: reject names that are clearly non-name words
       const cardName = rawName && NON_NAME_WORDS.some((w) => rawName.toLowerCase() === w) ? null : rawName;
       const collectorNumber = ident.card_number ?? sheetHint?.collector_number ?? null;
 
-      // Skip genuinely empty/unreadable slots — don't insert Unknown Cards
       if (!cardName && !collectorNumber) {
         console.log(`[scan] pos ${position}: no card identified — skipping insert`);
         continue;
@@ -666,16 +662,9 @@ Return ONLY a JSON object in this exact format:
 
       console.log(`[scan] pos ${position}: resolved name="${cardName}" number="${collectorNumber}"`);
 
-      // Step 5: Catalog lookup
-      const catalogCard = await lookupCardInCatalog(
-        env.DB,
-        cardName,
-        collectorNumber,
-        null,
-      );
+      const catalogCard = await lookupCardInCatalog(env.DB, cardName, collectorNumber, null);
       console.log(`[scan] pos ${position}: ${cardName} ${collectorNumber} → catalog: ${catalogCard?.card_name} (${catalogCard?.set_name})`);
 
-      // If catalog returned null, log a warning — user can correct via Edit
       if (!catalogCard && cardName) {
         console.warn(`[scan] pos ${position}: "${cardName}" not found in catalog — storing as-is; user can correct via Edit.`);
       }
@@ -688,31 +677,41 @@ Return ONLY a JSON object in this exact format:
         ).bind(cardName).first();
 
         if (!nameExists) {
-          console.warn(`[scan] pos ${position}: "${cardName}" not found in catalog — likely misread. Storing as-is; user can correct via Edit.`);
+          console.warn(
+            `[scan] pos ${position}: "${cardName}" not found in catalog — likely misread. Storing as-is; user can correct via Edit.`,
+          );
         }
       }
 
-      const tcgCard: TCGCard | null = catalogCard ? {
-        id: catalogCard.ptcg_id,
-        name: catalogCard.card_name,
-        number: catalogCard.card_number,
-        set: {
-          id: catalogCard.set_id,
-          name: catalogCard.set_name,
-          series: catalogCard.series ?? '',
-        },
-        rarity: catalogCard.rarity ?? '',
-        images: {
-          small: catalogCard.image_small ?? '',
-          large: catalogCard.image_large ?? '',
-        },
-        tcgplayer: catalogCard.tcgplayer_url ? {
-          url: catalogCard.tcgplayer_url,
-          prices: catalogCard.tcgplayer_market_cents ? {
-            holofoil: { market: catalogCard.tcgplayer_market_cents / 100 },
-          } : undefined,
-        },
-      } : null;
+      const tcgCard: TCGCard | null = catalogCard
+        ? {
+            id: catalogCard.ptcg_id,
+            name: catalogCard.card_name,
+            number: catalogCard.card_number,
+            set: {
+              id: catalogCard.set_id,
+              name: catalogCard.set_name,
+              series: catalogCard.series ?? '',
+            },
+            rarity: catalogCard.rarity ?? '',
+            images: {
+              small: catalogCard.image_small ?? '',
+              large: catalogCard.image_large ?? '',
+            },
+            tcgplayer: catalogCard.tcgplayer_url
+              ? {
+                  url: catalogCard.tcgplayer_url,
+                  prices: catalogCard.tcgplayer_market_cents
+                    ? {
+                        holofoil: {
+                          market: catalogCard.tcgplayer_market_cents / 100,
+                        },
+                      }
+                    : undefined,
+                }
+              : undefined,
+          }
+        : null;
 
       const resolvedCardName = tcgCard?.name ?? cardName ?? 'Unknown Card';
       const game = ident.game ?? 'Pokemon';
@@ -726,7 +725,6 @@ Return ONLY a JSON object in this exact format:
       const estimatedValueCents = marketPrice ? Math.round(marketPrice * 100) : 0;
       const confidence = tcgCard ? 95 : (ident.confidence ?? 50);
 
-      // Upsert card record
       const existingCard = await queryOne<{ id: number }>(
         env.DB,
         `SELECT id FROM cards
