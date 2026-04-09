@@ -5,6 +5,7 @@ import { ArrowLeftRight, ArrowLeft, Plus, Minus } from 'lucide-react'
 import { api } from '../lib/api'
 import { useCollection } from '../lib/hooks'
 import type { CollectionItem } from '../lib/api'
+import CardCrop from '../components/CardCrop'
 
 export default function NewTradePage() {
   const navigate = useNavigate()
@@ -133,9 +134,34 @@ export default function NewTradePage() {
           {(myCollection as CollectionItem[]).map((item) => {
             const name = item.card_name ?? item.player_name ?? 'Unknown'
             const selected = offerIds.includes(item.id)
-            const imageUrl = item.front_image_url
-              ? `${apiBase}/api/images/${encodeURIComponent(item.front_image_url)}`
+            // Use same image priority as CardTile:
+            // 1. Sheet + bbox → canvas crop  2. Direct img  3. Catalog image_url  4. Placeholder
+            const bbox = (item.bbox_x != null && item.bbox_y != null)
+              ? { x: item.bbox_x, y: item.bbox_y, width: item.bbox_width ?? 28, height: item.bbox_height ?? 28 }
               : null
+            const isSheet = item.front_image_url?.includes('sheets/')
+            const imageSection = isSheet && bbox ? (
+              <CardCrop
+                sheetUrl={`${apiBase}/api/images/${encodeURIComponent(item.front_image_url!)}`}
+                bbox={bbox}
+                alt={name}
+                className="w-full h-full object-contain"
+              />
+            ) : item.front_image_url ? (
+              <img
+                src={`${apiBase}/api/images/${encodeURIComponent(item.front_image_url)}`}
+                alt={name}
+                className="w-full h-full object-contain object-center"
+              />
+            ) : item.image_url ? (
+              <img
+                src={item.image_url}
+                alt={name}
+                className="w-full h-full object-contain object-center"
+              />
+            ) : (
+              <div className="w-full h-full bg-[linear-gradient(135deg,var(--primary),var(--secondary))]" />
+            )
             return (
               <button
                 key={item.id}
@@ -144,11 +170,7 @@ export default function NewTradePage() {
                 className={`glass text-left p-2 transition ${selected ? 'ring-2 ring-[var(--primary)]' : ''}`}
               >
                 <div className="w-full rounded overflow-hidden bg-zinc-900 mb-2" style={{ aspectRatio: '2.5/3.5' }}>
-                  {imageUrl ? (
-                    <img src={imageUrl} alt={name} className="w-full h-full object-contain object-center" />
-                  ) : (
-                    <div className="w-full h-full bg-[linear-gradient(135deg,var(--primary),var(--secondary))]" />
-                  )}
+                  {imageSection}
                 </div>
                 <p className="text-xs font-medium truncate">{name}</p>
                 {item.estimated_value_cents != null && (

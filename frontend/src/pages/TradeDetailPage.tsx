@@ -1,9 +1,11 @@
-import { useParams, useNavigate, Link } from 'react-router-dom'
+import { useState } from 'react'
+import { useNavigate, useParams } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { ArrowLeftRight, ArrowLeft, CheckCircle, XCircle, Ban, Star } from 'lucide-react'
 import { api } from '../lib/api'
 import { useAuth } from '../lib/hooks'
 import type { TradeItem, TradeStatus } from '../lib/api'
+import CardCrop from '../components/CardCrop'
 
 const STATUS_COLORS: Record<TradeStatus, string> = {
   pending:   'bg-yellow-500/20 text-yellow-300',
@@ -15,20 +17,34 @@ const STATUS_COLORS: Record<TradeStatus, string> = {
 
 function TradeItemCard({ item }: { item: TradeItem }) {
   const apiBase = import.meta.env.VITE_API_URL ?? ''
-  const imageUrl = item.front_image_url
-    ? `${apiBase}/api/images/${encodeURIComponent(item.front_image_url)}`
-    : null
-
   const name = item.card_name ?? item.player_name ?? 'Unknown Card'
+
+  const bbox = (item.bbox_x != null && item.bbox_y != null)
+    ? { x: item.bbox_x, y: item.bbox_y, width: item.bbox_width ?? 28, height: item.bbox_height ?? 28 }
+    : null
+  const isSheet = item.front_image_url?.includes('sheets/')
+
+  const imageSection = isSheet && bbox ? (
+    <CardCrop
+      sheetUrl={`${apiBase}/api/images/${encodeURIComponent(item.front_image_url!)}`}
+      bbox={bbox}
+      alt={name}
+      className="w-full h-full object-contain"
+    />
+  ) : item.front_image_url ? (
+    <img
+      src={`${apiBase}/api/images/${encodeURIComponent(item.front_image_url)}`}
+      alt={name}
+      className="w-full h-full object-contain object-center"
+    />
+  ) : (
+    <div className="w-full h-full bg-[linear-gradient(135deg,var(--primary),var(--secondary))]" />
+  )
 
   return (
     <div className="flex items-center gap-3 rounded-[var(--radius-md)] bg-cv-surface p-3">
       <div className="h-12 w-9 rounded-[var(--radius-sm)] overflow-hidden bg-zinc-900 shrink-0">
-        {imageUrl ? (
-          <img src={imageUrl} alt={name} className="w-full h-full object-contain object-center" />
-        ) : (
-          <div className="w-full h-full bg-[linear-gradient(135deg,var(--primary),var(--secondary))]" />
-        )}
+        {imageSection}
       </div>
       <div className="min-w-0 flex-1">
         <p className="text-sm font-medium truncate">{name}</p>

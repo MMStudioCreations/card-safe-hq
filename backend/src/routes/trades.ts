@@ -165,11 +165,14 @@ export async function getTrade(env: Env, _request: Request, user: User, tradeId:
     card_name: string | null; player_name: string | null;
     set_name: string | null; estimated_value_cents: number | null;
     front_image_url: string | null;
+    bbox_x: number | null; bbox_y: number | null;
+    bbox_width: number | null; bbox_height: number | null;
   }>(
     env.DB,
     `SELECT ti.id, ti.collection_item_id, ti.direction,
             c.card_name, c.player_name, c.set_name,
-            ci.estimated_value_cents, ci.front_image_url
+            ci.estimated_value_cents, ci.front_image_url,
+            ci.bbox_x, ci.bbox_y, ci.bbox_width, ci.bbox_height
      FROM trade_items ti
      JOIN collection_items ci ON ti.collection_item_id = ci.id
      LEFT JOIN cards c ON ci.card_id = c.id

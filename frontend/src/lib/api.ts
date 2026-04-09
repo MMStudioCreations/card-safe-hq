@@ -166,6 +166,10 @@ export type TradeItem = {
   set_name: string | null
   estimated_value_cents: number | null
   front_image_url: string | null
+  bbox_x?: number | null
+  bbox_y?: number | null
+  bbox_width?: number | null
+  bbox_height?: number | null
 }
 
 export type TradeDetail = TradeRow & { items: TradeItem[] }
