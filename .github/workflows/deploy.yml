@@ -65,4 +65,5 @@ jobs:
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          command: pages deploy frontend/dist --project-name=card-safe-hq --commit-dirty=true
+          command: pages deploy frontend/dist --project-name=card-safe-hq --commit-dirty=true --account-id=ba8de8decc22986f0cc7a0541902bc94
+
