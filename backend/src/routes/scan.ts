@@ -651,6 +651,7 @@ Return ONLY a JSON object in this exact format:
       }
 
       const rawName = sheetHint?.card_name ?? ident.card_name ?? ident.player_name ?? null;
+      // Sanity-check: reject names that are clearly non-name words
       const cardName = rawName && NON_NAME_WORDS.some((w) => rawName.toLowerCase() === w) ? null : rawName;
       const collectorNumber = ident.card_number ?? sheetHint?.collector_number ?? null;
 
@@ -666,6 +667,20 @@ Return ONLY a JSON object in this exact format:
 
       if (!catalogCard && cardName) {
         console.warn(`[scan] pos ${position}: "${cardName}" not found in catalog — storing as-is; user can correct via Edit.`);
+      }
+
+      // If catalog returned null, check if the name itself exists at all.
+      // A name that doesn't exist in the catalog at all means GPT likely misread it.
+      if (!catalogCard && cardName) {
+        const nameExists = await env.DB.prepare(
+          `SELECT card_name FROM pokemon_catalog WHERE card_name = ? LIMIT 1`,
+        ).bind(cardName).first();
+
+        if (!nameExists) {
+          console.warn(
+            `[scan] pos ${position}: "${cardName}" not found in catalog — likely misread. Storing as-is; user can correct via Edit.`,
+          );
+        }
       }
 
       const tcgCard: TCGCard | null = catalogCard
@@ -768,6 +783,8 @@ Return ONLY a JSON object in this exact format:
         cardId = newCard.id;
       }
 
+      // Insert collection item — front_image_url is the per-card crop, not the sheet
+      // bbox_x/y/width/height are stored as null since the image is already cropped
       await run(
         env.DB,
         `INSERT INTO collection_items
@@ -793,6 +810,7 @@ Return ONLY a JSON object in this exact format:
         [collectionItemId, null, null, null, null, null, confidence, null],
       );
 
+      // eBay comps in background (non-blocking)
       if (env.EBAY_CLIENT_ID && env.EBAY_CLIENT_SECRET) {
         const ebayClientId = env.EBAY_CLIENT_ID;
         const ebayClientSecret = env.EBAY_CLIENT_SECRET;
@@ -844,6 +862,7 @@ Return ONLY a JSON object in this exact format:
       if (fullItem) {
         collectionItems.push({
           ...fullItem,
+          // Provide sheet_url + bbox for legacy CardCrop fallback (bbox is null for new crops)
           sheet_url: cropKey,
           bbox: null,
           ptcg_confirmed: tcgCard != null,
@@ -891,6 +910,7 @@ export async function handleSetCorrection(env: Env, request: Request, user: User
     return badRequest('collection_item_id and new_set_name are required');
   }
 
+  // Verify the collection item belongs to this user
   const item = await queryOne<{
     id: number;
     card_id: number;
@@ -907,6 +927,7 @@ export async function handleSetCorrection(env: Env, request: Request, user: User
 
   if (!item) return badRequest('Collection item not found');
 
+  // Re-run identification with new set name
   const corrected = await correctCardSet(
     env,
     item.card_name,
@@ -914,6 +935,7 @@ export async function handleSetCorrection(env: Env, request: Request, user: User
     body.new_set_name.trim(),
   );
 
+  // Update the card record with corrected data
   await run(
     env.DB,
     `UPDATE cards SET
@@ -932,6 +954,7 @@ export async function handleSetCorrection(env: Env, request: Request, user: User
     ],
   );
 
+  // Update collection item estimated value if we got new pricing
   if (corrected.price_market_cents) {
     await run(
       env.DB,
