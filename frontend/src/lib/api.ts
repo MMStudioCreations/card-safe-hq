@@ -534,4 +534,15 @@ export const api = {
     http.post<never, { url: string }>('/api/billing/checkout', { plan }),
   createPortalSession: () =>
     http.post<never, { url: string }>('/api/billing/portal'),
+  // ── TCGCSV live price refresh ─────────────────────────────────────────────────
+  refreshSealedPrice: (tcgplayerProductId: number) =>
+    http.post<never, { price_cents: number | null }>('/api/prices/refresh', {
+      tcgplayer_product_id: tcgplayerProductId,
+      type: 'sealed',
+    }),
+  refreshCardPrice: (tcgplayerProductId: number) =>
+    http.post<never, { normal: number | null; holofoil: number | null; reverseHolo: number | null }>(
+      '/api/prices/refresh',
+      { tcgplayer_product_id: tcgplayerProductId, type: 'card' },
+    ),
 }

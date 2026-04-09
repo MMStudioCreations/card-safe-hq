@@ -1,6 +1,6 @@
 import type { Env } from './types';
 import { requireAuth } from './lib/auth';
-import { badRequest, notFound, serverError } from './lib/json';
+import { badRequest, notFound, ok, serverError } from './lib/json';
 import { handleLogin, handleLogout, handleMe, handleRegister } from './routes/auth';
 import { createCard, deleteCard, getCard, listCards, updateCard } from './routes/cards';
 import {
@@ -485,6 +485,27 @@ export default {
       }
       if (method === 'POST' && pathname === '/api/billing/portal') {
         return withCors(await handleCreatePortal(env, request), request, env);
+      }
+
+      // Refresh price for a sealed product or card from TCGCSV
+      if (method === 'POST' && pathname === '/api/prices/refresh') {
+        const body = await request.json() as { tcgplayer_product_id: number; type: 'sealed' | 'card' }
+        if (!body.tcgplayer_product_id) return withCors(badRequest('Missing tcgplayer_product_id'), request, env)
+        
+        const { fetchSealedPrice, fetchCardPrice } = await import('./lib/tcgcsv')
+        
+        if (body.type === 'sealed') {
+          const price = await fetchSealedPrice(body.tcgplayer_product_id)
+          if (price) {
+            await env.DB.prepare(
+              `UPDATE sealed_products SET market_price_cents = ? WHERE tcgplayer_product_id = ?`
+            ).bind(price, body.tcgplayer_product_id).run()
+          }
+          return withCors(ok({ price_cents: price }), request, env)
+        }
+        
+        const prices = await fetchCardPrice(body.tcgplayer_product_id)
+        return withCors(ok(prices), request, env)
       }
 
       return withCors(notFound('Route not found'), request, env);
