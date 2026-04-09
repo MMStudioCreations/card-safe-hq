@@ -1,6 +1,7 @@
 name = "cardsafehq-api"
 main = "src/index.ts"
 compatibility_date = "2025-01-01"
+account_id = "ba8de8decc22986f0cc7a0541902bc94"
 
 [[d1_databases]]
 binding = "DB"
