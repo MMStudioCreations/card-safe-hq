@@ -121,13 +121,14 @@ export function buildSearchQuery(ident: EbayCardIdent): string {
   let parts: (string | number | null | undefined)[];
 
   if (isPokemon) {
-    // Pokémon: name + number is extremely precise on eBay
-    // e.g. "Chi-Yu ex 252/193 Obsidian Flames"
+    // Pokémon: name + number + rarity is extremely precise on eBay
+    // e.g. "Chi-Yu ex 252/193 Obsidian Flames Illustration Rare Pokemon Card"
     parts = [
-      ident.card_name,
+      ident.player_name ?? ident.card_name,
       ident.card_number,
       resolvedSetName,
       ident.variation,
+      'Pokemon Card',
     ];
   } else {
     // Sports/other: player + year + set + variation
