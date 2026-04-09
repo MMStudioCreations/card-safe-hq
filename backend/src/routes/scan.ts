@@ -3,7 +3,6 @@ import { queryOne, run } from '../lib/db';
 import { badRequest, ok, serverError } from '../lib/json';
 import { fetchEbayComps } from '../lib/ebay';
 import { identifyCard as visionIdentifyCard, correctCardSet } from '../lib/vision';
-import { cropCardFromSheet } from '../lib/crop';
 import { lookupCardInCatalog } from '../lib/pokemon-reference';
 
 const ALLOWED_MIME_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp']);
@@ -393,26 +392,9 @@ All 9 positions are REQUIRED. Do not stop at 7 or 8.`;
         } : undefined,
       } : null;
 
-      // ── Step 3: Crop using fixed grid math ──
+      // Bbox stored for frontend canvas cropping — no backend crop needed
       const fixedBbox = getFixedBbox(position);
-      const cropBuffer = await cropCardFromSheet(fileBuffer, file.type, fixedBbox);
-
-      const cropKey = `cards/${user.id}/${timestamp}-card-${position}.jpg`;
-      let cardImageUrl: string = sheetKey;
-      if (cropBuffer) {
-        try {
-          await env.BUCKET.put(cropKey, cropBuffer, {
-            httpMetadata: { contentType: 'image/jpeg' },
-          });
-          cardImageUrl = cropKey;
-        } catch (cropUploadErr) {
-          console.error(`[scan] Failed to upload crop for card ${position}:`, cropUploadErr);
-        }
-      } else {
-        console.error(`[scan] cropCardFromSheet returned null for position ${position}`);
-      }
-
-      console.log(`[scan] pos ${position}: saving crop key: ${cardImageUrl}`);
+      const cardImageUrl = sheetKey; // frontend will crop using bbox
 
       // ── Step 4: Resolve card data and INSERT ──
       const cardName = tcgCard?.name ?? card_name ?? 'Unknown Card';
@@ -479,7 +461,6 @@ All 9 positions are REQUIRED. Do not stop at 7 or 8.`;
         cardId = newCard.id;
       }
 
-      console.log(`[scan] INSERT pos ${position} front_image_url: ${cardImageUrl} (cropKey=${cropKey}, fallback=${cardImageUrl === sheetKey})`);
       await run(
         env.DB,
         `INSERT INTO collection_items
