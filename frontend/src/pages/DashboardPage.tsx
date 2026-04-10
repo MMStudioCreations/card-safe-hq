@@ -245,14 +245,6 @@ export default function DashboardPage() {
       </section>
 
 
-      <section className="glass p-4 w-full">
-        <h3 className="mb-3 text-sm font-semibold text-cv-muted">Community Metrics</h3>
-        <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
-          <div className="rounded-lg bg-cv-surface p-3 text-center"><p className="text-xs text-cv-muted">Members</p><p className="text-lg font-bold">{summary?.global.total_members ?? 0}</p></div>
-          <div className="rounded-lg bg-cv-surface p-3 text-center"><p className="text-xs text-cv-muted">Cards Across Members</p><p className="text-lg font-bold">{summary?.global.total_collection_cards ?? 0}</p></div>
-          <div className="rounded-lg bg-cv-surface p-3 text-center"><p className="text-xs text-cv-muted">Community Value</p><p className="text-lg font-bold">${((summary?.global.total_collection_value_cents ?? 0)/100).toFixed(2)}</p></div>
-        </div>
-      </section>
 
       <section className="grid gap-4 md:grid-cols-2">
         <div className="glass p-4">

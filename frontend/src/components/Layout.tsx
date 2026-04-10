@@ -106,7 +106,7 @@ export default function Layout({ children }: Props) {
                 to={link.to}
                 end={link.to === '/'}
                 className={({ isActive }) =>
-                  `relative rounded-full px-3 py-2 text-sm ${isActive ? 'bg-cv-surfaceStrong text-cv-text' : 'text-cv-muted'}`
+                  `relative rounded-full px-3 py-2 text-sm whitespace-nowrap ${isActive ? 'bg-cv-surfaceStrong text-cv-text' : 'text-cv-muted'}`
                 }
               >
                 {link.label}

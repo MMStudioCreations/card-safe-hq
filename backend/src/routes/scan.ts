@@ -200,51 +200,41 @@ export async function handleSheetScan(env: Env, request: Request, user: User): P
         ],
       );
     } else {
-      await run(
-        env.DB,
+      const singleInsertedCard = await env.DB.prepare(
         `INSERT INTO cards
            (game, set_name, card_name, card_number, rarity, image_url, external_ref,
             sport, player_name, year, variation, manufacturer)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-        [
-          game,
-          setName ?? null,
-          cardName,
-          ident.card_number ?? null,
-          ident.ptcg_rarity ?? ident.variation ?? null,
-          ident.ptcg_image_large ?? ident.ptcg_image_small ?? null,
-          externalRef,
-          ident.sport ?? null,
-          ident.player_name ?? null,
-          yearValue,
-          ident.variation ?? null,
-          ident.manufacturer ?? null,
-        ],
-      );
-      const newCard = await queryOne<{ id: number }>(
-        env.DB,
-        'SELECT id FROM cards WHERE id = last_insert_rowid()',
-      );
-      if (!newCard) return serverError('Failed to create card record');
-      cardId = newCard.id;
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+         RETURNING id`,
+      ).bind(
+        game,
+        setName ?? null,
+        cardName,
+        ident.card_number ?? null,
+        ident.ptcg_rarity ?? ident.variation ?? null,
+        ident.ptcg_image_large ?? ident.ptcg_image_small ?? null,
+        externalRef,
+        ident.sport ?? null,
+        ident.player_name ?? null,
+        yearValue,
+        ident.variation ?? null,
+        ident.manufacturer ?? null,
+      ).first<{ id: number }>();
+      if (!singleInsertedCard) return serverError('Failed to create card record');
+      cardId = singleInsertedCard.id;
     }
 
     const estimatedValueCents = ident.price_market_cents ?? ident.price_mid_cents ?? 0;
 
-    await run(
-      env.DB,
+    const singleInsertedItem = await env.DB.prepare(
       `INSERT INTO collection_items
          (user_id, card_id, quantity, condition_note, estimated_value_cents,
           front_image_url, product_type)
-       VALUES (?, ?, 1, ?, ?, ?, 'single_card')`,
-      [user.id, cardId, ident.condition_notes ?? null, estimatedValueCents, cardKey],
-    );
-
-    const newItem = await queryOne<{ id: number }>(
-      env.DB,
-      'SELECT id FROM collection_items WHERE id = last_insert_rowid()',
-    );
-    if (!newItem) return serverError('Failed to create collection item');
+       VALUES (?, ?, 1, ?, ?, ?, 'single_card')
+       RETURNING id`,
+    ).bind(user.id, cardId, ident.condition_notes ?? null, estimatedValueCents, cardKey)
+      .first<{ id: number }>();
+    if (!singleInsertedItem) return serverError('Failed to create collection item');
 
     const fullItem = await queryOne<Record<string, unknown>>(
       env.DB,
@@ -253,7 +243,7 @@ export async function handleSheetScan(env: Env, request: Request, user: User): P
        FROM collection_items ci
        LEFT JOIN cards c ON ci.card_id = c.id
        WHERE ci.id = ?`,
-      [newItem.id],
+      [singleInsertedItem.id],
     );
 
     const responsePayload: ScanApiPayload = {
@@ -886,50 +876,48 @@ Return ONLY a JSON object in this exact format:
           ],
         );
       } else {
-        await run(
-          env.DB,
+        const insertedCard = await env.DB.prepare(
           `INSERT INTO cards
              (game, set_name, card_name, card_number, rarity, image_url, external_ref,
               sport, player_name, year, variation, manufacturer)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-          [
-            game,
-            setName ?? null,
-            resolvedCardName,
-            finalNumber,
-            tcgCard?.rarity ?? ident.ptcg_rarity ?? null,
-            tcgCard?.images.large ?? tcgCard?.images.small ?? ident.ptcg_image_large ?? null,
-            externalRef,
-            null, null, null, null, null,
-          ],
-        );
-
-        const newCard = await queryOne<{ id: number }>(
-          env.DB,
-          'SELECT id FROM cards WHERE id = last_insert_rowid()',
-        );
-        if (!newCard) throw new Error('Failed to create card record');
-        cardId = newCard.id;
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+           RETURNING id`,
+        ).bind(
+          game,
+          setName ?? null,
+          resolvedCardName,
+          finalNumber,
+          tcgCard?.rarity ?? ident.ptcg_rarity ?? null,
+          tcgCard?.images.large ?? tcgCard?.images.small ?? ident.ptcg_image_large ?? null,
+          externalRef,
+          null, null, null, null, null,
+        ).first<{ id: number }>();
+        if (!insertedCard) throw new Error('Failed to create card record');
+        cardId = insertedCard.id;
       }
 
-      // Insert collection item — front_image_url is the per-card crop (if available) or null
-      // bbox_x/y/width/height are stored as null since the image is already cropped
-      const frontImageUrl = cropBuffer ? cropKey : null;
-      await run(
-        env.DB,
+      // Insert collection item:
+      // - If we have a crop, store the crop key as front_image_url (no bbox needed)
+      // - If no crop (OffscreenCanvas unavailable), store the full sheet key + bbox so
+      //   the CardCrop component can render the correct region client-side
+      const frontImageUrl = cropBuffer ? cropKey : sheetKey;
+      const bboxX = cropBuffer ? null : bbox.x;
+      const bboxY = cropBuffer ? null : bbox.y;
+      const bboxW = cropBuffer ? null : bbox.width;
+      const bboxH = cropBuffer ? null : bbox.height;
+
+      const insertedItem = await env.DB.prepare(
         `INSERT INTO collection_items
            (user_id, card_id, quantity, condition_note, estimated_grade, estimated_value_cents,
             front_image_url, bbox_x, bbox_y, bbox_width, bbox_height, product_type)
-         VALUES (?, ?, 1, ?, ?, ?, ?, NULL, NULL, NULL, NULL, 'single_card')`,
-        [user.id, cardId, ident.condition_notes ?? null, null, estimatedValueCents, frontImageUrl],
-      );
-
-      const newItem = await queryOne<{ id: number }>(
-        env.DB,
-        'SELECT id FROM collection_items WHERE id = last_insert_rowid()',
-      );
-      if (!newItem) throw new Error('Failed to create collection item');
-      const collectionItemId = newItem.id;
+         VALUES (?, ?, 1, ?, ?, ?, ?, ?, ?, ?, ?, 'single_card')
+         RETURNING id`,
+      ).bind(
+        user.id, cardId, ident.condition_notes ?? null, null, estimatedValueCents,
+        frontImageUrl, bboxX, bboxY, bboxW, bboxH,
+      ).first<{ id: number }>();
+      if (!insertedItem) throw new Error('Failed to create collection item');
+      const collectionItemId = insertedItem.id;
 
       await run(
         env.DB,
@@ -992,9 +980,9 @@ Return ONLY a JSON object in this exact format:
       if (fullItem) {
         collectionItems.push({
           ...fullItem,
-          // Provide sheet_url + bbox for legacy CardCrop fallback (bbox is null for new crops)
-          sheet_url: frontImageUrl ?? sheetKey,
-          bbox: null,
+          // Provide sheet_url + bbox for CardCrop fallback when no crop was available
+          sheet_url: cropBuffer ? null : sheetKey,
+          bbox: cropBuffer ? null : { x: bbox.x, y: bbox.y, width: bbox.width, height: bbox.height },
           ptcg_confirmed: tcgCard != null,
           ptcg_id: tcgCard?.id ?? ident.ptcg_id ?? null,
           ptcg_set_name: tcgCard?.set.name ?? ident.ptcg_set_name ?? null,
