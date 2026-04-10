@@ -68,7 +68,7 @@ export async function listCollection(env: Env, user: User, request: Request): Pr
               FROM sales_comps
               WHERE card_id = ci.card_id
                 AND source = 'ebay_sold'
-              ORDER BY created_at DESC
+              ORDER BY sold_date DESC, created_at DESC
               LIMIT 1
             ) as latest_sold_price_cents,
             (SELECT AVG(sold_price_cents)
@@ -82,7 +82,7 @@ export async function listCollection(env: Env, user: User, request: Request): Pr
               FROM sales_comps
               WHERE card_id = ci.card_id
                 AND source = 'ebay_sold'
-              ORDER BY created_at DESC
+              ORDER BY sold_date DESC, created_at DESC
               LIMIT 1 OFFSET 1
             ) as previous_sold_price_cents
      FROM collection_items ci
@@ -137,7 +137,7 @@ export async function createCollectionItem(env: Env, request: Request, user: Use
            VALUES ('Pokemon', ?, ?, ?, ?, ?, ?)`,
           [setName, cardName, cardNumber, rarity, imageUrl, ptcgId],
         );
-        const newCard = await queryOne<{ id: number }>(env.DB, 'SELECT id FROM cards WHERE id = last_insert_rowid()');
+        const newCard = await queryOne<{ id: number }>(env.DB, 'SELECT id FROM cards WHERE id = last_insert_rowid() LIMIT 1');
         if (!newCard) return badRequest('Failed to create card record');
         cardId = newCard.id;
       }
@@ -155,7 +155,7 @@ export async function createCollectionItem(env: Env, request: Request, user: Use
       [user.id, cardId, quantity, conditionNote, estimatedGrade, estimatedValue, productType, productName, purchasePrice],
     );
 
-    const created = await queryOne(env.DB, 'SELECT * FROM collection_items WHERE id = last_insert_rowid()');
+    const created = await queryOne(env.DB, 'SELECT * FROM collection_items WHERE user_id = ? ORDER BY created_at DESC LIMIT 1', [user.id]);
     return ok(created, 201);
   } catch (err) {
     return badRequest(err instanceof Error ? err.message : 'Invalid collection item');
@@ -175,7 +175,7 @@ export async function getCollectionItem(env: Env, user: User, id: number): Promi
               FROM sales_comps
               WHERE card_id = ci.card_id
                 AND source = 'ebay_sold'
-              ORDER BY created_at DESC
+              ORDER BY sold_date DESC, created_at DESC
               LIMIT 1
             ) as latest_sold_price_cents,
             (

@@ -2,51 +2,83 @@ import { useMemo, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { ExternalLink } from 'lucide-react'
+import {
+  LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip,
+  ResponsiveContainer, ReferenceLine,
+} from 'recharts'
 import { api } from '../lib/api'
 import { queryKeys, useCollectionItem, useComps, useGrade, useCompsHistory } from '../lib/hooks'
 import CardCrop from '../components/CardCrop'
 
-// ── SVG Price Chart ───────────────────────────────────────────────────────────
+// ── Recharts Price Chart ──────────────────────────────────────────────────────
+
+type SoldComp = { sold_price_cents: number; sold_date: string; title: string; source?: string }
+
+const CustomDot = (props: any) => {
+  const { cx, cy, payload } = props
+  if (payload?.type === 'active') {
+    return <circle cx={cx} cy={cy} r={4} fill="#00E5FF" fillOpacity={0.5} stroke="none" />
+  }
+  return <circle cx={cx} cy={cy} r={4} fill="var(--primary)" stroke="#080C10" strokeWidth={1.5} />
+}
+
+const ChartTooltip = ({ active, payload }: any) => {
+  if (!active || !payload?.length) return null
+  const d = payload[0].payload
+  return (
+    <div className="rounded-lg border border-cv-border bg-cv-bg px-3 py-2 text-xs shadow-lg">
+      <p className="font-semibold text-cv-text">${(d.price / 100).toFixed(2)}</p>
+      <p className="text-cv-muted">{d.dateLabel}</p>
+      {d.title && <p className="text-cv-muted max-w-[200px] truncate">{d.title}</p>}
+      <p className="text-cv-muted capitalize">{d.type === 'active' ? 'Active Listing' : 'eBay Sold'}</p>
+    </div>
+  )
+}
 
 const PriceChart = ({
-  history,
+  soldListings,
   activeListings,
   pricing,
   days,
 }: {
-  history: Array<{ date: string; avg_price_cents: number }>
-  activeListings: Array<{ sold_price_cents: number; sold_date: string; title: string }>
+  soldListings: SoldComp[]
+  activeListings: SoldComp[]
   pricing?: { tcgplayer?: { market?: number | null } | null; pricecharting?: { loose_price_cents?: number | null } | null } | null
   days: 30 | 60 | 90
 }) => {
   const cutoff = new Date()
   cutoff.setDate(cutoff.getDate() - days)
 
-  // Build unified data points from all available sources
-  const dataPoints: Array<{ date: Date; price_cents: number; label: string; dotted?: boolean }> = []
-
-  // Sold history (solid line — most reliable)
-  history
-    .filter((h) => new Date(h.date) >= cutoff)
-    .forEach((h) => {
-      dataPoints.push({ date: new Date(h.date), price_cents: h.avg_price_cents, label: 'Sold Avg' })
-    })
-
-  // Active listings (dotted points — show as market pulse)
-  activeListings
-    .filter((a) => new Date(a.sold_date) >= cutoff)
-    .forEach((a) => {
-      dataPoints.push({ date: new Date(a.sold_date), price_cents: a.sold_price_cents, label: 'Active Listing', dotted: true })
-    })
-
-  // Sort by date
-  dataPoints.sort((a, b) => a.date.getTime() - b.date.getTime())
-
-  // Reference lines from market data sources
   const tcgPrice = pricing?.tcgplayer?.market ?? null
   const pcPrice = pricing?.pricecharting?.loose_price_cents ?? null
 
-  if (dataPoints.length === 0 && !tcgPrice && !pcPrice) {
+  // Build chart data from individual sold listings (sorted by date asc)
+  const soldPoints = soldListings
+    .filter((s) => s.source === 'ebay_sold' || !s.source)
+    .filter((s) => new Date(s.sold_date) >= cutoff)
+    .map((s) => ({
+      timestamp: new Date(s.sold_date).getTime(),
+      price: s.sold_price_cents,
+      dateLabel: new Date(s.sold_date).toLocaleDateString(),
+      title: s.title,
+      type: 'sold' as const,
+    }))
+    .sort((a, b) => a.timestamp - b.timestamp)
+
+  const activePoints = activeListings
+    .filter((a) => new Date(a.sold_date) >= cutoff)
+    .map((a) => ({
+      timestamp: new Date(a.sold_date).getTime(),
+      price: a.sold_price_cents,
+      dateLabel: new Date(a.sold_date).toLocaleDateString(),
+      title: a.title,
+      type: 'active' as const,
+    }))
+    .sort((a, b) => a.timestamp - b.timestamp)
+
+  const allPoints = [...soldPoints, ...activePoints].sort((a, b) => a.timestamp - b.timestamp)
+
+  if (allPoints.length === 0 && !tcgPrice && !pcPrice) {
     return (
       <div className="flex h-32 flex-col items-center justify-center gap-1 text-cv-muted text-sm">
         <p>No market data yet.</p>
@@ -55,8 +87,7 @@ const PriceChart = ({
     )
   }
 
-  // If only reference prices exist (no listing data), show a simple price band
-  if (dataPoints.length === 0) {
+  if (allPoints.length === 0) {
     return (
       <div className="space-y-2">
         <div className="flex h-20 items-center justify-center rounded-[var(--radius-md)] bg-cv-surface">
@@ -70,96 +101,62 @@ const PriceChart = ({
     )
   }
 
-  const prices = dataPoints.map((d) => d.price_cents)
-  const allPrices = [...prices, ...(tcgPrice ? [tcgPrice] : []), ...(pcPrice ? [pcPrice] : [])]
-  const minP = Math.min(...allPrices) * 0.9
-  const maxP = Math.max(...allPrices) * 1.1
-  const range = maxP - minP || 1
-
-  const W = 600
-  const H = 120
-  const PAD = 12
-
-  const toX = (i: number, total: number) =>
-    total === 1 ? W / 2 : PAD + (i / (total - 1)) * (W - PAD * 2)
-  const toY = (price: number) =>
-    H - PAD - ((price - minP) / range) * (H - PAD * 2)
-
-  // Separate solid (sold) and dotted (active) points
-  const solidPoints = dataPoints.filter((d) => !d.dotted)
-  const dottedPoints = dataPoints.filter((d) => d.dotted)
-
-  const solidPath = solidPoints.length >= 2
-    ? solidPoints.map((d, i) => `${toX(i, solidPoints.length)},${toY(d.price_cents)}`).join(' ')
-    : null
-
+  const prices = allPoints.map((d) => d.price)
   const low = Math.min(...prices)
   const high = Math.max(...prices)
   const avg = Math.round(prices.reduce((a, b) => a + b, 0) / prices.length)
 
   return (
     <div>
-      <svg viewBox={`0 0 ${W} ${H}`} className="w-full" preserveAspectRatio="none">
-        <defs>
-          <linearGradient id="grad" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor="var(--primary)" stopOpacity="0.25" />
-            <stop offset="100%" stopColor="var(--primary)" stopOpacity="0" />
-          </linearGradient>
-        </defs>
-
-        {/* TCGPlayer reference line */}
-        {tcgPrice && (
-          <line
-            x1={PAD} y1={toY(tcgPrice)} x2={W - PAD} y2={toY(tcgPrice)}
-            stroke="#60a5fa" strokeWidth="1" strokeDasharray="4,4" opacity="0.5"
+      <ResponsiveContainer width="100%" height={160}>
+        <LineChart data={allPoints} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
+          <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
+          <XAxis
+            dataKey="dateLabel"
+            tick={{ fontSize: 10, fill: '#6B7280' }}
+            tickLine={false}
+            axisLine={false}
+            interval="preserveStartEnd"
           />
-        )}
-
-        {/* PriceCharting reference line */}
-        {pcPrice && (
-          <line
-            x1={PAD} y1={toY(pcPrice)} x2={W - PAD} y2={toY(pcPrice)}
-            stroke="#a78bfa" strokeWidth="1" strokeDasharray="4,4" opacity="0.5"
+          <YAxis
+            tickFormatter={(v) => `$${(v / 100).toFixed(0)}`}
+            tick={{ fontSize: 10, fill: '#6B7280' }}
+            tickLine={false}
+            axisLine={false}
+            width={48}
           />
-        )}
-
-        {/* Sold history — solid filled area */}
-        {solidPath && (
-          <>
-            <polyline
-              fill="url(#grad)"
-              stroke="none"
-              points={`${PAD},${H} ${solidPath} ${W - PAD},${H}`}
+          <Tooltip content={<ChartTooltip />} />
+          {tcgPrice && (
+            <ReferenceLine
+              y={tcgPrice}
+              stroke="#60a5fa"
+              strokeDasharray="4 4"
+              strokeOpacity={0.6}
+              label={{ value: 'TCG', position: 'right', fontSize: 9, fill: '#60a5fa' }}
             />
-            <polyline fill="none" stroke="var(--primary)" strokeWidth="2" points={solidPath} />
-          </>
-        )}
-
-        {/* Active listing dots */}
-        {dottedPoints.map((d, i) => (
-          <circle
-            key={i}
-            cx={toX(i, dottedPoints.length)}
-            cy={toY(d.price_cents)}
-            r="3"
-            fill="var(--primary)"
-            opacity="0.5"
+          )}
+          {pcPrice && (
+            <ReferenceLine
+              y={pcPrice}
+              stroke="#a78bfa"
+              strokeDasharray="4 4"
+              strokeOpacity={0.6}
+              label={{ value: 'PC', position: 'right', fontSize: 9, fill: '#a78bfa' }}
+            />
+          )}
+          <Line
+            type="monotone"
+            dataKey="price"
+            stroke="var(--primary)"
+            strokeWidth={2}
+            dot={<CustomDot />}
+            activeDot={{ r: 5, fill: 'var(--primary)' }}
+            connectNulls
           />
-        ))}
+        </LineChart>
+      </ResponsiveContainer>
 
-        {/* Sold history dots */}
-        {solidPoints.map((d, i) => (
-          <circle
-            key={i}
-            cx={toX(i, solidPoints.length)}
-            cy={toY(d.price_cents)}
-            r="3"
-            fill="var(--primary)"
-          />
-        ))}
-      </svg>
-
-      <div className="mt-2 flex flex-wrap justify-between gap-2 text-xs text-cv-muted">
+      <div className="mt-1 flex flex-wrap justify-between gap-2 text-xs text-cv-muted">
         <span>Low ${(low / 100).toFixed(2)}</span>
         <span>Avg ${(avg / 100).toFixed(2)}</span>
         <span>High ${(high / 100).toFixed(2)}</span>
@@ -168,19 +165,19 @@ const PriceChart = ({
         <span className="flex items-center gap-1">
           <span className="inline-block h-0.5 w-4 bg-[var(--primary)]" /> eBay Sold
         </span>
-        {dottedPoints.length > 0 && (
+        {activePoints.length > 0 && (
           <span className="flex items-center gap-1">
-            <span className="inline-block h-2 w-2 rounded-full bg-[var(--primary)] opacity-50" /> Active Listings
+            <span className="inline-block h-2 w-2 rounded-full bg-[#00E5FF] opacity-50" /> Active Listings
           </span>
         )}
         {tcgPrice && (
           <span className="flex items-center gap-1">
-            <span className="inline-block h-0.5 w-4 bg-blue-400 opacity-50" style={{ borderTop: '1px dashed' }} /> TCGPlayer
+            <span className="inline-block h-0.5 w-4 bg-blue-400 opacity-50" /> TCGPlayer
           </span>
         )}
         {pcPrice && (
           <span className="flex items-center gap-1">
-            <span className="inline-block h-0.5 w-4 bg-violet-400 opacity-50" style={{ borderTop: '1px dashed' }} /> PriceCharting
+            <span className="inline-block h-0.5 w-4 bg-violet-400 opacity-50" /> PriceCharting
           </span>
         )}
       </div>
@@ -553,7 +550,7 @@ export default function CardDetailPage() {
             </div>
           </div>
           <PriceChart
-            history={historyData?.history ?? []}
+            soldListings={soldListings}
             activeListings={activeListings}
             pricing={pricing}
             days={chartDays}

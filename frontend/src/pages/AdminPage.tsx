@@ -36,6 +36,10 @@ type Stats = {
   total_collection_items: number
   total_scans: number
   avg_confidence_score: number | null
+  free_users: number
+  monthly_subscribers: number
+  yearly_subscribers: number
+  mrr_cents: number
 }
 
 type AdminUser = {
@@ -80,18 +84,36 @@ function OverviewTab() {
   })
 
   if (isLoading) return <Loader2 className="h-6 w-6 animate-spin text-cv-secondary mx-auto mt-8" />
-  if (error || !stats) return <p className="text-red-400 mt-4">Failed to load stats.</p>
+  if (error || !stats) return <p className="text-red-400 mt-4">Failed to load stats. Check that your session is active.</p>
+
+  const mrrDisplay = stats.mrr_cents ? `$${(stats.mrr_cents / 100).toFixed(0)}/mo` : '$0/mo'
 
   return (
-    <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
-      <StatCard label="Total Users" value={stats.total_users} />
-      <StatCard label="Total Cards" value={stats.total_cards} />
-      <StatCard label="Collection Items" value={stats.total_collection_items} />
-      <StatCard label="Total Scans" value={stats.total_scans} />
-      <StatCard
-        label="Avg Confidence"
-        value={stats.avg_confidence_score != null ? stats.avg_confidence_score.toFixed(2) : '—'}
-      />
+    <div className="space-y-4">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <StatCard label="Total Users" value={stats.total_users} />
+        <StatCard label="Total Cards" value={stats.total_cards.toLocaleString()} />
+        <StatCard label="Collection Items" value={stats.total_collection_items.toLocaleString()} />
+        <StatCard label="Total Scans" value={stats.total_scans} />
+      </div>
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <div className="rounded-[var(--radius-md)] bg-cv-surface p-5 flex flex-col gap-1">
+          <span className="text-xs text-cv-muted uppercase tracking-wider">Free Users</span>
+          <span className="text-2xl font-bold text-cv-text">{stats.free_users}</span>
+        </div>
+        <div className="rounded-[var(--radius-md)] p-5 flex flex-col gap-1" style={{ background: 'rgba(0,229,255,0.08)', border: '1px solid rgba(0,229,255,0.2)' }}>
+          <span className="text-xs uppercase tracking-wider" style={{ color: '#00E5FF' }}>Monthly Pro</span>
+          <span className="text-2xl font-bold" style={{ color: '#00E5FF' }}>{stats.monthly_subscribers}</span>
+        </div>
+        <div className="rounded-[var(--radius-md)] p-5 flex flex-col gap-1" style={{ background: 'rgba(201,168,76,0.1)', border: '1px solid rgba(201,168,76,0.25)' }}>
+          <span className="text-xs uppercase tracking-wider" style={{ color: '#C9A84C' }}>Yearly Pro</span>
+          <span className="text-2xl font-bold" style={{ color: '#C9A84C' }}>{stats.yearly_subscribers}</span>
+        </div>
+        <div className="rounded-[var(--radius-md)] p-5 flex flex-col gap-1" style={{ background: 'rgba(52,211,153,0.08)', border: '1px solid rgba(52,211,153,0.2)' }}>
+          <span className="text-xs uppercase tracking-wider" style={{ color: '#34D399' }}>Est. MRR</span>
+          <span className="text-2xl font-bold" style={{ color: '#34D399' }}>{mrrDisplay}</span>
+        </div>
+      </div>
     </div>
   )
 }
@@ -542,8 +564,8 @@ type CRMUser = {
   collection_count: number
   stripe_customer_id: string | null
   stripe_subscription_id: string | null
-  stripe_price_id: string | null
-  subscription_status: string | null
+  plan: string | null
+  status: string | null
   current_period_end: string | null
 }
 
@@ -559,12 +581,15 @@ function CRMTab() {
     (u.username ?? '').toLowerCase().includes(search.toLowerCase())
   )
 
-  const proUsers = (users ?? []).filter(u => u.subscription_status === 'active')
-  const freeUsers = (users ?? []).filter(u => u.subscription_status !== 'active')
+  const proUsers = (users ?? []).filter(u => u.status === 'active' && u.plan && u.plan !== 'free')
+  const monthlyUsers = (users ?? []).filter(u => u.plan === 'monthly' && u.status === 'active')
+  const yearlyUsers = (users ?? []).filter(u => u.plan === 'yearly' && u.status === 'active')
+  const freeUsers = (users ?? []).filter(u => !u.plan || u.plan === 'free' || u.status !== 'active')
+  const mrr = monthlyUsers.length * 10 + yearlyUsers.length * (100 / 12)
 
   function getPlanLabel(u: CRMUser) {
-    if (!u.stripe_subscription_id || u.subscription_status !== 'active') return 'Free'
-    if (u.stripe_price_id?.includes('yearly') || u.stripe_price_id?.includes('annual') || u.stripe_price_id?.includes('year')) return 'Pro Yearly'
+    if (!u.plan || u.plan === 'free' || u.status !== 'active') return 'Free'
+    if (u.plan === 'yearly') return 'Pro Yearly'
     return 'Pro Monthly'
   }
 
@@ -574,18 +599,26 @@ function CRMTab() {
   return (
     <div className="space-y-4">
       {/* Summary cards */}
-      <div className="grid grid-cols-3 gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
         <div className="rounded-[var(--radius-md)] bg-cv-surface p-4">
           <p className="text-xs text-cv-muted uppercase tracking-wider">Total Users</p>
           <p className="text-2xl font-bold mt-1">{users?.length ?? 0}</p>
         </div>
-        <div className="rounded-[var(--radius-md)] p-4" style={{ background: 'rgba(0,229,255,0.08)', border: '1px solid rgba(0,229,255,0.2)' }}>
-          <p className="text-xs uppercase tracking-wider" style={{ color: '#00E5FF' }}>Pro Subscribers</p>
-          <p className="text-2xl font-bold mt-1" style={{ color: '#00E5FF' }}>{proUsers.length}</p>
-        </div>
         <div className="rounded-[var(--radius-md)] bg-cv-surface p-4">
-          <p className="text-xs text-cv-muted uppercase tracking-wider">Free Users</p>
+          <p className="text-xs text-cv-muted uppercase tracking-wider">Free</p>
           <p className="text-2xl font-bold mt-1">{freeUsers.length}</p>
+        </div>
+        <div className="rounded-[var(--radius-md)] p-4" style={{ background: 'rgba(0,229,255,0.08)', border: '1px solid rgba(0,229,255,0.2)' }}>
+          <p className="text-xs uppercase tracking-wider" style={{ color: '#00E5FF' }}>Monthly</p>
+          <p className="text-2xl font-bold mt-1" style={{ color: '#00E5FF' }}>{monthlyUsers.length}</p>
+        </div>
+        <div className="rounded-[var(--radius-md)] p-4" style={{ background: 'rgba(201,168,76,0.1)', border: '1px solid rgba(201,168,76,0.25)' }}>
+          <p className="text-xs uppercase tracking-wider" style={{ color: '#C9A84C' }}>Yearly</p>
+          <p className="text-2xl font-bold mt-1" style={{ color: '#C9A84C' }}>{yearlyUsers.length}</p>
+        </div>
+        <div className="rounded-[var(--radius-md)] p-4" style={{ background: 'rgba(52,211,153,0.08)', border: '1px solid rgba(52,211,153,0.2)' }}>
+          <p className="text-xs uppercase tracking-wider" style={{ color: '#34D399' }}>Est. MRR</p>
+          <p className="text-2xl font-bold mt-1" style={{ color: '#34D399' }}>${mrr.toFixed(0)}</p>
         </div>
       </div>
 
@@ -634,7 +667,7 @@ function CRMTab() {
                   </td>
                   <td className="px-4 py-3">
                     <span className={`text-xs ${isActive ? 'text-green-400' : 'text-cv-muted'}`}>
-                      {u.subscription_status ?? 'none'}
+                      {u.status ?? 'none'}
                     </span>
                   </td>
                   <td className="px-4 py-3 text-cv-muted text-xs">

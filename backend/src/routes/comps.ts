@@ -99,14 +99,14 @@ export async function getComps(env: Env, cardId: number): Promise<Response> {
       await env.DB.batch(buildInserts(env, cardId, all));
     }
   }
-// Update estimated_value_cents on all collection items for this card
+// Update estimated_value_cents to the most recent actual sale date
 await run(
   env.DB,
   `UPDATE collection_items 
    SET estimated_value_cents = (
      SELECT sold_price_cents FROM sales_comps 
      WHERE card_id = ? AND source = 'ebay_sold'
-     ORDER BY created_at DESC LIMIT 1
+     ORDER BY sold_date DESC, created_at DESC LIMIT 1
    )
    WHERE card_id = ?`,
   [cardId, cardId],
@@ -195,14 +195,14 @@ export async function refreshComps(env: Env, cardId: number): Promise<Response> 
 
   const summary = summarizeComps(soldComps.map((c) => c.sold_price_cents));
 
-// Update estimated_value_cents on all collection items for this card
+// Update estimated_value_cents to the most recent actual sale date
 await run(
   env.DB,
   `UPDATE collection_items 
    SET estimated_value_cents = (
      SELECT sold_price_cents FROM sales_comps 
      WHERE card_id = ? AND source = 'ebay_sold'
-     ORDER BY created_at DESC LIMIT 1
+     ORDER BY sold_date DESC, created_at DESC LIMIT 1
    )
    WHERE card_id = ?`,
   [cardId, cardId],
