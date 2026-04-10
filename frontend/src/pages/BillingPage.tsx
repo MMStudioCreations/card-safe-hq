@@ -17,7 +17,7 @@ function formatDate(iso: string | null): string {
   return new Date(iso).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })
 }
 
-function CheckIcon({ color = '#00E5FF' }: { color?: string }) {
+function CheckIcon({ color = '#f97316' }: { color?: string }) {
   return (
     <svg width="14" height="14" viewBox="0 0 14 14" fill="none" className="shrink-0 mt-0.5">
       <circle cx="7" cy="7" r="7" fill={color} fillOpacity="0.15" />
@@ -115,9 +115,9 @@ export default function BillingPage() {
               className="text-sm font-bold px-2 py-0.5 rounded-full"
               style={
                 isYearly
-                  ? { background: 'rgba(201,168,76,0.15)', color: '#C9A84C' }
+                  ? { background: 'rgba(249,115,22,0.15)', color: '#f59e0b' }
                   : isMonthly
-                  ? { background: 'rgba(0,229,255,0.1)', color: '#00E5FF' }
+                  ? { background: 'rgba(249,115,22,0.10)', color: '#f97316' }
                   : { color: 'var(--cv-muted)' }
               }
             >
@@ -151,8 +151,8 @@ export default function BillingPage() {
         <div className="grid text-xs font-semibold text-cv-muted border-b border-white/5" style={{ gridTemplateColumns: '1fr auto auto auto' }}>
           <div className="p-3">Feature</div>
           <div className="p-3 text-center w-16">Free</div>
-          <div className="p-3 text-center w-20" style={{ color: '#00E5FF' }}>Monthly</div>
-          <div className="p-3 text-center w-20" style={{ color: '#C9A84C' }}>Yearly</div>
+          <div className="p-3 text-center w-20" style={{ color: '#f97316' }}>Monthly</div>
+          <div className="p-3 text-center w-20" style={{ color: '#f59e0b' }}>Yearly</div>
         </div>
         {[
           { feature: 'Search — cards, ETBs, tins, promos, all TCG products', free: true, monthly: true, yearly: true },
@@ -182,10 +182,10 @@ export default function BillingPage() {
               {free ? <CheckIcon color="rgba(255,255,255,0.4)" /> : <LockIcon />}
             </div>
             <div className="p-3 flex justify-center w-20">
-              {monthly ? <CheckIcon color="#00E5FF" /> : <LockIcon />}
+              {monthly ? <CheckIcon color="#f97316" /> : <LockIcon />}
             </div>
             <div className="p-3 flex justify-center w-20">
-              {yearly ? <CheckIcon color="#C9A84C" /> : <LockIcon />}
+              {yearly ? <CheckIcon color="#f59e0b" /> : <LockIcon />}
             </div>
           </div>
         ))}
@@ -198,7 +198,7 @@ export default function BillingPage() {
           <div className="glass p-5 space-y-4 flex flex-col rounded-[var(--radius-lg)]"
             style={{ border: '1px solid rgba(0,229,255,0.2)' }}>
             <div>
-              <h2 className="text-lg font-bold" style={{ color: '#00E5FF' }}>Pro Monthly</h2>
+              <h2 className="text-lg font-bold" style={{ color: '#f97316' }}>Pro Monthly</h2>
               <p className="text-sm text-cv-muted mt-0.5">Billed every month. Cancel anytime.</p>
             </div>
             <div className="flex-1 space-y-2">
@@ -211,7 +211,7 @@ export default function BillingPage() {
                 'Monthly product giveaway',
               ].map(f => (
                 <div key={f} className="flex items-start gap-2 text-sm text-cv-muted">
-                  <CheckIcon color="#00E5FF" />
+                  <CheckIcon color="#f97316" />
                   <span>{f}</span>
                 </div>
               ))}
@@ -230,12 +230,12 @@ export default function BillingPage() {
             style={{ background: 'linear-gradient(145deg,rgba(0,229,255,0.04),rgba(201,168,76,0.08))', border: '1px solid rgba(201,168,76,0.35)' }}>
             <div className="absolute -top-3 left-4">
               <span className="text-[10px] font-bold px-2.5 py-0.5 rounded-full"
-                style={{ background: 'linear-gradient(90deg,#C9A84C,#E8C76A)', color: '#080C10' }}>
+                style={{ background: 'linear-gradient(90deg,#f97316,#f59e0b)', color: '#0A0A0C' }}>
                 BEST VALUE
               </span>
             </div>
             <div>
-              <h2 className="text-lg font-bold" style={{ color: '#C9A84C' }}>Pro Yearly</h2>
+              <h2 className="text-lg font-bold" style={{ color: '#f59e0b' }}>Pro Yearly</h2>
               <p className="text-sm text-cv-muted mt-0.5">Billed once per year — ~2 months free.</p>
             </div>
             <div className="flex-1 space-y-2">
@@ -247,14 +247,14 @@ export default function BillingPage() {
                 'Monthly product giveaway',
               ].map(f => (
                 <div key={f} className="flex items-start gap-2 text-sm text-cv-muted">
-                  <CheckIcon color="#C9A84C" />
+                  <CheckIcon color="#f59e0b" />
                   <span>{f}</span>
                 </div>
               ))}
             </div>
             <button
               className="w-full mt-2 py-2.5 px-4 rounded-full text-sm font-bold transition-opacity hover:opacity-90"
-              style={{ background: 'linear-gradient(90deg,#C9A84C,#E8C76A)', color: '#080C10' }}
+              style={{ background: 'linear-gradient(90deg,#f97316,#f59e0b)', color: '#0A0A0C' }}
               onClick={() => void handleSubscribe('yearly')}
               disabled={loadingPlan !== null}
             >
@@ -268,13 +268,13 @@ export default function BillingPage() {
       {isPro && isMonthly && billingConfigured && (
         <div className="glass p-5 rounded-[var(--radius-lg)]"
           style={{ border: '1px solid rgba(201,168,76,0.2)' }}>
-          <h2 className="text-base font-semibold mb-1" style={{ color: '#C9A84C' }}>Upgrade to Yearly</h2>
+          <h2 className="text-base font-semibold mb-1" style={{ color: '#f59e0b' }}>Upgrade to Yearly</h2>
           <p className="text-sm text-cv-muted mb-3">
             Switch to yearly and get early access to new features, priority support, and save ~2 months.
           </p>
           <button
             className="py-2 px-5 rounded-full text-sm font-bold"
-            style={{ background: 'linear-gradient(90deg,#C9A84C,#E8C76A)', color: '#080C10' }}
+            style={{ background: 'linear-gradient(90deg,#f97316,#f59e0b)', color: '#0A0A0C' }}
             onClick={() => void handleSubscribe('yearly')}
             disabled={loadingPlan !== null}
           >
@@ -287,11 +287,11 @@ export default function BillingPage() {
       {isPro && isYearly && (
         <div className="glass p-4 rounded-[var(--radius-md)]"
           style={{ border: '1px solid rgba(201,168,76,0.2)', background: 'rgba(201,168,76,0.04)' }}>
-          <p className="text-sm font-semibold mb-1" style={{ color: '#C9A84C' }}>Yearly Member Perks</p>
+          <p className="text-sm font-semibold mb-1" style={{ color: '#f59e0b' }}>Yearly Member Perks</p>
           <div className="space-y-1.5 text-sm text-cv-muted">
-            <div className="flex items-center gap-2"><CheckIcon color="#C9A84C" /><span>Early access to new features before monthly members</span></div>
-            <div className="flex items-center gap-2"><CheckIcon color="#C9A84C" /><span>Monthly product giveaway — check your email each month</span></div>
-            <div className="flex items-center gap-2"><CheckIcon color="#C9A84C" /><span>Priority support response</span></div>
+            <div className="flex items-center gap-2"><CheckIcon color="#f59e0b" /><span>Early access to new features before monthly members</span></div>
+            <div className="flex items-center gap-2"><CheckIcon color="#f59e0b" /><span>Monthly product giveaway — check your email each month</span></div>
+            <div className="flex items-center gap-2"><CheckIcon color="#f59e0b" /><span>Priority support response</span></div>
           </div>
         </div>
       )}
@@ -300,10 +300,10 @@ export default function BillingPage() {
       {isPro && isMonthly && (
         <div className="glass p-4 rounded-[var(--radius-md)]"
           style={{ border: '1px solid rgba(0,229,255,0.15)', background: 'rgba(0,229,255,0.03)' }}>
-          <p className="text-sm font-semibold mb-1" style={{ color: '#00E5FF' }}>Monthly Member Perks</p>
+          <p className="text-sm font-semibold mb-1" style={{ color: '#f97316' }}>Monthly Member Perks</p>
           <div className="space-y-1.5 text-sm text-cv-muted">
-            <div className="flex items-center gap-2"><CheckIcon color="#00E5FF" /><span>Monthly product giveaway — check your email each month</span></div>
-            <div className="flex items-center gap-2"><CheckIcon color="#00E5FF" /><span>All Pro features unlocked</span></div>
+            <div className="flex items-center gap-2"><CheckIcon color="#f97316" /><span>Monthly product giveaway — check your email each month</span></div>
+            <div className="flex items-center gap-2"><CheckIcon color="#f97316" /><span>All Pro features unlocked</span></div>
           </div>
         </div>
       )}

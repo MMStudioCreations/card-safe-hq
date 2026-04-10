@@ -101,13 +101,13 @@ function OverviewTab() {
           <span className="text-xs text-cv-muted uppercase tracking-wider">Free Users</span>
           <span className="text-2xl font-bold text-cv-text">{stats.free_users}</span>
         </div>
-        <div className="rounded-[var(--radius-md)] p-5 flex flex-col gap-1" style={{ background: 'rgba(0,229,255,0.08)', border: '1px solid rgba(0,229,255,0.2)' }}>
-          <span className="text-xs uppercase tracking-wider" style={{ color: '#00E5FF' }}>Monthly Pro</span>
-          <span className="text-2xl font-bold" style={{ color: '#00E5FF' }}>{stats.monthly_subscribers}</span>
+        <div className="rounded-[var(--radius-md)] p-5 flex flex-col gap-1" style={{ background: 'rgba(249,115,22,0.08)', border: '1px solid rgba(249,115,22,0.20)' }}>
+          <span className="text-xs uppercase tracking-wider" style={{ color: '#f97316' }}>Monthly Pro</span>
+          <span className="text-2xl font-bold" style={{ color: '#f97316' }}>{stats.monthly_subscribers}</span>
         </div>
-        <div className="rounded-[var(--radius-md)] p-5 flex flex-col gap-1" style={{ background: 'rgba(201,168,76,0.1)', border: '1px solid rgba(201,168,76,0.25)' }}>
-          <span className="text-xs uppercase tracking-wider" style={{ color: '#C9A84C' }}>Yearly Pro</span>
-          <span className="text-2xl font-bold" style={{ color: '#C9A84C' }}>{stats.yearly_subscribers}</span>
+        <div className="rounded-[var(--radius-md)] p-5 flex flex-col gap-1" style={{ background: 'rgba(245,158,11,0.10)', border: '1px solid rgba(245,158,11,0.25)' }}>
+          <span className="text-xs uppercase tracking-wider" style={{ color: '#f59e0b' }}>Yearly Pro</span>
+          <span className="text-2xl font-bold" style={{ color: '#f59e0b' }}>{stats.yearly_subscribers}</span>
         </div>
         <div className="rounded-[var(--radius-md)] p-5 flex flex-col gap-1" style={{ background: 'rgba(52,211,153,0.08)', border: '1px solid rgba(52,211,153,0.2)' }}>
           <span className="text-xs uppercase tracking-wider" style={{ color: '#34D399' }}>Est. MRR</span>
@@ -608,13 +608,13 @@ function CRMTab() {
           <p className="text-xs text-cv-muted uppercase tracking-wider">Free</p>
           <p className="text-2xl font-bold mt-1">{freeUsers.length}</p>
         </div>
-        <div className="rounded-[var(--radius-md)] p-4" style={{ background: 'rgba(0,229,255,0.08)', border: '1px solid rgba(0,229,255,0.2)' }}>
-          <p className="text-xs uppercase tracking-wider" style={{ color: '#00E5FF' }}>Monthly</p>
-          <p className="text-2xl font-bold mt-1" style={{ color: '#00E5FF' }}>{monthlyUsers.length}</p>
+        <div className="rounded-[var(--radius-md)] p-4" style={{ background: 'rgba(249,115,22,0.08)', border: '1px solid rgba(249,115,22,0.20)' }}>
+          <p className="text-xs uppercase tracking-wider" style={{ color: '#f97316' }}>Monthly</p>
+          <p className="text-2xl font-bold mt-1" style={{ color: '#f97316' }}>{monthlyUsers.length}</p>
         </div>
-        <div className="rounded-[var(--radius-md)] p-4" style={{ background: 'rgba(201,168,76,0.1)', border: '1px solid rgba(201,168,76,0.25)' }}>
-          <p className="text-xs uppercase tracking-wider" style={{ color: '#C9A84C' }}>Yearly</p>
-          <p className="text-2xl font-bold mt-1" style={{ color: '#C9A84C' }}>{yearlyUsers.length}</p>
+        <div className="rounded-[var(--radius-md)] p-4" style={{ background: 'rgba(245,158,11,0.10)', border: '1px solid rgba(245,158,11,0.25)' }}>
+          <p className="text-xs uppercase tracking-wider" style={{ color: '#f59e0b' }}>Yearly</p>
+          <p className="text-2xl font-bold mt-1" style={{ color: '#f59e0b' }}>{yearlyUsers.length}</p>
         </div>
         <div className="rounded-[var(--radius-md)] p-4" style={{ background: 'rgba(52,211,153,0.08)', border: '1px solid rgba(52,211,153,0.2)' }}>
           <p className="text-xs uppercase tracking-wider" style={{ color: '#34D399' }}>Est. MRR</p>
@@ -658,8 +658,8 @@ function CRMTab() {
                     <span
                       className="rounded-full px-2 py-0.5 text-xs font-medium"
                       style={{
-                        background: plan === 'Pro Yearly' ? 'rgba(201,168,76,0.15)' : plan === 'Pro Monthly' ? 'rgba(0,229,255,0.1)' : 'rgba(255,255,255,0.06)',
-                        color: plan === 'Pro Yearly' ? '#C9A84C' : plan === 'Pro Monthly' ? '#00E5FF' : 'var(--cv-muted)',
+                        background: plan === 'Pro Yearly' ? 'rgba(201,168,76,0.15)' : plan === 'Pro Monthly' ? 'rgba(249,115,22,0.10)' : 'rgba(255,255,255,0.06)',
+                        color: plan === 'Pro Yearly' ? '#f59e0b' : plan === 'Pro Monthly' ? '#f97316' : 'var(--cv-muted)',
                       }}
                     >
                       {plan}
@@ -727,7 +727,7 @@ function SealedSyncTab() {
         onClick={runSync}
         disabled={syncing}
         className="px-4 py-2 rounded-[var(--radius-sm)] text-white text-sm font-medium disabled:opacity-50 hover:opacity-90 transition flex items-center gap-2"
-        style={{ background: 'linear-gradient(90deg, #00E5FF, #0099aa)' }}
+        style={{ background: 'linear-gradient(90deg, #f97316, #ea580c)' }}
         type="button"
       >
         {syncing && <Loader2 className="h-4 w-4 animate-spin" />}

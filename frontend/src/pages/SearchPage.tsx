@@ -1,11 +1,11 @@
-import { useEffect, useRef, useState } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { ExternalLink, Heart, Package, Plus, Search, ShoppingCart, X } from 'lucide-react'
 import { api } from '../lib/api'
 
 // ── Type labels for all sealed product types ──────────────────────────────────
 const TYPE_LABELS: Record<string, string> = {
   booster_box: 'Booster Box',
-  elite_trainer_box: 'Elite Trainer Box (ETB)',
+  elite_trainer_box: 'Elite Trainer Box',
   ultra_premium_collection: 'Ultra Premium Collection',
   premium_collection: 'Premium Collection',
   special_collection: 'Special Collection',
@@ -30,6 +30,7 @@ const TYPE_LABELS: Record<string, string> = {
   ex_box: 'EX Box',
   vstar_universe: 'VSTAR Universe Box',
   other: 'Sealed Product',
+  other_sealed: 'Sealed Product',
 }
 
 // Product type filter groups for the UI
@@ -60,6 +61,7 @@ type CardResult = {
   image_large: string | null
   tcgplayer_url: string | null
   tcgplayer_market_cents: number | null
+  _type: 'card'
 }
 
 type SealedResult = {
@@ -71,7 +73,11 @@ type SealedResult = {
   market_price_cents: number | null
   release_date: string | null
   tcgplayer_product_id: number | null
+  image_url?: string | null
+  _type: 'sealed'
 }
+
+type UnifiedResult = CardResult | SealedResult
 
 function formatPrice(cents: number | null | undefined): string {
   if (!cents) return '—'
@@ -84,23 +90,32 @@ function getRarityColor(rarity: string | null): { bg: string; text: string } {
   if (r.includes('special illustration') || r.includes('hyper')) return { bg: 'rgba(236,72,153,0.15)', text: '#f472b6' }
   if (r.includes('illustration rare') || r.includes('full art')) return { bg: 'rgba(168,85,247,0.15)', text: '#c084fc' }
   if (r.includes('secret') || r.includes('rainbow')) return { bg: 'rgba(236,72,153,0.12)', text: '#f9a8d4' }
-  if (r.includes('ultra') || r.includes('vmax') || r.includes('vstar')) return { bg: 'rgba(245,158,11,0.15)', text: '#fbbf24' }
-  if (r.includes('rare holo') || r.includes('holo')) return { bg: 'rgba(0,229,255,0.12)', text: '#00E5FF' }
+  if (r.includes('ultra') || r.includes('vmax') || r.includes('vstar')) return { bg: 'rgba(249,115,22,0.15)', text: '#fb923c' }
+  if (r.includes('rare holo') || r.includes('holo')) return { bg: 'rgba(249,115,22,0.12)', text: '#f97316' }
   if (r.includes('rare')) return { bg: 'rgba(99,102,241,0.15)', text: '#818cf8' }
   return { bg: 'rgba(100,116,139,0.12)', text: '#94a3b8' }
 }
 
 function getProductTypeColor(type: string): { bg: string; text: string } {
-  if (type === 'elite_trainer_box') return { bg: 'rgba(0,229,255,0.12)', text: '#00E5FF' }
-  if (type.includes('premium') || type.includes('ultra')) return { bg: 'rgba(201,168,76,0.15)', text: '#C9A84C' }
+  if (type === 'elite_trainer_box') return { bg: 'rgba(249,115,22,0.15)', text: '#f97316' }
+  if (type.includes('premium') || type.includes('ultra')) return { bg: 'rgba(234,88,12,0.15)', text: '#ea580c' }
   if (type === 'booster_box') return { bg: 'rgba(99,102,241,0.15)', text: '#818cf8' }
   if (type === 'tin' || type === 'mini_tin') return { bg: 'rgba(16,185,129,0.12)', text: '#34d399' }
   if (type.includes('collection')) return { bg: 'rgba(168,85,247,0.12)', text: '#c084fc' }
   if (type.includes('promo') || type.includes('ex_box')) return { bg: 'rgba(236,72,153,0.12)', text: '#f472b6' }
-  return { bg: 'rgba(245,158,11,0.12)', text: '#f59e0b' }
+  return { bg: 'rgba(249,115,22,0.12)', text: '#fb923c' }
 }
 
-// ── Expanded card detail modal ────────────────────────────────────────────────
+// Build TCGCSV image URL from productId
+function getSealedImageUrl(product: SealedResult): string | null {
+  if (product.image_url) return product.image_url
+  if (product.tcgplayer_product_id) {
+    return `https://product-images.tcgplayer.com/fit-in/437x437/${product.tcgplayer_product_id}.jpg`
+  }
+  return null
+}
+
+// ── Card detail modal ─────────────────────────────────────────────────────────
 function CardDetailModal({ card, onClose }: { card: CardResult; onClose: () => void }) {
   const [addingToCollection, setAddingToCollection] = useState(false)
   const [addingToWishlist, setAddingToWishlist] = useState(false)
@@ -166,27 +181,13 @@ function CardDetailModal({ card, onClose }: { card: CardResult; onClose: () => v
         {/* Card image */}
         <div className="relative bg-zinc-900 flex items-center justify-center" style={{ minHeight: 200 }}>
           {card.image_large ? (
-            <img
-              src={card.image_large}
-              alt={card.card_name}
-              className="w-full object-contain"
-              style={{ maxHeight: 340 }}
-            />
+            <img src={card.image_large} alt={card.card_name} className="w-full object-contain" style={{ maxHeight: 340 }} />
           ) : card.image_small ? (
-            <img
-              src={card.image_small}
-              alt={card.card_name}
-              className="w-full object-contain"
-              style={{ maxHeight: 340 }}
-            />
+            <img src={card.image_small} alt={card.card_name} className="w-full object-contain" style={{ maxHeight: 340 }} />
           ) : (
             <div className="flex items-center justify-center h-48 text-4xl">🃏</div>
           )}
-          <button
-            onClick={onClose}
-            className="absolute top-3 right-3 rounded-full p-1.5"
-            style={{ background: 'rgba(0,0,0,0.5)' }}
-          >
+          <button onClick={onClose} className="absolute top-3 right-3 rounded-full p-1.5" style={{ background: 'rgba(0,0,0,0.5)' }}>
             <X size={16} color="white" />
           </button>
         </div>
@@ -198,54 +199,42 @@ function CardDetailModal({ card, onClose }: { card: CardResult; onClose: () => v
             <p className="text-sm text-cv-muted">{card.set_name}{card.card_number ? ` · #${card.card_number}` : ''}</p>
           </div>
 
-          {/* Badges */}
           <div className="flex flex-wrap gap-2">
             {card.rarity && (
-              <span className="text-xs px-2 py-0.5 rounded-full font-medium"
-                style={{ background: rarityStyle.bg, color: rarityStyle.text }}>
+              <span className="text-xs px-2 py-0.5 rounded-full font-medium" style={{ background: rarityStyle.bg, color: rarityStyle.text }}>
                 {card.rarity}
               </span>
             )}
             {card.supertype && (
-              <span className="text-xs px-2 py-0.5 rounded-full font-medium"
-                style={{ background: 'rgba(16,185,129,0.12)', color: '#34d399' }}>
+              <span className="text-xs px-2 py-0.5 rounded-full font-medium" style={{ background: 'rgba(16,185,129,0.12)', color: '#34d399' }}>
                 {card.supertype}
               </span>
             )}
             {card.hp && (
-              <span className="text-xs px-2 py-0.5 rounded-full font-medium"
-                style={{ background: 'rgba(239,68,68,0.12)', color: '#f87171' }}>
+              <span className="text-xs px-2 py-0.5 rounded-full font-medium" style={{ background: 'rgba(239,68,68,0.12)', color: '#f87171' }}>
                 {card.hp} HP
               </span>
             )}
             {card.series && (
-              <span className="text-xs px-2 py-0.5 rounded-full font-medium"
-                style={{ background: 'rgba(100,116,139,0.12)', color: '#94a3b8' }}>
+              <span className="text-xs px-2 py-0.5 rounded-full font-medium" style={{ background: 'rgba(100,116,139,0.12)', color: '#94a3b8' }}>
                 {card.series}
               </span>
             )}
           </div>
 
-          {/* Price */}
           <div className="glass rounded-[var(--radius-md)] p-3 flex items-center justify-between">
             <span className="text-sm text-cv-muted">Market Price</span>
-            <span className="text-lg font-bold" style={{ color: '#00E5FF' }}>
+            <span className="text-lg font-bold" style={{ color: 'var(--primary)' }}>
               {formatPrice(card.tcgplayer_market_cents)}
             </span>
           </div>
 
-          {/* Error */}
           {addError && <p className="text-xs text-red-400">{addError}</p>}
 
-          {/* Actions */}
           {added === 'collection' ? (
-            <div className="text-center text-sm font-medium py-2" style={{ color: '#4ECBA0' }}>
-              ✓ Added to your collection
-            </div>
+            <div className="text-center text-sm font-medium py-2" style={{ color: '#4ECBA0' }}>✓ Added to your collection</div>
           ) : added === 'wishlist' ? (
-            <div className="text-center text-sm font-medium py-2" style={{ color: '#f472b6' }}>
-              ✓ Added to your wishlist
-            </div>
+            <div className="text-center text-sm font-medium py-2" style={{ color: '#f472b6' }}>✓ Added to your wishlist</div>
           ) : (
             <div className="grid grid-cols-2 gap-2">
               <button
@@ -254,7 +243,7 @@ function CardDetailModal({ card, onClose }: { card: CardResult; onClose: () => v
                 disabled={addingToCollection}
               >
                 <Plus size={14} />
-                {addingToCollection ? 'Adding...' : 'Add to Collection'}
+                {addingToCollection ? 'Adding…' : 'Add to Collection'}
               </button>
               <button
                 className="btn-ghost flex items-center justify-center gap-2 text-sm py-2"
@@ -263,19 +252,14 @@ function CardDetailModal({ card, onClose }: { card: CardResult; onClose: () => v
                 style={{ border: '1px solid rgba(244,114,182,0.3)', color: '#f472b6' }}
               >
                 <Heart size={14} />
-                {addingToWishlist ? 'Adding...' : 'Wishlist'}
+                {addingToWishlist ? 'Adding…' : 'Wishlist'}
               </button>
             </div>
           )}
 
-          {/* TCGPlayer link */}
           {card.tcgplayer_url && (
-            <a
-              href={card.tcgplayer_url}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="flex items-center justify-center gap-2 text-sm text-cv-muted hover:text-white transition-colors py-1"
-            >
+            <a href={card.tcgplayer_url} target="_blank" rel="noopener noreferrer"
+              className="flex items-center justify-center gap-2 text-sm text-cv-muted hover:text-white transition-colors py-1">
               <ShoppingCart size={14} />
               Buy on TCGPlayer
               <ExternalLink size={12} />
@@ -290,6 +274,7 @@ function CardDetailModal({ card, onClose }: { card: CardResult; onClose: () => v
 // ── Sealed product detail modal ───────────────────────────────────────────────
 function SealedDetailModal({ product, onClose }: { product: SealedResult; onClose: () => void }) {
   const typeStyle = getProductTypeColor(product.product_type)
+  const imageUrl = getSealedImageUrl(product)
 
   return (
     <div
@@ -301,40 +286,57 @@ function SealedDetailModal({ product, onClose }: { product: SealedResult; onClos
         className="glass rounded-[var(--radius-lg)] w-full max-w-sm overflow-hidden"
         onClick={e => e.stopPropagation()}
       >
-        {/* Header */}
-        <div className="relative p-5 pb-3 flex items-start gap-4">
-          <div className="rounded-xl p-3 shrink-0" style={{ background: typeStyle.bg }}>
-            <Package size={28} color={typeStyle.text} />
+        {/* Product image */}
+        {imageUrl && (
+          <div className="relative bg-zinc-900 flex items-center justify-center" style={{ minHeight: 160 }}>
+            <img
+              src={imageUrl}
+              alt={product.name}
+              className="object-contain"
+              style={{ maxHeight: 260, maxWidth: '100%' }}
+              onError={e => { (e.currentTarget as HTMLImageElement).style.display = 'none' }}
+            />
+            <button onClick={onClose} className="absolute top-3 right-3 rounded-full p-1.5" style={{ background: 'rgba(0,0,0,0.5)' }}>
+              <X size={16} color="white" />
+            </button>
           </div>
-          <div className="flex-1 min-w-0 pr-6">
-            <h2 className="text-base font-bold leading-snug">{product.name}</h2>
-            <p className="text-sm text-cv-muted mt-0.5">{product.set_name}</p>
+        )}
+
+        {/* Header (when no image) */}
+        {!imageUrl && (
+          <div className="relative p-5 pb-3 flex items-start gap-4">
+            <div className="rounded-xl p-3 shrink-0" style={{ background: typeStyle.bg }}>
+              <Package size={28} color={typeStyle.text} />
+            </div>
+            <div className="flex-1 min-w-0 pr-6">
+              <h2 className="text-base font-bold leading-snug">{product.name}</h2>
+              <p className="text-sm text-cv-muted mt-0.5">{product.set_name}</p>
+            </div>
+            <button onClick={onClose} className="absolute top-3 right-3 rounded-full p-1.5" style={{ background: 'rgba(255,255,255,0.05)' }}>
+              <X size={16} />
+            </button>
           </div>
-          <button
-            onClick={onClose}
-            className="absolute top-3 right-3 rounded-full p-1.5"
-            style={{ background: 'rgba(255,255,255,0.05)' }}
-          >
-            <X size={16} />
-          </button>
-        </div>
+        )}
 
         <div className="px-5 pb-5 space-y-3">
-          {/* Type badge */}
-          <span className="inline-block text-xs px-2.5 py-0.5 rounded-full font-medium"
-            style={{ background: typeStyle.bg, color: typeStyle.text }}>
+          {imageUrl && (
+            <div>
+              <h2 className="text-base font-bold leading-snug">{product.name}</h2>
+              <p className="text-sm text-cv-muted mt-0.5">{product.set_name}</p>
+            </div>
+          )}
+
+          <span className="inline-block text-xs px-2.5 py-0.5 rounded-full font-medium" style={{ background: typeStyle.bg, color: typeStyle.text }}>
             {TYPE_LABELS[product.product_type] ?? product.product_type}
           </span>
 
-          {/* Price */}
           <div className="glass rounded-[var(--radius-md)] p-3 flex items-center justify-between">
             <span className="text-sm text-cv-muted">Market Price</span>
-            <span className="text-lg font-bold" style={{ color: '#00E5FF' }}>
+            <span className="text-lg font-bold" style={{ color: 'var(--primary)' }}>
               {formatPrice(product.market_price_cents)}
             </span>
           </div>
 
-          {/* Release date */}
           {product.release_date && (
             <div className="flex items-center justify-between text-sm">
               <span className="text-cv-muted">Release Date</span>
@@ -342,14 +344,9 @@ function SealedDetailModal({ product, onClose }: { product: SealedResult; onClos
             </div>
           )}
 
-          {/* TCGPlayer link */}
           {product.tcgplayer_url && (
-            <a
-              href={product.tcgplayer_url}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="btn-primary flex items-center justify-center gap-2 text-sm w-full"
-            >
+            <a href={product.tcgplayer_url} target="_blank" rel="noopener noreferrer"
+              className="btn-primary flex items-center justify-center gap-2 text-sm w-full">
               <ShoppingCart size={14} />
               Buy on TCGPlayer
               <ExternalLink size={12} />
@@ -358,6 +355,156 @@ function SealedDetailModal({ product, onClose }: { product: SealedResult; onClos
         </div>
       </div>
     </div>
+  )
+}
+
+// ── Unified grid card component ───────────────────────────────────────────────
+function UnifiedGridItem({ item, onSelectCard, onSelectSealed }: {
+  item: UnifiedResult
+  onSelectCard: (c: CardResult) => void
+  onSelectSealed: (s: SealedResult) => void
+}) {
+  const [imgError, setImgError] = useState(false)
+
+  if (item._type === 'card') {
+    const rarityStyle = getRarityColor(item.rarity)
+    return (
+      <button
+        onClick={() => onSelectCard(item)}
+        style={{
+          background: 'var(--glass-bg)',
+          border: '1px solid var(--glass-border)',
+          borderRadius: 14,
+          padding: 0,
+          cursor: 'pointer',
+          textAlign: 'left',
+          overflow: 'hidden',
+          transition: 'transform 0.15s, border-color 0.15s',
+        }}
+        onMouseEnter={e => {
+          (e.currentTarget as HTMLElement).style.transform = 'translateY(-2px)'
+          ;(e.currentTarget as HTMLElement).style.borderColor = 'rgba(249,115,22,0.35)'
+        }}
+        onMouseLeave={e => {
+          (e.currentTarget as HTMLElement).style.transform = 'translateY(0)'
+          ;(e.currentTarget as HTMLElement).style.borderColor = 'var(--glass-border)'
+        }}
+      >
+        {/* Card image */}
+        <div style={{ aspectRatio: '2.5/3.5', background: 'rgba(0,0,0,0.3)', overflow: 'hidden', position: 'relative' }}>
+          {item.image_small && !imgError ? (
+            <img
+              src={item.image_small}
+              alt={item.card_name}
+              style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+              loading="lazy"
+              onError={() => setImgError(true)}
+            />
+          ) : (
+            <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 28 }}>🃏</div>
+          )}
+          {/* Card type badge */}
+          <div style={{
+            position: 'absolute', top: 5, left: 5,
+            background: 'rgba(0,0,0,0.65)', borderRadius: 6,
+            padding: '1px 5px', fontSize: 9, fontWeight: 700, color: '#94a3b8', letterSpacing: 0.5,
+          }}>CARD</div>
+        </div>
+
+        {/* Card info */}
+        <div style={{ padding: '8px 10px' }}>
+          <p style={{ margin: 0, fontWeight: 700, fontSize: 12, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            {item.card_name}
+          </p>
+          <p style={{ margin: '2px 0 0', fontSize: 11, color: 'var(--text-secondary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            {item.set_name}
+          </p>
+          {item.rarity && (
+            <span style={{ display: 'inline-block', marginTop: 4, fontSize: 10, padding: '1px 6px', borderRadius: 20, background: rarityStyle.bg, color: rarityStyle.text, fontWeight: 500 }}>
+              {item.rarity}
+            </span>
+          )}
+          <p style={{ margin: '4px 0 0', fontSize: 12, fontWeight: 700, color: 'var(--primary)' }}>
+            {formatPrice(item.tcgplayer_market_cents)}
+          </p>
+        </div>
+      </button>
+    )
+  }
+
+  // Sealed product
+  const typeStyle = getProductTypeColor(item.product_type)
+  const imageUrl = getSealedImageUrl(item)
+
+  return (
+    <button
+      onClick={() => onSelectSealed(item)}
+      style={{
+        background: 'var(--glass-bg)',
+        border: '1px solid var(--glass-border)',
+        borderRadius: 14,
+        padding: 0,
+        cursor: 'pointer',
+        textAlign: 'left',
+        overflow: 'hidden',
+        transition: 'transform 0.15s, border-color 0.15s',
+      }}
+      onMouseEnter={e => {
+        (e.currentTarget as HTMLElement).style.transform = 'translateY(-2px)'
+        ;(e.currentTarget as HTMLElement).style.borderColor = 'rgba(249,115,22,0.35)'
+      }}
+      onMouseLeave={e => {
+        (e.currentTarget as HTMLElement).style.transform = 'translateY(0)'
+        ;(e.currentTarget as HTMLElement).style.borderColor = 'var(--glass-border)'
+      }}
+    >
+      {/* Product image */}
+      <div style={{ aspectRatio: '2.5/3.5', background: 'rgba(0,0,0,0.3)', overflow: 'hidden', position: 'relative' }}>
+        {imageUrl && !imgError ? (
+          <img
+            src={imageUrl}
+            alt={item.name}
+            style={{ width: '100%', height: '100%', objectFit: 'contain', padding: 6 }}
+            loading="lazy"
+            onError={() => setImgError(true)}
+          />
+        ) : (
+          <div style={{ width: '100%', height: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
+            <div style={{ width: 44, height: 44, borderRadius: 10, background: typeStyle.bg, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <Package size={22} color={typeStyle.text} />
+            </div>
+          </div>
+        )}
+        {/* Sealed badge */}
+        <div style={{
+          position: 'absolute', top: 5, left: 5,
+          background: typeStyle.bg, borderRadius: 6,
+          padding: '1px 5px', fontSize: 9, fontWeight: 700, color: typeStyle.text, letterSpacing: 0.5,
+        }}>
+          {item.product_type === 'elite_trainer_box' ? 'ETB' :
+           item.product_type === 'booster_box' ? 'BOX' :
+           item.product_type === 'tin' ? 'TIN' :
+           item.product_type === 'booster_bundle' ? 'BUNDLE' :
+           'SEALED'}
+        </div>
+      </div>
+
+      {/* Product info */}
+      <div style={{ padding: '8px 10px' }}>
+        <p style={{ margin: 0, fontWeight: 700, fontSize: 12, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' } as React.CSSProperties}>
+          {item.name}
+        </p>
+        <p style={{ margin: '2px 0 0', fontSize: 11, color: 'var(--text-secondary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+          {item.set_name}
+        </p>
+        <span style={{ display: 'inline-block', marginTop: 4, fontSize: 10, padding: '1px 6px', borderRadius: 20, background: typeStyle.bg, color: typeStyle.text, fontWeight: 500 }}>
+          {TYPE_LABELS[item.product_type] ?? item.product_type}
+        </span>
+        <p style={{ margin: '4px 0 0', fontSize: 12, fontWeight: 700, color: 'var(--primary)' }}>
+          {formatPrice(item.market_price_cents)}
+        </p>
+      </div>
+    </button>
   )
 }
 
@@ -387,8 +534,8 @@ export default function SearchPage() {
       setLoading(true)
       try {
         const result = await api.universalSearch(query.trim(), category, 80)
-        setCards(result.cards ?? [])
-        setSealed(result.sealed ?? [])
+        setCards((result.cards ?? []).map((c: Omit<CardResult, '_type'>) => ({ ...c, _type: 'card' as const })))
+        setSealed((result.sealed ?? []).map((s: Omit<SealedResult, '_type'>) => ({ ...s, _type: 'sealed' as const })))
         setSearched(true)
       } catch {
         setCards([])
@@ -405,6 +552,26 @@ export default function SearchPage() {
   const filteredSealed = productTypeFilter
     ? sealed.filter(p => p.product_type === productTypeFilter)
     : sealed
+
+  // Build unified results list: interleave cards and sealed products
+  // Strategy: show sealed first if category=sealed, cards first if category=cards,
+  // otherwise interleave (1 sealed per 3 cards to keep variety)
+  const unifiedResults: UnifiedResult[] = (() => {
+    if (category === 'cards') return cards
+    if (category === 'sealed') return filteredSealed
+    // 'all': interleave — cards and sealed mixed together
+    const result: UnifiedResult[] = []
+    let ci = 0, si = 0
+    const cardArr = cards
+    const sealedArr = filteredSealed
+    while (ci < cardArr.length || si < sealedArr.length) {
+      // 2 cards then 1 sealed (ratio)
+      if (ci < cardArr.length) result.push(cardArr[ci++])
+      if (ci < cardArr.length) result.push(cardArr[ci++])
+      if (si < sealedArr.length) result.push(sealedArr[si++])
+    }
+    return result
+  })()
 
   const totalResults = cards.length + filteredSealed.length
 
@@ -470,8 +637,8 @@ export default function SearchPage() {
               padding: '6px 14px',
               borderRadius: 20,
               border: '1px solid var(--glass-border)',
-              background: category === cat ? 'rgba(0,229,255,0.15)' : 'var(--glass-bg)',
-              color: category === cat ? '#00E5FF' : 'var(--text-secondary)',
+              background: category === cat ? 'rgba(249,115,22,0.15)' : 'var(--glass-bg)',
+              color: category === cat ? '#f97316' : 'var(--text-secondary)',
               fontSize: 13,
               fontWeight: category === cat ? 600 : 400,
               cursor: 'pointer',
@@ -492,8 +659,8 @@ export default function SearchPage() {
               padding: '4px 12px',
               borderRadius: 20,
               border: '1px solid var(--glass-border)',
-              background: productTypeFilter === '' ? 'rgba(245,158,11,0.15)' : 'var(--glass-bg)',
-              color: productTypeFilter === '' ? '#f59e0b' : 'var(--text-secondary)',
+              background: productTypeFilter === '' ? 'rgba(249,115,22,0.15)' : 'var(--glass-bg)',
+              color: productTypeFilter === '' ? '#f97316' : 'var(--text-secondary)',
               fontSize: 12,
               fontWeight: productTypeFilter === '' ? 600 : 400,
               cursor: 'pointer',
@@ -510,8 +677,8 @@ export default function SearchPage() {
                 padding: '4px 12px',
                 borderRadius: 20,
                 border: '1px solid var(--glass-border)',
-                background: productTypeFilter === value ? 'rgba(245,158,11,0.15)' : 'var(--glass-bg)',
-                color: productTypeFilter === value ? '#f59e0b' : 'var(--text-secondary)',
+                background: productTypeFilter === value ? 'rgba(249,115,22,0.15)' : 'var(--glass-bg)',
+                color: productTypeFilter === value ? '#f97316' : 'var(--text-secondary)',
                 fontSize: 12,
                 fontWeight: productTypeFilter === value ? 600 : 400,
                 cursor: 'pointer',
@@ -549,156 +716,24 @@ export default function SearchPage() {
         </div>
       )}
 
-      {/* ── Results ── */}
-      {!loading && totalResults > 0 && (
+      {/* ── Unified results grid ── */}
+      {!loading && unifiedResults.length > 0 && (
         <div>
           <p style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 12 }}>
             {totalResults} result{totalResults !== 1 ? 's' : ''}
-            {cards.length > 0 && filteredSealed.length > 0 && ` (${cards.length} card${cards.length !== 1 ? 's' : ''}, ${filteredSealed.length} sealed)`}
+            {cards.length > 0 && filteredSealed.length > 0 && ` · ${cards.length} card${cards.length !== 1 ? 's' : ''}, ${filteredSealed.length} sealed`}
           </p>
 
-          {/* Card results — collection-style grid */}
-          {cards.length > 0 && (
-            <div>
-              {category === 'all' && (
-                <p style={{ fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: 1, color: 'var(--text-secondary)', marginBottom: 10 }}>
-                  Cards ({cards.length})
-                </p>
-              )}
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(130px, 1fr))', gap: 12, marginBottom: 24 }}>
-                {cards.map(card => {
-                  const rarityStyle = getRarityColor(card.rarity)
-                  return (
-                    <button
-                      key={card.ptcg_id}
-                      onClick={() => setSelectedCard(card)}
-                      style={{
-                        background: 'var(--glass-bg)',
-                        border: '1px solid var(--glass-border)',
-                        borderRadius: 14,
-                        padding: 0,
-                        cursor: 'pointer',
-                        textAlign: 'left',
-                        overflow: 'hidden',
-                        transition: 'transform 0.15s, border-color 0.15s',
-                      }}
-                      onMouseEnter={e => {
-                        (e.currentTarget as HTMLElement).style.transform = 'translateY(-2px)'
-                        ;(e.currentTarget as HTMLElement).style.borderColor = 'rgba(0,229,255,0.3)'
-                      }}
-                      onMouseLeave={e => {
-                        (e.currentTarget as HTMLElement).style.transform = 'translateY(0)'
-                        ;(e.currentTarget as HTMLElement).style.borderColor = 'var(--glass-border)'
-                      }}
-                    >
-                      {/* Card image */}
-                      <div style={{ aspectRatio: '2.5/3.5', background: 'rgba(0,0,0,0.3)', overflow: 'hidden' }}>
-                        {card.image_small ? (
-                          <img
-                            src={card.image_small}
-                            alt={card.card_name}
-                            style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-                            loading="lazy"
-                          />
-                        ) : (
-                          <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 28 }}>🃏</div>
-                        )}
-                      </div>
-
-                      {/* Card info */}
-                      <div style={{ padding: '8px 10px' }}>
-                        <p style={{ margin: 0, fontWeight: 700, fontSize: 12, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                          {card.card_name}
-                        </p>
-                        <p style={{ margin: '2px 0 0', fontSize: 11, color: 'var(--text-secondary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                          {card.set_name}
-                        </p>
-                        {card.rarity && (
-                          <span style={{ display: 'inline-block', marginTop: 4, fontSize: 10, padding: '1px 6px', borderRadius: 20, background: rarityStyle.bg, color: rarityStyle.text, fontWeight: 500 }}>
-                            {card.rarity}
-                          </span>
-                        )}
-                        <p style={{ margin: '4px 0 0', fontSize: 12, fontWeight: 700, color: '#00E5FF' }}>
-                          {formatPrice(card.tcgplayer_market_cents)}
-                        </p>
-                      </div>
-                    </button>
-                  )
-                })}
-              </div>
-            </div>
-          )}
-
-          {/* Sealed results — list style with rich info */}
-          {filteredSealed.length > 0 && (
-            <div>
-              {category === 'all' && (
-                <p style={{ fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: 1, color: 'var(--text-secondary)', marginBottom: 10 }}>
-                  Sealed Products ({filteredSealed.length})
-                </p>
-              )}
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                {filteredSealed.map(product => {
-                  const typeStyle = getProductTypeColor(product.product_type)
-                  return (
-                    <button
-                      key={product.id}
-                      onClick={() => setSelectedSealed(product)}
-                      style={{
-                        display: 'flex',
-                        gap: 14,
-                        background: 'var(--glass-bg)',
-                        border: '1px solid var(--glass-border)',
-                        borderRadius: 14,
-                        padding: 12,
-                        alignItems: 'center',
-                        cursor: 'pointer',
-                        textAlign: 'left',
-                        width: '100%',
-                        transition: 'border-color 0.15s',
-                      }}
-                      onMouseEnter={e => (e.currentTarget as HTMLElement).style.borderColor = 'rgba(245,158,11,0.3)'}
-                      onMouseLeave={e => (e.currentTarget as HTMLElement).style.borderColor = 'var(--glass-border)'}
-                    >
-                      {/* Product icon */}
-                      <div style={{
-                        flexShrink: 0, width: 52, height: 52, borderRadius: 12,
-                        background: typeStyle.bg,
-                        display: 'flex', alignItems: 'center', justifyContent: 'center',
-                      }}>
-                        <Package size={24} color={typeStyle.text} />
-                      </div>
-
-                      {/* Product info */}
-                      <div style={{ flex: 1, minWidth: 0 }}>
-                        <p style={{
-                          margin: 0, fontWeight: 700, fontSize: 14, color: 'var(--text-primary)',
-                          overflow: 'hidden', textOverflow: 'ellipsis',
-                          display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical',
-                        } as React.CSSProperties}>
-                          {product.name}
-                        </p>
-                        <p style={{ margin: '2px 0 0', fontSize: 12, color: 'var(--text-secondary)' }}>
-                          {product.set_name}
-                          {product.release_date ? ` · ${new Date(product.release_date).getFullYear()}` : ''}
-                        </p>
-                        <div style={{ display: 'flex', gap: 6, marginTop: 5, alignItems: 'center', flexWrap: 'wrap' }}>
-                          <span style={{ fontSize: 11, padding: '2px 8px', borderRadius: 20, background: typeStyle.bg, color: typeStyle.text, fontWeight: 500 }}>
-                            {TYPE_LABELS[product.product_type] ?? product.product_type}
-                          </span>
-                          <span style={{ fontSize: 13, fontWeight: 700, color: '#00E5FF', marginLeft: 'auto' }}>
-                            {formatPrice(product.market_price_cents)}
-                          </span>
-                        </div>
-                      </div>
-
-                      <ExternalLink size={14} color="var(--text-secondary)" style={{ flexShrink: 0 }} />
-                    </button>
-                  )
-                })}
-              </div>
-            </div>
-          )}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(130px, 1fr))', gap: 12 }}>
+            {unifiedResults.map(item => (
+              <UnifiedGridItem
+                key={item._type === 'card' ? `card-${item.ptcg_id}` : `sealed-${item.id}`}
+                item={item}
+                onSelectCard={setSelectedCard}
+                onSelectSealed={setSelectedSealed}
+              />
+            ))}
+          </div>
         </div>
       )}
 

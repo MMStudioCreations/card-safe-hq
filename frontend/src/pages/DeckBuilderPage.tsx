@@ -420,11 +420,11 @@ function HaveNeedSection({
                     card.category === 'pokemon' ? 'bg-yellow-500/20 text-yellow-300' :
                     card.category === 'trainer' ? 'bg-blue-500/20 text-blue-300' :
                     card.category === 'monster' ? 'bg-orange-500/20 text-orange-300' :
-                    card.category === 'spell' ? 'bg-teal-500/20 text-teal-300' :
+                    card.category === 'spell' ? 'bg-emerald-500/20 text-emerald-300' :
                     card.category === 'trap' ? 'bg-pink-500/20 text-pink-300' :
                     card.category === 'extra' ? 'bg-purple-500/20 text-purple-300' :
                     card.category === 'land' ? 'bg-green-500/20 text-green-300' :
-                    card.category === 'creature' ? 'bg-cyan-500/20 text-cyan-300' :
+                    card.category === 'creature' ? 'bg-sky-500/20 text-sky-300' :
                     'bg-gray-500/20 text-gray-300'
                   }`}>{card.category}</span>
                 </div>
@@ -959,11 +959,11 @@ export default function DeckBuilderPage() {
           {!isPro && (
             <div className="glass rounded-[var(--radius-md)] p-3 flex items-start gap-3"
               style={{ border: '1px solid rgba(201,168,76,0.2)', background: 'rgba(201,168,76,0.04)' }}>
-              <Lock size={16} className="shrink-0 mt-0.5" style={{ color: '#C9A84C' }} />
+              <Lock size={16} className="shrink-0 mt-0.5" style={{ color: '#f97316' }} />
               <div className="flex-1 min-w-0">
-                <p className="text-xs font-semibold" style={{ color: '#C9A84C' }}>Free Tier — Limited Deck Builder</p>
+                <p className="text-xs font-semibold" style={{ color: '#f97316' }}>Free Tier — Limited Deck Builder</p>
                 <p className="text-xs text-cv-muted mt-0.5">Free accounts can build decks up to {FREE_DECK_LIMIT} cards. Upgrade to Pro for full 60-card decks, AI generation, and meta deck analysis.</p>
-                <Link to="/billing" className="text-xs font-semibold mt-1 inline-block" style={{ color: '#C9A84C' }}>Upgrade to Pro →</Link>
+                <Link to="/billing" className="text-xs font-semibold mt-1 inline-block" style={{ color: '#f97316' }}>Upgrade to Pro →</Link>
               </div>
             </div>
           )}
@@ -973,7 +973,7 @@ export default function DeckBuilderPage() {
               <h3 className="font-semibold">Custom Deck</h3>
               <span className="text-sm text-cv-muted">
                 {totalCards}/{isPro ? deckSize : FREE_DECK_LIMIT}
-                {!isPro && <span className="ml-1 text-xs" style={{ color: '#C9A84C' }}>(free limit)</span>}
+                {!isPro && <span className="ml-1 text-xs" style={{ color: '#f97316' }}>(free limit)</span>}
               </span>
             </div>
 
@@ -1085,7 +1085,7 @@ export default function DeckBuilderPage() {
               </>
             ) : (
               <div className="text-center py-3">
-                <Lock size={20} className="mx-auto mb-2" style={{ color: '#C9A84C', opacity: 0.7 }} />
+                <Lock size={20} className="mx-auto mb-2" style={{ color: '#f97316', opacity: 0.7 }} />
                 <p className="text-xs text-cv-muted mb-2">AI deck generation is a Pro feature.</p>
                 <Link to="/billing" className="btn-primary text-xs py-1.5 px-4 inline-block">Upgrade to Pro</Link>
               </div>

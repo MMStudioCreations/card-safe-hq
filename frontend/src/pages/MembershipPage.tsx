@@ -4,7 +4,7 @@ import { useQuery } from '@tanstack/react-query'
 import { api } from '../lib/api'
 import { useAuth } from '../lib/hooks'
 
-function CheckIcon({ color = '#00E5FF' }: { color?: string }) {
+function CheckIcon({ color = '#f97316' }: { color?: string }) {
   return (
     <svg width="15" height="15" viewBox="0 0 15 15" fill="none" className="shrink-0 mt-0.5">
       <circle cx="7.5" cy="7.5" r="7.5" fill={color} fillOpacity="0.15" />
@@ -91,7 +91,7 @@ export default function MembershipPage() {
         {!user && (
           <p className="text-xs text-cv-muted mt-2">
             Already have an account?{' '}
-            <Link to="/login" className="text-[#00E5FF] hover:underline">Sign in</Link>
+            <Link to="/login" className="text-[#f97316] hover:underline">Sign in</Link>
           </p>
         )}
       </div>
@@ -104,9 +104,9 @@ export default function MembershipPage() {
             className="text-sm font-bold px-2 py-0.5 rounded-full ml-1"
             style={
               isYearly
-                ? { background: 'rgba(201,168,76,0.15)', color: '#C9A84C' }
+                ? { background: 'rgba(249,115,22,0.15)', color: '#f59e0b' }
                 : isMonthly
-                ? { background: 'rgba(0,229,255,0.1)', color: '#00E5FF' }
+                ? { background: 'rgba(249,115,22,0.10)', color: '#f97316' }
                 : { color: 'var(--cv-muted)' }
             }
           >
@@ -161,7 +161,7 @@ export default function MembershipPage() {
         <div className="glass p-5 rounded-[var(--radius-lg)] flex flex-col space-y-4"
           style={{ border: '1px solid rgba(0,229,255,0.25)' }}>
           <div>
-            <h2 className="text-xl font-bold" style={{ color: '#00E5FF' }}>Pro Monthly</h2>
+            <h2 className="text-xl font-bold" style={{ color: '#f97316' }}>Pro Monthly</h2>
             <div className="flex items-end gap-1 mt-1">
               <span className="text-3xl font-black">$10</span>
               <span className="text-cv-muted text-sm mb-0.5">/ month</span>
@@ -179,7 +179,7 @@ export default function MembershipPage() {
               'Monthly product giveaway',
             ].map(f => (
               <div key={f} className="flex items-start gap-2 text-sm text-cv-muted">
-                <CheckIcon color="#00E5FF" />
+                <CheckIcon color="#f97316" />
                 <span>{f}</span>
               </div>
             ))}
@@ -194,7 +194,7 @@ export default function MembershipPage() {
             </button>
           )}
           {isPro && isMonthly && (
-            <div className="rounded-full text-center py-2.5 text-sm font-medium" style={{ background: 'rgba(0,229,255,0.1)', color: '#00E5FF' }}>
+            <div className="rounded-full text-center py-2.5 text-sm font-medium" style={{ background: 'rgba(249,115,22,0.10)', color: '#f97316' }}>
               Current Plan ✓
             </div>
           )}
@@ -213,12 +213,12 @@ export default function MembershipPage() {
           }}>
           <div className="absolute -top-3 left-4">
             <span className="text-[10px] font-bold px-2.5 py-0.5 rounded-full"
-              style={{ background: 'linear-gradient(90deg,#C9A84C,#E8C76A)', color: '#080C10' }}>
+              style={{ background: 'linear-gradient(90deg,#f97316,#f59e0b)', color: '#080C10' }}>
               BEST VALUE — SAVE $20/YR
             </span>
           </div>
           <div>
-            <h2 className="text-xl font-bold" style={{ color: '#C9A84C' }}>Pro Yearly</h2>
+            <h2 className="text-xl font-bold" style={{ color: '#f59e0b' }}>Pro Yearly</h2>
             <div className="flex items-end gap-1 mt-1">
               <span className="text-3xl font-black">$100</span>
               <span className="text-cv-muted text-sm mb-0.5">/ year</span>
@@ -234,7 +234,7 @@ export default function MembershipPage() {
               'Monthly product giveaway',
             ].map(f => (
               <div key={f} className="flex items-start gap-2 text-sm text-cv-muted">
-                <CheckIcon color="#C9A84C" />
+                <CheckIcon color="#f59e0b" />
                 <span>{f}</span>
               </div>
             ))}
@@ -242,7 +242,7 @@ export default function MembershipPage() {
           {(!user || !isPro) && billingConfigured && (
             <button
               className="w-full py-2.5 px-4 rounded-full text-sm font-bold transition-opacity hover:opacity-90"
-              style={{ background: 'linear-gradient(90deg,#C9A84C,#E8C76A)', color: '#080C10' }}
+              style={{ background: 'linear-gradient(90deg,#f97316,#f59e0b)', color: '#080C10' }}
               onClick={() => void handleSubscribe('yearly')}
               disabled={loadingPlan !== null}
             >
@@ -250,14 +250,14 @@ export default function MembershipPage() {
             </button>
           )}
           {isPro && isYearly && (
-            <div className="rounded-full text-center py-2.5 text-sm font-bold" style={{ background: 'rgba(201,168,76,0.15)', color: '#C9A84C' }}>
+            <div className="rounded-full text-center py-2.5 text-sm font-bold" style={{ background: 'rgba(249,115,22,0.15)', color: '#f59e0b' }}>
               Current Plan ✓
             </div>
           )}
           {isPro && isMonthly && billingConfigured && (
             <button
               className="w-full py-2.5 px-4 rounded-full text-sm font-bold"
-              style={{ background: 'linear-gradient(90deg,#C9A84C,#E8C76A)', color: '#080C10' }}
+              style={{ background: 'linear-gradient(90deg,#f97316,#f59e0b)', color: '#080C10' }}
               onClick={() => void handleSubscribe('yearly')}
               disabled={loadingPlan !== null}
             >
@@ -283,8 +283,8 @@ export default function MembershipPage() {
             style={{ gridTemplateColumns: '1fr 80px 90px 90px' }}>
             <div className="p-3">Feature</div>
             <div className="p-3 text-center">Free</div>
-            <div className="p-3 text-center" style={{ color: '#00E5FF' }}>Monthly</div>
-            <div className="p-3 text-center" style={{ color: '#C9A84C' }}>Yearly</div>
+            <div className="p-3 text-center" style={{ color: '#f97316' }}>Monthly</div>
+            <div className="p-3 text-center" style={{ color: '#f59e0b' }}>Yearly</div>
           </div>
           {features.map(({ label, free, monthly, yearly }, i) => (
             <div
@@ -297,10 +297,10 @@ export default function MembershipPage() {
                 {free ? <CheckIcon color="rgba(255,255,255,0.4)" /> : <LockIcon />}
               </div>
               <div className="p-3 flex justify-center">
-                {monthly ? <CheckIcon color="#00E5FF" /> : <LockIcon />}
+                {monthly ? <CheckIcon color="#f97316" /> : <LockIcon />}
               </div>
               <div className="p-3 flex justify-center">
-                {yearly ? <CheckIcon color="#C9A84C" /> : <LockIcon />}
+                {yearly ? <CheckIcon color="#f59e0b" /> : <LockIcon />}
               </div>
             </div>
           ))}

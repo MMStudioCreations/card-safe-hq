@@ -193,11 +193,17 @@ export async function searchSealedLive(query: string, limit: number): Promise<Ar
 
     // Sort all groups by groupId descending (newest first — higher IDs = more recent sets)
     const sortedGroups = [...allGroups].sort((a, b) => b.groupId - a.groupId);
-    // Search groups whose name matches the query
-    const groupNameMatches = sortedGroups.filter(g => g.name.toLowerCase().includes(q));
-    // Also check the 60 most recent groups for product-level name matches
-    const recentGroups = sortedGroups.slice(0, 60);
-    const groupsToSearch = [...new Map([...groupNameMatches, ...recentGroups].map(g => [g.groupId, g])).values()].slice(0, 40);
+    // Split query into significant words (3+ chars) for group name matching
+    const queryWords = q.split(/\s+/).filter(w => w.length >= 3);
+    // Search groups whose name contains ANY significant query word
+    const groupNameMatches = sortedGroups.filter(g => {
+      const gn = g.name.toLowerCase();
+      return queryWords.some(w => gn.includes(w));
+    });
+    // Also check the 80 most recent groups for product-level name matches
+    const recentGroups = sortedGroups.slice(0, 80);
+    // Merge: group name matches + recent groups, deduplicated, up to 60 total
+    const groupsToSearch = [...new Map([...groupNameMatches, ...recentGroups].map(g => [g.groupId, g])).values()].slice(0, 60);
 
     await Promise.all(groupsToSearch.map(async (group) => {
       try {

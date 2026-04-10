@@ -17,7 +17,7 @@ type SoldComp = { sold_price_cents: number; sold_date: string; title: string; so
 const CustomDot = (props: any) => {
   const { cx, cy, payload } = props
   if (payload?.type === 'active') {
-    return <circle cx={cx} cy={cy} r={4} fill="#00E5FF" fillOpacity={0.5} stroke="none" />
+    return <circle cx={cx} cy={cy} r={4} fill="#f97316" fillOpacity={0.5} stroke="none" />
   }
   return <circle cx={cx} cy={cy} r={4} fill="var(--primary)" stroke="#080C10" strokeWidth={1.5} />
 }
@@ -167,7 +167,7 @@ const PriceChart = ({
         </span>
         {activePoints.length > 0 && (
           <span className="flex items-center gap-1">
-            <span className="inline-block h-2 w-2 rounded-full bg-[#00E5FF] opacity-50" /> Active Listings
+            <span className="inline-block h-2 w-2 rounded-full bg-[#f97316] opacity-50" /> Active Listings
           </span>
         )}
         {tcgPrice && (
