@@ -19,6 +19,7 @@ import ResetPasswordPage from './pages/ResetPasswordPage'
 import VerifyEmailPage from './pages/VerifyEmailPage'
 import BillingPage from './pages/BillingPage'
 import SearchPage from './pages/SearchPage'
+import AccountPage from './pages/AccountPage'
 
 function Protected({ children }: { children: React.ReactNode }) {
   return (
@@ -55,6 +56,7 @@ export default function App() {
 
       {/* Sealed Products */}
       <Route path="/sealed" element={<Protected><SearchPage /></Protected>} />
+      <Route path="/account" element={<Protected><AccountPage /></Protected>} />
 
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>

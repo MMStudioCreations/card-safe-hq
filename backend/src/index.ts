@@ -25,6 +25,8 @@ import { getCardPricing } from './routes/pricing';
 import { getPokemonSets, getSetChecklist, saveDeck, listDecks } from './routes/sets';
 import { getMetaDecks, getMetaDeck, analyzeDeckAgainstCollection } from './routes/meta';
 import { seedPokemonCatalog, getSeedStatus, lookupPokemonCard } from './routes/seed';
+import { handleDashboardSummary } from './routes/dashboard';
+import { createDeck, deleteDeck, getDeck, listDecksV2, updateDeck, upsertDeckCard } from './routes/decks';
 import {
   handleAdminStats,
   handleAdminUsers,
@@ -473,6 +475,26 @@ export default {
         );
       }
 
+
+      if (pathname === '/api/decks/v2') {
+        const user = await requireAuth(env, request);
+        if (user instanceof Response) return withCors(user, request, env);
+        if (method === 'GET') return withCors(await listDecksV2(env, user), request, env);
+        if (method === 'POST') return withCors(await createDeck(env, request, user), request, env);
+      }
+
+      if (pathname.startsWith('/api/decks/v2/')) {
+        const user = await requireAuth(env, request);
+        if (user instanceof Response) return withCors(user, request, env);
+        const deckSegment = pathname.split('/')[4];
+        const id = Number(deckSegment);
+        if (!Number.isInteger(id) || id <= 0) return withCors(badRequest('Invalid deck id'), request, env);
+        if (method === 'GET' && !pathname.endsWith('/cards')) return withCors(await getDeck(env, user, id), request, env);
+        if (method === 'PATCH') return withCors(await updateDeck(env, request, user, id), request, env);
+        if (method === 'DELETE') return withCors(await deleteDeck(env, user, id), request, env);
+        if (method === 'POST' && pathname.endsWith('/cards')) return withCors(await upsertDeckCard(env, request, user, id), request, env);
+      }
+
       if (pathname === '/api/decks') {
         const user = await requireAuth(env, request);
         if (user instanceof Response) return withCors(user, request, env);
@@ -516,6 +538,13 @@ export default {
       // ── Public catalog lookup (used by vision pipeline) ───────────────────
       if (pathname === '/api/catalog/pokemon/lookup') {
         if (method === 'GET') return withCors(await lookupPokemonCard(env, request), request, env);
+      }
+
+
+      if (method === 'GET' && pathname === '/api/dashboard/summary') {
+        const user = await requireAuth(env, request);
+        if (user instanceof Response) return withCors(user, request, env);
+        return withCors(await handleDashboardSummary(env, user), request, env);
       }
 
       // ── Trades routes ──────────────────────────────────────────────────────
@@ -634,14 +663,14 @@ export default {
                     supertype, subtypes, hp, image_small, image_large,
                     tcgplayer_url, tcgplayer_market_cents
              FROM pokemon_catalog
-             WHERE card_name LIKE ? OR set_name LIKE ?
+             WHERE card_name LIKE ? OR set_name LIKE ? OR card_number LIKE ?
              ORDER BY
                CASE WHEN card_name = ? THEN 0
                     WHEN card_name LIKE ? THEN 1
                     ELSE 2 END,
                card_name ASC
              LIMIT ?`
-          ).bind(like, like, q, `${q}%`, Math.ceil(limit * 0.7)).all()
+          ).bind(like, like, like, q, `${q}%`, Math.ceil(limit * 0.7)).all()
           cards = cardRows.results ?? []
         }
 

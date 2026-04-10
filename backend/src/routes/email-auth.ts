@@ -12,8 +12,9 @@ import type { Env } from '../types';
 import { queryOne, run } from '../lib/db';
 import { hashPassword } from '../lib/auth-utils';
 import { sendVerificationEmail, sendPasswordResetEmail } from '../lib/email';
-import { badRequest, ok, notFound } from '../lib/json';
-import { asEmail, asString, parseJsonBody } from '../lib/validation';
+import { isEmailConfigured } from '../lib/config';
+import { badRequest, ok } from '../lib/json';
+import { asEmail, parseJsonBody } from '../lib/validation';
 import { getCurrentUser } from '../lib/auth';
 
 // ── Token helpers ─────────────────────────────────────────────────────────────
@@ -80,8 +81,11 @@ export async function handleResendVerification(env: Env, request: Request): Prom
     [token, user.id, hoursFromNow(24)],
   );
 
-  await sendVerificationEmail(env, userRow.email, token);
-  return ok({ sent: true });
+  const sent = await sendVerificationEmail(env, userRow.email, token);
+  if (!sent.ok && !isEmailConfigured(env)) {
+    return ok({ sent: false, message: 'Email delivery is temporarily unavailable.' });
+  }
+  return ok({ sent: sent.ok });
 }
 
 // ── Forgot Password ───────────────────────────────────────────────────────────
@@ -121,6 +125,10 @@ export async function handleForgotPassword(env: Env, request: Request): Promise<
       console.error('[forgot-password] Failed to send email', err);
       // Don't expose the error to the client
     }
+  }
+
+  if (!isEmailConfigured(env)) {
+    return ok({ sent: false, message: 'Email delivery is temporarily unavailable.' });
   }
 
   return ok({ sent: true });

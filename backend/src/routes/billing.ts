@@ -22,7 +22,8 @@
 import type { Env } from '../types';
 import { queryOne, run } from '../lib/db';
 import { requireAuth } from '../lib/auth';
-import { ok, badRequest, serverError, unauthorized } from '../lib/json';
+import { ok, badRequest, unauthorized } from '../lib/json';
+import { isStripeConfigured } from '../lib/config';
 
 // ── Stripe helpers ────────────────────────────────────────────────────────────
 
@@ -125,6 +126,7 @@ export async function handleBillingStatus(env: Env, request: Request): Promise<R
       status: null,
       current_period_end: null,
       cancel_at_period_end: false,
+      billing_configured: isStripeConfigured(env),
     });
   }
 
@@ -136,13 +138,14 @@ export async function handleBillingStatus(env: Env, request: Request): Promise<R
     status: sub.status,
     current_period_end: sub.current_period_end,
     cancel_at_period_end: Boolean(sub.cancel_at_period_end),
+    billing_configured: isStripeConfigured(env),
   });
 }
 
 // ── POST /api/billing/checkout ────────────────────────────────────────────────
 
 export async function handleCreateCheckout(env: Env, request: Request): Promise<Response> {
-  if (!env.STRIPE_SECRET_KEY) return serverError('Stripe not configured');
+  if (!isStripeConfigured(env)) return badRequest('Billing is not configured yet.');
 
   const user = await requireAuth(env, request);
   if (user instanceof Response) return user;
@@ -157,11 +160,11 @@ export async function handleCreateCheckout(env: Env, request: Request): Promise<
 
   // Get price IDs from env — set these in wrangler.toml or Cloudflare dashboard
   const priceId = plan === 'monthly'
-    ? (env as unknown as Record<string, string>)['STRIPE_PRICE_MONTHLY']
-    : (env as unknown as Record<string, string>)['STRIPE_PRICE_YEARLY'];
+    ? (env as unknown as Record<string, string>)['STRIPE_PRICE_ID_MONTHLY']
+    : (env as unknown as Record<string, string>)['STRIPE_PRICE_ID_YEARLY'];
 
   if (!priceId) {
-    return serverError(`STRIPE_PRICE_${plan.toUpperCase()} not configured`);
+    return badRequest('Stripe price is not configured.');
   }
 
   const userRow = await queryOne<{ email: string }>(
@@ -190,7 +193,7 @@ export async function handleCreateCheckout(env: Env, request: Request): Promise<
 // ── POST /api/billing/portal ──────────────────────────────────────────────────
 
 export async function handleCreatePortal(env: Env, request: Request): Promise<Response> {
-  if (!env.STRIPE_SECRET_KEY) return serverError('Stripe not configured');
+  if (!isStripeConfigured(env)) return badRequest('Billing is not configured yet.');
 
   const user = await requireAuth(env, request);
   if (user instanceof Response) return user;

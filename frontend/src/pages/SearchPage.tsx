@@ -130,7 +130,7 @@ export default function SearchPage() {
           type="text"
           value={query}
           onChange={e => setQuery(e.target.value)}
-          placeholder="Search by name, set, year…"
+          placeholder="Search by name, set, or card number…"
           autoFocus
           style={{
             flex: 1,

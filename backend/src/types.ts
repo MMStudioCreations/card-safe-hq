@@ -8,12 +8,19 @@ export interface Env {
   EBAY_CLIENT_SECRET?: string;
   POKEMON_TCG_API_KEY?: string;
   ADMIN_EMAIL?: string;
-  // Email (Resend)
-  RESEND_API_KEY?: string;
-  APP_URL?: string;
+  // Email
+  RESEND_API_KEY?: string; // legacy
+  MAILEROO_API_KEY?: string;
+  MAIL_FROM?: string;
+  APP_URL?: string; // legacy
+  APP_BASE_URL?: string;
+  ENFORCE_EMAIL_VERIFICATION?: string;
   // Payments (Stripe)
   STRIPE_SECRET_KEY?: string;
+  STRIPE_PUBLISHABLE_KEY?: string;
   STRIPE_WEBHOOK_SECRET?: string;
+  STRIPE_PRICE_ID_MONTHLY?: string;
+  STRIPE_PRICE_ID_YEARLY?: string;
 }
 export interface User {
   id: number;
