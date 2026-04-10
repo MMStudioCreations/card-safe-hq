@@ -1,11 +1,11 @@
 import { useEffect, useRef, useState } from 'react'
-import { ExternalLink, Package, Search, X } from 'lucide-react'
+import { ExternalLink, Heart, Package, Plus, Search, ShoppingCart, X } from 'lucide-react'
 import { api } from '../lib/api'
 
-// ── Type labels for sealed products ──────────────────────────────────────────
+// ── Type labels for all sealed product types ──────────────────────────────────
 const TYPE_LABELS: Record<string, string> = {
   booster_box: 'Booster Box',
-  elite_trainer_box: 'Elite Trainer Box',
+  elite_trainer_box: 'Elite Trainer Box (ETB)',
   ultra_premium_collection: 'Ultra Premium Collection',
   premium_collection: 'Premium Collection',
   special_collection: 'Special Collection',
@@ -16,6 +16,7 @@ const TYPE_LABELS: Record<string, string> = {
   poster_collection: 'Poster Collection',
   pin_collection: 'Pin Collection',
   collection_box: 'Collection Box',
+  collection_chest: 'Collection Chest',
   tin: 'Tin',
   mini_tin: 'Mini Tin',
   build_and_battle: 'Build & Battle Box',
@@ -24,9 +25,24 @@ const TYPE_LABELS: Record<string, string> = {
   gift_set: 'Gift Set',
   binder_collection: 'Binder Collection',
   world_championship_deck: 'World Championship Deck',
-  theme_deck: 'Theme Deck',
+  theme_deck: 'Theme / Starter Deck',
+  promo_pack: 'Promo Pack',
+  ex_box: 'EX Box',
+  vstar_universe: 'VSTAR Universe Box',
   other: 'Sealed Product',
 }
+
+// Product type filter groups for the UI
+const PRODUCT_FILTER_GROUPS = [
+  { label: 'ETB', value: 'elite_trainer_box' },
+  { label: 'Booster Box', value: 'booster_box' },
+  { label: 'Tin', value: 'tin' },
+  { label: 'Collection Box', value: 'collection_box' },
+  { label: 'Premium Collection', value: 'premium_collection' },
+  { label: 'Promo Pack', value: 'promo_pack' },
+  { label: 'Bundle', value: 'booster_bundle' },
+  { label: 'Battle Deck', value: 'battle_deck' },
+]
 
 type Category = 'all' | 'cards' | 'sealed'
 
@@ -62,13 +78,300 @@ function formatPrice(cents: number | null | undefined): string {
   return `$${(cents / 100).toFixed(2)}`
 }
 
+function getRarityColor(rarity: string | null): { bg: string; text: string } {
+  if (!rarity) return { bg: 'rgba(99,102,241,0.12)', text: '#818cf8' }
+  const r = rarity.toLowerCase()
+  if (r.includes('special illustration') || r.includes('hyper')) return { bg: 'rgba(236,72,153,0.15)', text: '#f472b6' }
+  if (r.includes('illustration rare') || r.includes('full art')) return { bg: 'rgba(168,85,247,0.15)', text: '#c084fc' }
+  if (r.includes('secret') || r.includes('rainbow')) return { bg: 'rgba(236,72,153,0.12)', text: '#f9a8d4' }
+  if (r.includes('ultra') || r.includes('vmax') || r.includes('vstar')) return { bg: 'rgba(245,158,11,0.15)', text: '#fbbf24' }
+  if (r.includes('rare holo') || r.includes('holo')) return { bg: 'rgba(0,229,255,0.12)', text: '#00E5FF' }
+  if (r.includes('rare')) return { bg: 'rgba(99,102,241,0.15)', text: '#818cf8' }
+  return { bg: 'rgba(100,116,139,0.12)', text: '#94a3b8' }
+}
+
+function getProductTypeColor(type: string): { bg: string; text: string } {
+  if (type === 'elite_trainer_box') return { bg: 'rgba(0,229,255,0.12)', text: '#00E5FF' }
+  if (type.includes('premium') || type.includes('ultra')) return { bg: 'rgba(201,168,76,0.15)', text: '#C9A84C' }
+  if (type === 'booster_box') return { bg: 'rgba(99,102,241,0.15)', text: '#818cf8' }
+  if (type === 'tin' || type === 'mini_tin') return { bg: 'rgba(16,185,129,0.12)', text: '#34d399' }
+  if (type.includes('collection')) return { bg: 'rgba(168,85,247,0.12)', text: '#c084fc' }
+  if (type.includes('promo') || type.includes('ex_box')) return { bg: 'rgba(236,72,153,0.12)', text: '#f472b6' }
+  return { bg: 'rgba(245,158,11,0.12)', text: '#f59e0b' }
+}
+
+// ── Expanded card detail modal ────────────────────────────────────────────────
+function CardDetailModal({ card, onClose }: { card: CardResult; onClose: () => void }) {
+  const [addingToCollection, setAddingToCollection] = useState(false)
+  const [addingToWishlist, setAddingToWishlist] = useState(false)
+  const [added, setAdded] = useState<'collection' | 'wishlist' | null>(null)
+  const [addError, setAddError] = useState('')
+
+  async function handleAddToCollection() {
+    setAddingToCollection(true)
+    setAddError('')
+    try {
+      await api.createCollectionItem({
+        ptcg_id: card.ptcg_id,
+        card_name: card.card_name,
+        set_name: card.set_name,
+        card_number: card.card_number,
+        rarity: card.rarity ?? undefined,
+        image_url: card.image_large ?? card.image_small ?? undefined,
+        game: 'Pokemon',
+      })
+      setAdded('collection')
+    } catch (err) {
+      setAddError((err as Error).message ?? 'Failed to add to collection')
+    } finally {
+      setAddingToCollection(false)
+    }
+  }
+
+  async function handleAddToWishlist() {
+    setAddingToWishlist(true)
+    setAddError('')
+    try {
+      await api.addWishlistItem({
+        ptcg_id: card.ptcg_id,
+        name: card.card_name,
+        set_name: card.set_name,
+        card_number: card.card_number,
+        rarity: card.rarity,
+        image_url: card.image_large ?? card.image_small,
+        tcgplayer_price_cents: card.tcgplayer_market_cents,
+        tcgplayer_url: card.tcgplayer_url,
+      })
+      setAdded('wishlist')
+    } catch (err) {
+      setAddError((err as Error).message ?? 'Failed to add to wishlist')
+    } finally {
+      setAddingToWishlist(false)
+    }
+  }
+
+  const rarityStyle = getRarityColor(card.rarity)
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4"
+      style={{ background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(4px)' }}
+      onClick={onClose}
+    >
+      <div
+        className="glass rounded-[var(--radius-lg)] w-full max-w-sm overflow-hidden"
+        style={{ maxHeight: '90vh', overflowY: 'auto' }}
+        onClick={e => e.stopPropagation()}
+      >
+        {/* Card image */}
+        <div className="relative bg-zinc-900 flex items-center justify-center" style={{ minHeight: 200 }}>
+          {card.image_large ? (
+            <img
+              src={card.image_large}
+              alt={card.card_name}
+              className="w-full object-contain"
+              style={{ maxHeight: 340 }}
+            />
+          ) : card.image_small ? (
+            <img
+              src={card.image_small}
+              alt={card.card_name}
+              className="w-full object-contain"
+              style={{ maxHeight: 340 }}
+            />
+          ) : (
+            <div className="flex items-center justify-center h-48 text-4xl">🃏</div>
+          )}
+          <button
+            onClick={onClose}
+            className="absolute top-3 right-3 rounded-full p-1.5"
+            style={{ background: 'rgba(0,0,0,0.5)' }}
+          >
+            <X size={16} color="white" />
+          </button>
+        </div>
+
+        {/* Card details */}
+        <div className="p-4 space-y-3">
+          <div>
+            <h2 className="text-lg font-bold">{card.card_name}</h2>
+            <p className="text-sm text-cv-muted">{card.set_name}{card.card_number ? ` · #${card.card_number}` : ''}</p>
+          </div>
+
+          {/* Badges */}
+          <div className="flex flex-wrap gap-2">
+            {card.rarity && (
+              <span className="text-xs px-2 py-0.5 rounded-full font-medium"
+                style={{ background: rarityStyle.bg, color: rarityStyle.text }}>
+                {card.rarity}
+              </span>
+            )}
+            {card.supertype && (
+              <span className="text-xs px-2 py-0.5 rounded-full font-medium"
+                style={{ background: 'rgba(16,185,129,0.12)', color: '#34d399' }}>
+                {card.supertype}
+              </span>
+            )}
+            {card.hp && (
+              <span className="text-xs px-2 py-0.5 rounded-full font-medium"
+                style={{ background: 'rgba(239,68,68,0.12)', color: '#f87171' }}>
+                {card.hp} HP
+              </span>
+            )}
+            {card.series && (
+              <span className="text-xs px-2 py-0.5 rounded-full font-medium"
+                style={{ background: 'rgba(100,116,139,0.12)', color: '#94a3b8' }}>
+                {card.series}
+              </span>
+            )}
+          </div>
+
+          {/* Price */}
+          <div className="glass rounded-[var(--radius-md)] p-3 flex items-center justify-between">
+            <span className="text-sm text-cv-muted">Market Price</span>
+            <span className="text-lg font-bold" style={{ color: '#00E5FF' }}>
+              {formatPrice(card.tcgplayer_market_cents)}
+            </span>
+          </div>
+
+          {/* Error */}
+          {addError && <p className="text-xs text-red-400">{addError}</p>}
+
+          {/* Actions */}
+          {added === 'collection' ? (
+            <div className="text-center text-sm font-medium py-2" style={{ color: '#4ECBA0' }}>
+              ✓ Added to your collection
+            </div>
+          ) : added === 'wishlist' ? (
+            <div className="text-center text-sm font-medium py-2" style={{ color: '#f472b6' }}>
+              ✓ Added to your wishlist
+            </div>
+          ) : (
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                className="btn-primary flex items-center justify-center gap-2 text-sm py-2"
+                onClick={() => void handleAddToCollection()}
+                disabled={addingToCollection}
+              >
+                <Plus size={14} />
+                {addingToCollection ? 'Adding...' : 'Add to Collection'}
+              </button>
+              <button
+                className="btn-ghost flex items-center justify-center gap-2 text-sm py-2"
+                onClick={() => void handleAddToWishlist()}
+                disabled={addingToWishlist}
+                style={{ border: '1px solid rgba(244,114,182,0.3)', color: '#f472b6' }}
+              >
+                <Heart size={14} />
+                {addingToWishlist ? 'Adding...' : 'Wishlist'}
+              </button>
+            </div>
+          )}
+
+          {/* TCGPlayer link */}
+          {card.tcgplayer_url && (
+            <a
+              href={card.tcgplayer_url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center justify-center gap-2 text-sm text-cv-muted hover:text-white transition-colors py-1"
+            >
+              <ShoppingCart size={14} />
+              Buy on TCGPlayer
+              <ExternalLink size={12} />
+            </a>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ── Sealed product detail modal ───────────────────────────────────────────────
+function SealedDetailModal({ product, onClose }: { product: SealedResult; onClose: () => void }) {
+  const typeStyle = getProductTypeColor(product.product_type)
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4"
+      style={{ background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(4px)' }}
+      onClick={onClose}
+    >
+      <div
+        className="glass rounded-[var(--radius-lg)] w-full max-w-sm overflow-hidden"
+        onClick={e => e.stopPropagation()}
+      >
+        {/* Header */}
+        <div className="relative p-5 pb-3 flex items-start gap-4">
+          <div className="rounded-xl p-3 shrink-0" style={{ background: typeStyle.bg }}>
+            <Package size={28} color={typeStyle.text} />
+          </div>
+          <div className="flex-1 min-w-0 pr-6">
+            <h2 className="text-base font-bold leading-snug">{product.name}</h2>
+            <p className="text-sm text-cv-muted mt-0.5">{product.set_name}</p>
+          </div>
+          <button
+            onClick={onClose}
+            className="absolute top-3 right-3 rounded-full p-1.5"
+            style={{ background: 'rgba(255,255,255,0.05)' }}
+          >
+            <X size={16} />
+          </button>
+        </div>
+
+        <div className="px-5 pb-5 space-y-3">
+          {/* Type badge */}
+          <span className="inline-block text-xs px-2.5 py-0.5 rounded-full font-medium"
+            style={{ background: typeStyle.bg, color: typeStyle.text }}>
+            {TYPE_LABELS[product.product_type] ?? product.product_type}
+          </span>
+
+          {/* Price */}
+          <div className="glass rounded-[var(--radius-md)] p-3 flex items-center justify-between">
+            <span className="text-sm text-cv-muted">Market Price</span>
+            <span className="text-lg font-bold" style={{ color: '#00E5FF' }}>
+              {formatPrice(product.market_price_cents)}
+            </span>
+          </div>
+
+          {/* Release date */}
+          {product.release_date && (
+            <div className="flex items-center justify-between text-sm">
+              <span className="text-cv-muted">Release Date</span>
+              <span>{new Date(product.release_date).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}</span>
+            </div>
+          )}
+
+          {/* TCGPlayer link */}
+          {product.tcgplayer_url && (
+            <a
+              href={product.tcgplayer_url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="btn-primary flex items-center justify-center gap-2 text-sm w-full"
+            >
+              <ShoppingCart size={14} />
+              Buy on TCGPlayer
+              <ExternalLink size={12} />
+            </a>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ── Main SearchPage ───────────────────────────────────────────────────────────
 export default function SearchPage() {
   const [query, setQuery] = useState('')
   const [category, setCategory] = useState<Category>('all')
+  const [productTypeFilter, setProductTypeFilter] = useState<string>('')
   const [cards, setCards] = useState<CardResult[]>([])
   const [sealed, setSealed] = useState<SealedResult[]>([])
   const [loading, setLoading] = useState(false)
   const [searched, setSearched] = useState(false)
+  const [selectedCard, setSelectedCard] = useState<CardResult | null>(null)
+  const [selectedSealed, setSelectedSealed] = useState<SealedResult | null>(null)
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const inputRef = useRef<HTMLInputElement>(null)
 
@@ -83,7 +386,7 @@ export default function SearchPage() {
     debounceRef.current = setTimeout(async () => {
       setLoading(true)
       try {
-        const result = await api.universalSearch(query.trim(), category, 60)
+        const result = await api.universalSearch(query.trim(), category, 80)
         setCards(result.cards ?? [])
         setSealed(result.sealed ?? [])
         setSearched(true)
@@ -98,17 +401,22 @@ export default function SearchPage() {
     return () => { if (debounceRef.current) clearTimeout(debounceRef.current) }
   }, [query, category])
 
-  const totalResults = cards.length + sealed.length
+  // Filter sealed by product type if a filter is active
+  const filteredSealed = productTypeFilter
+    ? sealed.filter(p => p.product_type === productTypeFilter)
+    : sealed
+
+  const totalResults = cards.length + filteredSealed.length
 
   return (
-    <div style={{ maxWidth: 700, margin: '0 auto', padding: '0 12px 80px' }}>
+    <div style={{ maxWidth: 740, margin: '0 auto', padding: '0 12px 80px' }}>
       {/* ── Header ── */}
       <div style={{ paddingTop: 20, paddingBottom: 12 }}>
         <h1 style={{ fontSize: 22, fontWeight: 700, margin: 0, color: 'var(--text-primary)' }}>
           Search
         </h1>
         <p style={{ fontSize: 13, color: 'var(--text-secondary)', margin: '4px 0 0' }}>
-          Find any Pokémon card or sealed product
+          Find any Pokémon TCG card, ETB, tin, promo pack, booster box, and more
         </p>
       </div>
 
@@ -130,7 +438,7 @@ export default function SearchPage() {
           type="text"
           value={query}
           onChange={e => setQuery(e.target.value)}
-          placeholder="Search by name, set, or card number…"
+          placeholder="Search cards, sets, ETBs, tins, promo packs…"
           autoFocus
           style={{
             flex: 1,
@@ -153,32 +461,74 @@ export default function SearchPage() {
       </div>
 
       {/* ── Category filter ── */}
-      <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
+      <div style={{ display: 'flex', gap: 8, marginBottom: 10, flexWrap: 'wrap' }}>
         {(['all', 'cards', 'sealed'] as Category[]).map(cat => (
           <button
             key={cat}
-            onClick={() => setCategory(cat)}
+            onClick={() => { setCategory(cat); setProductTypeFilter('') }}
             style={{
               padding: '6px 14px',
               borderRadius: 20,
               border: '1px solid var(--glass-border)',
-              background: category === cat ? 'var(--accent, #6366f1)' : 'var(--glass-bg)',
-              color: category === cat ? '#fff' : 'var(--text-secondary)',
+              background: category === cat ? 'rgba(0,229,255,0.15)' : 'var(--glass-bg)',
+              color: category === cat ? '#00E5FF' : 'var(--text-secondary)',
               fontSize: 13,
               fontWeight: category === cat ? 600 : 400,
               cursor: 'pointer',
               transition: 'all 0.15s',
             }}
           >
-            {cat === 'all' ? 'All Types' : cat === 'cards' ? 'Cards' : 'Sealed'}
+            {cat === 'all' ? 'All Types' : cat === 'cards' ? 'Cards Only' : 'Sealed Products'}
           </button>
         ))}
       </div>
 
+      {/* ── Product type sub-filter (sealed only) ── */}
+      {(category === 'sealed' || (category === 'all' && sealed.length > 0)) && (
+        <div style={{ display: 'flex', gap: 6, marginBottom: 14, overflowX: 'auto', paddingBottom: 4 }}>
+          <button
+            onClick={() => setProductTypeFilter('')}
+            style={{
+              padding: '4px 12px',
+              borderRadius: 20,
+              border: '1px solid var(--glass-border)',
+              background: productTypeFilter === '' ? 'rgba(245,158,11,0.15)' : 'var(--glass-bg)',
+              color: productTypeFilter === '' ? '#f59e0b' : 'var(--text-secondary)',
+              fontSize: 12,
+              fontWeight: productTypeFilter === '' ? 600 : 400,
+              cursor: 'pointer',
+              whiteSpace: 'nowrap',
+            }}
+          >
+            All Products
+          </button>
+          {PRODUCT_FILTER_GROUPS.map(({ label, value }) => (
+            <button
+              key={value}
+              onClick={() => setProductTypeFilter(productTypeFilter === value ? '' : value)}
+              style={{
+                padding: '4px 12px',
+                borderRadius: 20,
+                border: '1px solid var(--glass-border)',
+                background: productTypeFilter === value ? 'rgba(245,158,11,0.15)' : 'var(--glass-bg)',
+                color: productTypeFilter === value ? '#f59e0b' : 'var(--text-secondary)',
+                fontSize: 12,
+                fontWeight: productTypeFilter === value ? 600 : 400,
+                cursor: 'pointer',
+                whiteSpace: 'nowrap',
+              }}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+      )}
+
       {/* ── Loading ── */}
       {loading && (
         <div style={{ textAlign: 'center', padding: 40, color: 'var(--text-secondary)', fontSize: 14 }}>
-          Searching…
+          <div className="inline-block h-6 w-6 animate-spin rounded-full border-2 border-cv-surface border-t-[var(--primary)] mb-3" />
+          <p>Searching…</p>
         </div>
       )}
 
@@ -186,7 +536,8 @@ export default function SearchPage() {
       {!loading && !searched && (
         <div style={{ textAlign: 'center', padding: 60, color: 'var(--text-secondary)' }}>
           <Search size={40} style={{ opacity: 0.3, marginBottom: 12 }} />
-          <p style={{ fontSize: 15, margin: 0 }}>Type at least 2 characters to search</p>
+          <p style={{ fontSize: 15, margin: 0 }}>Search for any Pokémon TCG product</p>
+          <p style={{ fontSize: 13, marginTop: 6, opacity: 0.7 }}>Cards, ETBs, tins, promo packs, booster boxes, and more</p>
         </div>
       )}
 
@@ -194,7 +545,7 @@ export default function SearchPage() {
       {!loading && searched && totalResults === 0 && (
         <div style={{ textAlign: 'center', padding: 60, color: 'var(--text-secondary)' }}>
           <p style={{ fontSize: 15, margin: 0 }}>No results for <strong>"{query}"</strong></p>
-          <p style={{ fontSize: 13, marginTop: 6 }}>Try a different name or set</p>
+          <p style={{ fontSize: 13, marginTop: 6 }}>Try a different name, set, or product type</p>
         </div>
       )}
 
@@ -203,151 +554,160 @@ export default function SearchPage() {
         <div>
           <p style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 12 }}>
             {totalResults} result{totalResults !== 1 ? 's' : ''}
-            {cards.length > 0 && sealed.length > 0 && ` (${cards.length} card${cards.length !== 1 ? 's' : ''}, ${sealed.length} sealed)`}
+            {cards.length > 0 && filteredSealed.length > 0 && ` (${cards.length} card${cards.length !== 1 ? 's' : ''}, ${filteredSealed.length} sealed)`}
           </p>
 
-          {/* Card results */}
+          {/* Card results — collection-style grid */}
           {cards.length > 0 && (
             <div>
               {category === 'all' && (
-                <p style={{ fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: 1, color: 'var(--text-secondary)', marginBottom: 8 }}>
-                  Cards
+                <p style={{ fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: 1, color: 'var(--text-secondary)', marginBottom: 10 }}>
+                  Cards ({cards.length})
                 </p>
               )}
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 20 }}>
-                {cards.map(card => (
-                  <div key={card.ptcg_id} style={{
-                    display: 'flex',
-                    gap: 14,
-                    background: 'var(--glass-bg)',
-                    border: '1px solid var(--glass-border)',
-                    borderRadius: 14,
-                    padding: 12,
-                    alignItems: 'center',
-                  }}>
-                    {/* Card image */}
-                    <div style={{ flexShrink: 0, width: 56, height: 78, borderRadius: 6, overflow: 'hidden', background: 'rgba(255,255,255,0.05)' }}>
-                      {card.image_small ? (
-                        <img
-                          src={card.image_small}
-                          alt={card.card_name}
-                          style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-                          loading="lazy"
-                        />
-                      ) : (
-                        <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 20 }}>🃏</div>
-                      )}
-                    </div>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(130px, 1fr))', gap: 12, marginBottom: 24 }}>
+                {cards.map(card => {
+                  const rarityStyle = getRarityColor(card.rarity)
+                  return (
+                    <button
+                      key={card.ptcg_id}
+                      onClick={() => setSelectedCard(card)}
+                      style={{
+                        background: 'var(--glass-bg)',
+                        border: '1px solid var(--glass-border)',
+                        borderRadius: 14,
+                        padding: 0,
+                        cursor: 'pointer',
+                        textAlign: 'left',
+                        overflow: 'hidden',
+                        transition: 'transform 0.15s, border-color 0.15s',
+                      }}
+                      onMouseEnter={e => {
+                        (e.currentTarget as HTMLElement).style.transform = 'translateY(-2px)'
+                        ;(e.currentTarget as HTMLElement).style.borderColor = 'rgba(0,229,255,0.3)'
+                      }}
+                      onMouseLeave={e => {
+                        (e.currentTarget as HTMLElement).style.transform = 'translateY(0)'
+                        ;(e.currentTarget as HTMLElement).style.borderColor = 'var(--glass-border)'
+                      }}
+                    >
+                      {/* Card image */}
+                      <div style={{ aspectRatio: '2.5/3.5', background: 'rgba(0,0,0,0.3)', overflow: 'hidden' }}>
+                        {card.image_small ? (
+                          <img
+                            src={card.image_small}
+                            alt={card.card_name}
+                            style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                            loading="lazy"
+                          />
+                        ) : (
+                          <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 28 }}>🃏</div>
+                        )}
+                      </div>
 
-                    {/* Card info */}
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <p style={{ margin: 0, fontWeight: 700, fontSize: 15, color: 'var(--text-primary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                        {card.card_name}
-                      </p>
-                      <p style={{ margin: '2px 0 0', fontSize: 12, color: 'var(--text-secondary)' }}>
-                        {card.set_name}{card.card_number ? ` · #${card.card_number}` : ''}
-                      </p>
-                      <div style={{ display: 'flex', gap: 6, marginTop: 6, flexWrap: 'wrap', alignItems: 'center' }}>
+                      {/* Card info */}
+                      <div style={{ padding: '8px 10px' }}>
+                        <p style={{ margin: 0, fontWeight: 700, fontSize: 12, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                          {card.card_name}
+                        </p>
+                        <p style={{ margin: '2px 0 0', fontSize: 11, color: 'var(--text-secondary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                          {card.set_name}
+                        </p>
                         {card.rarity && (
-                          <span style={{ fontSize: 11, padding: '2px 8px', borderRadius: 20, background: 'rgba(99,102,241,0.15)', color: '#818cf8', fontWeight: 500 }}>
+                          <span style={{ display: 'inline-block', marginTop: 4, fontSize: 10, padding: '1px 6px', borderRadius: 20, background: rarityStyle.bg, color: rarityStyle.text, fontWeight: 500 }}>
                             {card.rarity}
                           </span>
                         )}
-                        {card.supertype && (
-                          <span style={{ fontSize: 11, padding: '2px 8px', borderRadius: 20, background: 'rgba(16,185,129,0.12)', color: '#34d399', fontWeight: 500 }}>
-                            {card.supertype}
-                          </span>
-                        )}
-                        <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-primary)', marginLeft: 'auto' }}>
+                        <p style={{ margin: '4px 0 0', fontSize: 12, fontWeight: 700, color: '#00E5FF' }}>
                           {formatPrice(card.tcgplayer_market_cents)}
-                        </span>
+                        </p>
                       </div>
-                    </div>
-
-                    {/* TCGPlayer link */}
-                    {card.tcgplayer_url && (
-                      <a
-                        href={card.tcgplayer_url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        style={{ flexShrink: 0, color: 'var(--text-secondary)', padding: 4 }}
-                      >
-                        <ExternalLink size={16} />
-                      </a>
-                    )}
-                  </div>
-                ))}
+                    </button>
+                  )
+                })}
               </div>
             </div>
           )}
 
-          {/* Sealed results */}
-          {sealed.length > 0 && (
+          {/* Sealed results — list style with rich info */}
+          {filteredSealed.length > 0 && (
             <div>
               {category === 'all' && (
-                <p style={{ fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: 1, color: 'var(--text-secondary)', marginBottom: 8 }}>
-                  Sealed Products
+                <p style={{ fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: 1, color: 'var(--text-secondary)', marginBottom: 10 }}>
+                  Sealed Products ({filteredSealed.length})
                 </p>
               )}
               <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                {sealed.map(product => (
-                  <div key={product.id} style={{
-                    display: 'flex',
-                    gap: 14,
-                    background: 'var(--glass-bg)',
-                    border: '1px solid var(--glass-border)',
-                    borderRadius: 14,
-                    padding: 12,
-                    alignItems: 'center',
-                  }}>
-                    {/* Sealed icon */}
-                    <div style={{
-                      flexShrink: 0, width: 56, height: 56, borderRadius: 10,
-                      background: 'rgba(245,158,11,0.12)',
-                      display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    }}>
-                      <Package size={26} color="#f59e0b" />
-                    </div>
-
-                    {/* Sealed info */}
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <p style={{
-                        margin: 0, fontWeight: 700, fontSize: 14, color: 'var(--text-primary)',
-                        overflow: 'hidden', textOverflow: 'ellipsis',
-                        display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical',
-                      } as React.CSSProperties}>
-                        {product.name}
-                      </p>
-                      <p style={{ margin: '2px 0 0', fontSize: 12, color: 'var(--text-secondary)' }}>
-                        {product.set_name}
-                      </p>
-                      <div style={{ display: 'flex', gap: 6, marginTop: 6, alignItems: 'center' }}>
-                        <span style={{ fontSize: 11, padding: '2px 8px', borderRadius: 20, background: 'rgba(245,158,11,0.15)', color: '#f59e0b', fontWeight: 500 }}>
-                          {TYPE_LABELS[product.product_type] ?? product.product_type}
-                        </span>
-                        <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-primary)', marginLeft: 'auto' }}>
-                          {formatPrice(product.market_price_cents)}
-                        </span>
+                {filteredSealed.map(product => {
+                  const typeStyle = getProductTypeColor(product.product_type)
+                  return (
+                    <button
+                      key={product.id}
+                      onClick={() => setSelectedSealed(product)}
+                      style={{
+                        display: 'flex',
+                        gap: 14,
+                        background: 'var(--glass-bg)',
+                        border: '1px solid var(--glass-border)',
+                        borderRadius: 14,
+                        padding: 12,
+                        alignItems: 'center',
+                        cursor: 'pointer',
+                        textAlign: 'left',
+                        width: '100%',
+                        transition: 'border-color 0.15s',
+                      }}
+                      onMouseEnter={e => (e.currentTarget as HTMLElement).style.borderColor = 'rgba(245,158,11,0.3)'}
+                      onMouseLeave={e => (e.currentTarget as HTMLElement).style.borderColor = 'var(--glass-border)'}
+                    >
+                      {/* Product icon */}
+                      <div style={{
+                        flexShrink: 0, width: 52, height: 52, borderRadius: 12,
+                        background: typeStyle.bg,
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      }}>
+                        <Package size={24} color={typeStyle.text} />
                       </div>
-                    </div>
 
-                    {/* TCGPlayer link */}
-                    {product.tcgplayer_url && (
-                      <a
-                        href={product.tcgplayer_url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        style={{ flexShrink: 0, color: 'var(--text-secondary)', padding: 4 }}
-                      >
-                        <ExternalLink size={16} />
-                      </a>
-                    )}
-                  </div>
-                ))}
+                      {/* Product info */}
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <p style={{
+                          margin: 0, fontWeight: 700, fontSize: 14, color: 'var(--text-primary)',
+                          overflow: 'hidden', textOverflow: 'ellipsis',
+                          display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical',
+                        } as React.CSSProperties}>
+                          {product.name}
+                        </p>
+                        <p style={{ margin: '2px 0 0', fontSize: 12, color: 'var(--text-secondary)' }}>
+                          {product.set_name}
+                          {product.release_date ? ` · ${new Date(product.release_date).getFullYear()}` : ''}
+                        </p>
+                        <div style={{ display: 'flex', gap: 6, marginTop: 5, alignItems: 'center', flexWrap: 'wrap' }}>
+                          <span style={{ fontSize: 11, padding: '2px 8px', borderRadius: 20, background: typeStyle.bg, color: typeStyle.text, fontWeight: 500 }}>
+                            {TYPE_LABELS[product.product_type] ?? product.product_type}
+                          </span>
+                          <span style={{ fontSize: 13, fontWeight: 700, color: '#00E5FF', marginLeft: 'auto' }}>
+                            {formatPrice(product.market_price_cents)}
+                          </span>
+                        </div>
+                      </div>
+
+                      <ExternalLink size={14} color="var(--text-secondary)" style={{ flexShrink: 0 }} />
+                    </button>
+                  )
+                })}
               </div>
             </div>
           )}
         </div>
+      )}
+
+      {/* ── Modals ── */}
+      {selectedCard && (
+        <CardDetailModal card={selectedCard} onClose={() => setSelectedCard(null)} />
+      )}
+      {selectedSealed && (
+        <SealedDetailModal product={selectedSealed} onClose={() => setSelectedSealed(null)} />
       )}
     </div>
   )

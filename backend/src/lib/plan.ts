@@ -3,6 +3,7 @@ import { queryOne, run } from './db';
 import { forbidden } from './json';
 
 export type MembershipTier = 'free' | 'pro';
+export type MembershipPlan = 'free' | 'monthly' | 'yearly';
 
 export async function ensureUserSubscription(env: Env, userId: number): Promise<void> {
   await run(
@@ -23,6 +24,20 @@ export async function getUserTier(env: Env, userId: number): Promise<MembershipT
   if (!sub) return 'free';
   const activePro = (sub.plan === 'monthly' || sub.plan === 'yearly') && ['active', 'trialing'].includes(sub.status);
   return activePro ? 'pro' : 'free';
+}
+
+export async function getUserPlan(env: Env, userId: number): Promise<MembershipPlan> {
+  const sub = await queryOne<{ plan: string; status: string }>(
+    env.DB,
+    'SELECT plan, status FROM subscriptions WHERE user_id = ?',
+    [userId],
+  );
+  if (!sub) return 'free';
+  const isActive = ['active', 'trialing'].includes(sub.status);
+  if (!isActive) return 'free';
+  if (sub.plan === 'yearly') return 'yearly';
+  if (sub.plan === 'monthly') return 'monthly';
+  return 'free';
 }
 
 export async function requirePlan(env: Env, user: User, minimum: MembershipTier): Promise<Response | null> {

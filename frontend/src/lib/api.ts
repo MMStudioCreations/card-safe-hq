@@ -566,6 +566,7 @@ export const api = {
   getBillingStatus: () =>
     http.get<never, {
       tier: 'free' | 'pro';
+      plan: 'free' | 'monthly' | 'yearly';
       status: string | null;
       current_period_end: string | null;
       cancel_at_period_end: boolean;

@@ -1,9 +1,10 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
+import { Link } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
-import { Copy, Layers, Minus, Plus, RefreshCw, Trash2, CheckCircle, XCircle, AlertTriangle } from 'lucide-react'
+import { Copy, Layers, Lock, Minus, Plus, RefreshCw, Trash2, CheckCircle, XCircle, AlertTriangle } from 'lucide-react'
 import CardCrop from '../components/CardCrop'
 import { api, type CollectionItem } from '../lib/api'
-import { useCollection } from '../lib/hooks'
+import { useCollection, useBillingStatus } from '../lib/hooks'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -442,8 +443,12 @@ function HaveNeedSection({
 
 // ── Main Component ────────────────────────────────────────────────────────────
 
+const FREE_DECK_LIMIT = 20
+
 export default function DeckBuilderPage() {
   const { data: allItems = [], isLoading: collectionLoading } = useCollection(true)
+  const { data: billing } = useBillingStatus()
+  const isPro = billing?.tier === 'pro'
 
   // Game state
   const [selectedGame, setSelectedGame] = useState<SelectedGame>('pokemon')
@@ -511,6 +516,9 @@ export default function DeckBuilderPage() {
   function addCard(item: CollectionItem) {
     const name = cardName(item)
     setCustomDeck(prev => {
+      const currentTotal = prev.reduce((s, e) => s + e.copies, 0)
+      // Free tier: max 20 cards in deck
+      if (!isPro && currentTotal >= FREE_DECK_LIMIT) return prev
       const existing = prev.find(e => e.collectionItemId === item.id)
       if (existing) {
         if (existing.copies >= game.maxCopies) return prev
@@ -937,10 +945,26 @@ export default function DeckBuilderPage() {
 
         {/* RIGHT — Custom Deck Builder */}
         <div className="space-y-4">
+          {/* Free tier notice */}
+          {!isPro && (
+            <div className="glass rounded-[var(--radius-md)] p-3 flex items-start gap-3"
+              style={{ border: '1px solid rgba(201,168,76,0.2)', background: 'rgba(201,168,76,0.04)' }}>
+              <Lock size={16} className="shrink-0 mt-0.5" style={{ color: '#C9A84C' }} />
+              <div className="flex-1 min-w-0">
+                <p className="text-xs font-semibold" style={{ color: '#C9A84C' }}>Free Tier — Limited Deck Builder</p>
+                <p className="text-xs text-cv-muted mt-0.5">Free accounts can build decks up to {FREE_DECK_LIMIT} cards. Upgrade to Pro for full 60-card decks, AI generation, and meta deck analysis.</p>
+                <Link to="/billing" className="text-xs font-semibold mt-1 inline-block" style={{ color: '#C9A84C' }}>Upgrade to Pro →</Link>
+              </div>
+            </div>
+          )}
+
           <div className="glass p-4">
             <div className="mb-3 flex items-center justify-between">
               <h3 className="font-semibold">Custom Deck</h3>
-              <span className="text-sm text-cv-muted">{totalCards}/{deckSize}</span>
+              <span className="text-sm text-cv-muted">
+                {totalCards}/{isPro ? deckSize : FREE_DECK_LIMIT}
+                {!isPro && <span className="ml-1 text-xs" style={{ color: '#C9A84C' }}>(free limit)</span>}
+              </span>
             </div>
 
             <input
@@ -1030,21 +1054,31 @@ export default function DeckBuilderPage() {
           {/* AI Generator */}
           <div className="glass p-4">
             <h3 className="mb-2 font-semibold text-sm">AI Deck Generator</h3>
-            <p className="mb-3 text-xs text-cv-muted">Auto-build a {currentFormat.label} deck from your collection.</p>
-            <button
-              className="btn-primary w-full text-sm"
-              onClick={() => void handleGenerate()}
-              disabled={generating}
-              type="button"
-            >
-              {generating ? (
-                <span className="flex items-center justify-center gap-2">
-                  <RefreshCw className="h-4 w-4 animate-spin" /> Generating...
-                </span>
-              ) : 'Generate from Collection'}
-            </button>
-            {!customDeck.length && deckMessage && (
-              <p className="mt-2 text-xs text-cv-muted">{deckMessage}</p>
+            {isPro ? (
+              <>
+                <p className="mb-3 text-xs text-cv-muted">Auto-build a {currentFormat.label} deck from your collection.</p>
+                <button
+                  className="btn-primary w-full text-sm"
+                  onClick={() => void handleGenerate()}
+                  disabled={generating}
+                  type="button"
+                >
+                  {generating ? (
+                    <span className="flex items-center justify-center gap-2">
+                      <RefreshCw className="h-4 w-4 animate-spin" /> Generating...
+                    </span>
+                  ) : 'Generate from Collection'}
+                </button>
+                {!customDeck.length && deckMessage && (
+                  <p className="mt-2 text-xs text-cv-muted">{deckMessage}</p>
+                )}
+              </>
+            ) : (
+              <div className="text-center py-3">
+                <Lock size={20} className="mx-auto mb-2" style={{ color: '#C9A84C', opacity: 0.7 }} />
+                <p className="text-xs text-cv-muted mb-2">AI deck generation is a Pro feature.</p>
+                <Link to="/billing" className="btn-primary text-xs py-1.5 px-4 inline-block">Upgrade to Pro</Link>
+              </div>
             )}
           </div>
         </div>

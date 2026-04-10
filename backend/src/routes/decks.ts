@@ -48,12 +48,37 @@ export async function deleteDeck(env: Env, user: User, deckId: number): Promise<
   return ok({ deleted: true });
 }
 
+const FREE_DECK_CARD_LIMIT = 20;
+
 export async function upsertDeckCard(env: Env, request: Request, user: User, deckId: number): Promise<Response> {
   const body = await request.json() as { card_id?: string; quantity?: number };
   if (!body.card_id) return badRequest('card_id is required');
   const qty = Math.max(0, Math.min(99, Number(body.quantity ?? 1)));
   const deck = await queryOne(env.DB, 'SELECT id FROM decks WHERE id = ? AND user_id = ?', [deckId, user.id]);
   if (!deck) return notFound('Deck not found');
+
+  // ── Free tier: enforce 20-card deck limit ─────────────────────────────────
+  if (qty > 0) {
+    const { getUserTier } = await import('../lib/plan');
+    const tier = await getUserTier(env, user.id);
+    if (tier === 'free') {
+      // Count current total cards in this deck (excluding the card being upserted)
+      const currentRow = await queryOne<{ total: number }>(
+        env.DB,
+        'SELECT COALESCE(SUM(quantity), 0) AS total FROM deck_cards WHERE deck_id = ?',
+        [deckId],
+      );
+      const existingRow = await queryOne<{ quantity: number }>(
+        env.DB,
+        'SELECT quantity FROM deck_cards WHERE deck_id = ? AND card_id = ?',
+        [deckId, body.card_id],
+      );
+      const currentTotal = (currentRow?.total ?? 0) - (existingRow?.quantity ?? 0);
+      if (currentTotal + qty > FREE_DECK_CARD_LIMIT) {
+        return badRequest(`Free tier decks are limited to ${FREE_DECK_CARD_LIMIT} cards. Upgrade to Pro for full 60-card decks.`);
+      }
+    }
+  }
 
   if (qty === 0) {
     await run(env.DB, 'DELETE FROM deck_cards WHERE deck_id = ? AND card_id = ?', [deckId, body.card_id]);

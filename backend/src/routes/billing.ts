@@ -123,6 +123,7 @@ export async function handleBillingStatus(env: Env, request: Request): Promise<R
   if (!sub) {
     return ok({
       tier: 'free',
+      plan: 'free',
       status: null,
       current_period_end: null,
       cancel_at_period_end: false,
@@ -135,6 +136,7 @@ export async function handleBillingStatus(env: Env, request: Request): Promise<R
 
   return ok({
     tier: isActivePro ? 'pro' : 'free',
+    plan: sub.plan, // 'free' | 'monthly' | 'yearly'
     status: sub.status,
     current_period_end: sub.current_period_end,
     cancel_at_period_end: Boolean(sub.cancel_at_period_end),

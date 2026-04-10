@@ -68,3 +68,12 @@ export function useCompsHistory(cardId: number | undefined) {
     enabled: cardId != null,
   })
 }
+
+export function useBillingStatus() {
+  return useQuery({
+    queryKey: ['billing-status'],
+    queryFn: () => api.getBillingStatus(),
+    staleTime: 1000 * 60 * 5, // 5 min cache
+    retry: false,
+  })
+}

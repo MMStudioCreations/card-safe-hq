@@ -115,6 +115,12 @@ export async function handleSheetScan(env: Env, request: Request, user: User): P
     return serverError('Failed to upload sheet image');
   }
 
+  // ─── Check OpenAI API key availability ─────────────────────────────────────
+  if (!env.OPENAI_API_KEY) {
+    console.error('[scan] OPENAI_API_KEY is not configured in the worker environment');
+    return serverError('AI scanning is not configured. Please contact support.');
+  }
+
   // ─── Single card scan path ────────────────────────────────────────────────
   if (mode === 'single') {
     const cardKey = `cards/${user.id}/${timestamp}-card.${ext}`;
@@ -674,43 +680,102 @@ Return ONLY a JSON object in this exact format:
   const collectionItems: Record<string, unknown>[] = [];
   const errors: Array<{ position: number; error: string }> = [];
 
+  // Check if OffscreenCanvas is available (may not be in all CF Worker environments)
+  const canCrop = typeof OffscreenCanvas !== 'undefined' && typeof createImageBitmap !== 'undefined';
+  if (!canCrop) {
+    console.warn('[scan] OffscreenCanvas/createImageBitmap not available — sheet scan requires these APIs');
+  }
+
   for (let position = 1; position <= 9; position++) {
     try {
       const bbox = detectedBboxes.get(position)!;
       const sheetHint = cardsByPosition.get(position) ?? null;
 
+      // If no card name was detected for this position, skip it
+      if (!sheetHint?.card_name && !sheetHint?.collector_number) {
+        console.log(`[scan] pos ${position}: no card hint from GPT — skipping`);
+        continue;
+      }
+
       // Step 3: Crop the slot from the sheet
-      const cropBuffer = await cropCardFromSheet(fileBuffer, file.type, {
-        x: bbox.x,
-        y: bbox.y,
-        width: bbox.width,
-        height: bbox.height,
-      });
+      let cropBuffer: ArrayBuffer | null = null;
+      if (canCrop) {
+        cropBuffer = await cropCardFromSheet(fileBuffer, file.type, {
+          x: bbox.x,
+          y: bbox.y,
+          width: bbox.width,
+          height: bbox.height,
+        });
+      }
 
       if (!cropBuffer) {
-        console.warn(`[scan] pos ${position}: crop failed — skipping`);
-        continue;
+        console.warn(`[scan] pos ${position}: crop failed — using full sheet for identification`);
+        // Fall through with null cropBuffer; we'll use the sheet hint data directly
       }
 
       // Upload the crop to R2 as a standalone card image
       const cropKey = `cards/${user.id}/${timestamp}-sheet-pos${position}.jpg`;
-      try {
-        await env.BUCKET.put(cropKey, cropBuffer, {
-          httpMetadata: { contentType: 'image/jpeg' },
-        });
-      } catch (uploadErr) {
-        console.error(`[scan] pos ${position}: R2 crop upload failed:`, uploadErr);
+      if (cropBuffer) {
+        try {
+          await env.BUCKET.put(cropKey, cropBuffer, {
+            httpMetadata: { contentType: 'image/jpeg' },
+          });
+        } catch (uploadErr) {
+          console.error(`[scan] pos ${position}: R2 crop upload failed:`, uploadErr);
+        }
       }
 
-      // Step 4: Identify the cropped card image individually
-      const cropBase64 = arrayBufferToBase64(cropBuffer);
-      const cropDataUrl = `data:image/jpeg;base64,${cropBase64}`;
-
+      // Step 4: Identify the cropped card image individually (or use hint data if crop unavailable)
       let ident;
-      try {
-        ident = await visionIdentifyCard(env, cropDataUrl);
-      } catch (identErr) {
-        console.error(`[scan] pos ${position}: vision identification failed:`, identErr);
+      if (cropBuffer) {
+        const cropBase64 = arrayBufferToBase64(cropBuffer);
+        const cropDataUrl = `data:image/jpeg;base64,${cropBase64}`;
+        try {
+          ident = await visionIdentifyCard(env, cropDataUrl);
+        } catch (identErr) {
+          console.error(`[scan] pos ${position}: vision identification failed:`, identErr);
+          // Fall through to use hint data
+        }
+      }
+
+      // If vision failed or crop unavailable, build a minimal ident from GPT sheet hint
+      if (!ident && sheetHint?.card_name) {
+        console.log(`[scan] pos ${position}: using sheet hint data for ident (no vision result)`);
+        ident = {
+          card_name: sheetHint.card_name,
+          card_number: sheetHint.collector_number,
+          set_name: null,
+          game: 'Pokemon',
+          sport: null,
+          player_name: null,
+          year: null,
+          variation: null,
+          manufacturer: 'The Pokemon Company',
+          condition_notes: null,
+          confidence: 60,
+          raw_response: '',
+          ptcg_id: null,
+          ptcg_confirmed: false,
+          ptcg_image_small: null,
+          ptcg_image_large: null,
+          ptcg_set_id: null,
+          ptcg_set_name: null,
+          ptcg_set_series: null,
+          ptcg_rarity: null,
+          ptcg_tcgplayer_url: null,
+          price_market_cents: null,
+          price_low_cents: null,
+          price_mid_cents: null,
+          price_high_cents: null,
+          price_psa9_cents: null,
+          price_psa10_cents: null,
+          price_source: null as ('tcgplayer' | 'pricecharting' | null),
+          set_name_override: null,
+        };
+      }
+
+      if (!ident) {
+        console.log(`[scan] pos ${position}: no ident available — skipping`);
         continue;
       }
 
@@ -847,15 +912,16 @@ Return ONLY a JSON object in this exact format:
         cardId = newCard.id;
       }
 
-      // Insert collection item — front_image_url is the per-card crop, not the sheet
+      // Insert collection item — front_image_url is the per-card crop (if available) or null
       // bbox_x/y/width/height are stored as null since the image is already cropped
+      const frontImageUrl = cropBuffer ? cropKey : null;
       await run(
         env.DB,
         `INSERT INTO collection_items
            (user_id, card_id, quantity, condition_note, estimated_grade, estimated_value_cents,
             front_image_url, bbox_x, bbox_y, bbox_width, bbox_height, product_type)
          VALUES (?, ?, 1, ?, ?, ?, ?, NULL, NULL, NULL, NULL, 'single_card')`,
-        [user.id, cardId, ident.condition_notes ?? null, null, estimatedValueCents, cropKey],
+        [user.id, cardId, ident.condition_notes ?? null, null, estimatedValueCents, frontImageUrl],
       );
 
       const newItem = await queryOne<{ id: number }>(
@@ -927,7 +993,7 @@ Return ONLY a JSON object in this exact format:
         collectionItems.push({
           ...fullItem,
           // Provide sheet_url + bbox for legacy CardCrop fallback (bbox is null for new crops)
-          sheet_url: cropKey,
+          sheet_url: frontImageUrl ?? sheetKey,
           bbox: null,
           ptcg_confirmed: tcgCard != null,
           ptcg_id: tcgCard?.id ?? ident.ptcg_id ?? null,

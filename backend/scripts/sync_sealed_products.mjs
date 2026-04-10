@@ -21,27 +21,37 @@ async function d1Query(sql, params = []) {
 // Sealed product type detection from TCGPlayer product names
 function detectProductType(name) {
   const n = name.toLowerCase()
-  if (n.includes('booster box') || n.includes('36-pack')) return 'booster_box'
-  if (n.includes('elite trainer box') || n.includes('etb')) return 'elite_trainer_box'
+  // Order matters — more specific patterns first
+  if (n.includes('mini tin')) return 'mini_tin'
   if (n.includes('ultra premium') || n.includes('upc')) return 'ultra_premium_collection'
+  if (n.includes('super premium')) return 'super_premium_collection'
+  if (n.includes('elite trainer box') || n.includes(' etb') || n.endsWith('etb')) return 'elite_trainer_box'
+  if (n.includes('booster box') || n.includes('36-pack') || n.includes('booster display')) return 'booster_box'
   if (n.includes('premium collection')) return 'premium_collection'
   if (n.includes('special collection')) return 'special_collection'
-  if (n.includes('super premium')) return 'super_premium_collection'
   if (n.includes('booster bundle') || n.includes('6-pack')) return 'booster_bundle'
-  if (n.includes('booster pack') && !n.includes('box') && !n.includes('bundle')) return 'booster_pack'
   if (n.includes('figure collection')) return 'figure_collection'
   if (n.includes('poster collection')) return 'poster_collection'
   if (n.includes('pin collection') || n.includes('pin box')) return 'pin_collection'
-  if (n.includes('collection box') || n.includes('collection chest')) return 'collection_box'
-  if (n.includes('tin') && !n.includes('collection')) return 'tin'
+  if (n.includes('collection chest')) return 'collection_box'
+  if (n.includes('collection box')) return 'collection_box'
   if (n.includes('build & battle') || n.includes('build and battle')) return 'build_and_battle'
-  if (n.includes('league battle deck') || n.includes('ex battle deck')) return 'battle_deck'
-  if (n.includes('blister') || n.includes('3-pack')) return 'blister_pack'
-  if (n.includes('gift box') || n.includes('holiday')) return 'gift_set'
-  if (n.includes('mini tin')) return 'mini_tin'
-  if (n.includes('binder')) return 'binder_collection'
   if (n.includes('world championship')) return 'world_championship_deck'
+  if (n.includes('league battle deck') || n.includes('battle deck')) return 'battle_deck'
   if (n.includes('theme deck') || n.includes('starter deck')) return 'theme_deck'
+  if (n.includes('blister') || n.includes('3-pack')) return 'blister_pack'
+  if (n.includes('gift box') || n.includes('holiday gift')) return 'gift_set'
+  if (n.includes('binder')) return 'binder_collection'
+  // EX box / special promo box detection
+  if (/\bex\s+box\b/.test(n) || n.includes(' ex box') || n.endsWith(' ex')) return 'ex_box'
+  // Promo packs (Black Star promos, promo packs, promo sets)
+  if (n.includes('promo pack') || n.includes('black star promo') || n.includes('promo set') || n.includes('promotional')) return 'promo_pack'
+  // Tins (check after more specific patterns)
+  if (n.includes('tin') && !n.includes('collection') && !n.includes('platinum')) return 'tin'
+  // Single booster packs
+  if (n.includes('booster pack') && !n.includes('box') && !n.includes('bundle')) return 'booster_pack'
+  // Catch-all collection
+  if (n.includes('collection') && !n.includes('box')) return 'special_collection'
   return 'other'
 }
 
@@ -85,7 +95,8 @@ async function main() {
     // TCGPlayer sealed products have subTypeName like "Normal" and no card number
     const sealedKeywords = [
       'box', 'pack', 'bundle', 'collection', 'tin', 'deck', 
-      'binder', 'blister', 'set', 'display', 'case'
+      'binder', 'blister', 'set', 'display', 'case',
+      'promo', 'chest', 'gift', 'holiday', 'premium'
     ]
     
     const sealedProducts = products.filter(p => {

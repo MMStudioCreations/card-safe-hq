@@ -1,12 +1,19 @@
 import type { Env, User } from '../types';
 import { queryAll } from '../lib/db';
-import { ok } from '../lib/json';
+import { ok, forbidden } from '../lib/json';
+import { getUserTier } from '../lib/plan';
 
 export async function generateDeck(
   env: Env,
   request: Request,
   user: User,
 ): Promise<Response> {
+  // ── Pro tier required for AI deck generation ─────────────────────────────────
+  const tier = await getUserTier(env, user.id);
+  if (tier !== 'pro') {
+    return forbidden('AI deck generation requires a Pro subscription. Upgrade to unlock this feature.');
+  }
+
   const body = await request.json() as {
     game: string;
     format: string;

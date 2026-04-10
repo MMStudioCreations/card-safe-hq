@@ -1,7 +1,8 @@
 import type { Env, User } from '../types';
-import { ok } from '../lib/json';
+import { ok, badRequest } from '../lib/json';
 import { getAllSets, getSetCards } from '../lib/pokemontcg';
 import { queryAll, queryOne, run } from '../lib/db';
+import { getUserTier } from '../lib/plan';
 
 // GET /api/sets/pokemon
 // Returns all Pokémon sets (modern by default)
@@ -80,6 +81,8 @@ export async function getSetChecklist(
   });
 }
 
+const FREE_DECK_CARD_LIMIT = 20;
+
 // POST /api/decks
 export async function saveDeck(env: Env, request: Request, user: User): Promise<Response> {
   const body = await request.json() as {
@@ -90,6 +93,22 @@ export async function saveDeck(env: Env, request: Request, user: User): Promise<
     cards_json: string;
     notes?: string;
   };
+
+  // ── Free tier: limit deck size to 20 cards ─────────────────────────────────
+  const tier = await getUserTier(env, user.id);
+  if (tier === 'free' && body.cards_json) {
+    try {
+      const cards = JSON.parse(body.cards_json);
+      const totalCards = Array.isArray(cards)
+        ? cards.reduce((sum: number, c: { quantity?: number }) => sum + (c.quantity ?? 1), 0)
+        : 0;
+      if (totalCards > FREE_DECK_CARD_LIMIT) {
+        return badRequest(`Free tier decks are limited to ${FREE_DECK_CARD_LIMIT} cards. Upgrade to Pro for full 60-card decks.`);
+      }
+    } catch {
+      // Invalid JSON — let the insert fail naturally
+    }
+  }
 
   await run(
     env.DB,

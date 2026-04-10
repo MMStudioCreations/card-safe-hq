@@ -5,6 +5,7 @@ import { api } from '../lib/api'
 
 type BillingStatus = {
   tier: 'free' | 'pro'
+  plan: 'free' | 'monthly' | 'yearly'
   status: string | null
   current_period_end: string | null
   cancel_at_period_end: boolean
@@ -14,6 +15,24 @@ type BillingStatus = {
 function formatDate(iso: string | null): string {
   if (!iso) return '—'
   return new Date(iso).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })
+}
+
+function CheckIcon({ color = '#00E5FF' }: { color?: string }) {
+  return (
+    <svg width="14" height="14" viewBox="0 0 14 14" fill="none" className="shrink-0 mt-0.5">
+      <circle cx="7" cy="7" r="7" fill={color} fillOpacity="0.15" />
+      <path d="M4 7l2 2 4-4" stroke={color} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  )
+}
+
+function LockIcon() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 14 14" fill="none" className="shrink-0 mt-0.5">
+      <rect x="2" y="6" width="10" height="7" rx="1.5" fill="rgba(255,255,255,0.08)" stroke="rgba(255,255,255,0.2)" strokeWidth="1" />
+      <path d="M4.5 6V4.5a2.5 2.5 0 015 0V6" stroke="rgba(255,255,255,0.3)" strokeWidth="1.2" strokeLinecap="round" />
+    </svg>
+  )
 }
 
 export default function BillingPage() {
@@ -31,7 +50,6 @@ export default function BillingPage() {
     staleTime: 30_000,
   })
 
-  // Refetch after returning from Stripe
   useEffect(() => {
     if (successParam) void refetch()
   }, [successParam, refetch])
@@ -61,14 +79,16 @@ export default function BillingPage() {
   }
 
   const isPro = billing?.tier === 'pro'
+  const isYearly = billing?.plan === 'yearly'
+  const isMonthly = billing?.plan === 'monthly'
   const billingConfigured = billing?.billing_configured !== false
 
   return (
-    <div className="space-y-6 pb-8">
+    <div className="space-y-6 pb-8 max-w-3xl mx-auto">
       <div>
         <h1 className="text-2xl font-bold">Billing & Subscription</h1>
         <p className="text-sm text-cv-muted mt-1">
-          Support Card Safe HQ and unlock Pro features for your collection.
+          Choose the plan that fits your collection. Upgrade anytime.
         </p>
       </div>
 
@@ -76,7 +96,7 @@ export default function BillingPage() {
       {successParam && (
         <div className="glass border border-[rgba(78,203,160,0.3)] p-4 rounded-[var(--radius-md)]">
           <p className="text-sm font-medium" style={{ color: '#4ECBA0' }}>
-            You're now a Pro member — thank you for supporting Card Safe HQ!
+            🎉 You're now a Pro member — thank you for supporting Card Safe HQ!
           </p>
         </div>
       )}
@@ -88,12 +108,20 @@ export default function BillingPage() {
 
       {/* Current status */}
       {!isLoading && billing && (
-        <div className="glass p-4 space-y-2">
+        <div className="glass p-4 space-y-2 rounded-[var(--radius-md)]">
           <div className="flex items-center justify-between">
             <span className="text-sm text-cv-muted">Current plan</span>
-            <span className={`text-sm font-bold ${isPro ? '' : 'text-cv-muted'}`}
-              style={isPro ? { color: '#C9A84C' } : {}}>
-              {isPro ? 'Pro' : 'Free'}
+            <span
+              className="text-sm font-bold px-2 py-0.5 rounded-full"
+              style={
+                isYearly
+                  ? { background: 'rgba(201,168,76,0.15)', color: '#C9A84C' }
+                  : isMonthly
+                  ? { background: 'rgba(0,229,255,0.1)', color: '#00E5FF' }
+                  : { color: 'var(--cv-muted)' }
+              }
+            >
+              {isYearly ? 'Pro Yearly' : isMonthly ? 'Pro Monthly' : 'Free'}
             </span>
           </div>
           {isPro && billing.status && (
@@ -118,33 +146,75 @@ export default function BillingPage() {
         </div>
       )}
 
+      {/* Plan comparison table */}
+      <div className="glass rounded-[var(--radius-lg)] overflow-hidden">
+        <div className="grid text-xs font-semibold text-cv-muted border-b border-white/5" style={{ gridTemplateColumns: '1fr auto auto auto' }}>
+          <div className="p-3">Feature</div>
+          <div className="p-3 text-center w-16">Free</div>
+          <div className="p-3 text-center w-20" style={{ color: '#00E5FF' }}>Monthly</div>
+          <div className="p-3 text-center w-20" style={{ color: '#C9A84C' }}>Yearly</div>
+        </div>
+        {[
+          { feature: 'Search — cards, ETBs, tins, promos, all TCG products', free: true, monthly: true, yearly: true },
+          { feature: 'Single card scan (manual identification)', free: true, monthly: true, yearly: true },
+          { feature: 'Basic collection tracking', free: true, monthly: true, yearly: true },
+          { feature: 'Limited deck builder (up to 20 cards)', free: true, monthly: true, yearly: true },
+          { feature: 'Unlimited collection', free: false, monthly: true, yearly: true },
+          { feature: 'AI-powered binder sheet scan (9 cards at once)', free: false, monthly: true, yearly: true },
+          { feature: 'AI card identification & grading estimates', free: false, monthly: true, yearly: true },
+          { feature: 'Live eBay sold price comparisons', free: false, monthly: true, yearly: true },
+          { feature: 'Full deck builder (60-card decks)', free: false, monthly: true, yearly: true },
+          { feature: 'AI deck generator from your collection', free: false, monthly: true, yearly: true },
+          { feature: 'Trades marketplace', free: false, monthly: true, yearly: true },
+          { feature: 'Set completion checklists', free: false, monthly: true, yearly: true },
+          { feature: 'Wishlist & want list', free: false, monthly: true, yearly: true },
+          { feature: 'Monthly product giveaway entry', free: false, monthly: true, yearly: true },
+          { feature: 'Early access to new features', free: false, monthly: false, yearly: true },
+          { feature: 'Priority support', free: false, monthly: false, yearly: true },
+        ].map(({ feature, free, monthly, yearly }, i) => (
+          <div
+            key={feature}
+            className={`grid text-sm ${i % 2 === 0 ? 'bg-white/[0.02]' : ''}`}
+            style={{ gridTemplateColumns: '1fr auto auto auto' }}
+          >
+            <div className="p-3 text-cv-muted text-xs">{feature}</div>
+            <div className="p-3 flex justify-center w-16">
+              {free ? <CheckIcon color="rgba(255,255,255,0.4)" /> : <LockIcon />}
+            </div>
+            <div className="p-3 flex justify-center w-20">
+              {monthly ? <CheckIcon color="#00E5FF" /> : <LockIcon />}
+            </div>
+            <div className="p-3 flex justify-center w-20">
+              {yearly ? <CheckIcon color="#C9A84C" /> : <LockIcon />}
+            </div>
+          </div>
+        ))}
+      </div>
+
       {/* Plan cards */}
       {!isPro && billingConfigured && (
         <div className="grid gap-4 sm:grid-cols-2">
           {/* Monthly */}
-          <div className="glass p-5 space-y-3 flex flex-col">
+          <div className="glass p-5 space-y-4 flex flex-col rounded-[var(--radius-lg)]"
+            style={{ border: '1px solid rgba(0,229,255,0.2)' }}>
             <div>
-              <h2 className="text-lg font-bold">Pro Monthly</h2>
-              <p className="text-sm text-cv-muted">Billed every month. Cancel anytime.</p>
+              <h2 className="text-lg font-bold" style={{ color: '#00E5FF' }}>Pro Monthly</h2>
+              <p className="text-sm text-cv-muted mt-0.5">Billed every month. Cancel anytime.</p>
             </div>
-            <div className="flex-1">
-              <ul className="space-y-1.5 text-sm text-cv-muted">
-                <li className="flex items-center gap-2">
-                  <span style={{ color: '#00E5FF' }}>✓</span> Unlimited card scans
-                </li>
-                <li className="flex items-center gap-2">
-                  <span style={{ color: '#00E5FF' }}>✓</span> AI grading estimates
-                </li>
-                <li className="flex items-center gap-2">
-                  <span style={{ color: '#00E5FF' }}>✓</span> Live eBay price comps
-                </li>
-                <li className="flex items-center gap-2">
-                  <span style={{ color: '#00E5FF' }}>✓</span> Full deck builder
-                </li>
-                <li className="flex items-center gap-2">
-                  <span style={{ color: '#00E5FF' }}>✓</span> Trades marketplace
-                </li>
-              </ul>
+            <div className="flex-1 space-y-2">
+              {[
+                'Unlimited AI card scans',
+                'AI grading estimates',
+                'Live eBay price comps',
+                'Full deck builder',
+                'Trades marketplace',
+                'Monthly product giveaway',
+              ].map(f => (
+                <div key={f} className="flex items-start gap-2 text-sm text-cv-muted">
+                  <CheckIcon color="#00E5FF" />
+                  <span>{f}</span>
+                </div>
+              ))}
             </div>
             <button
               className="btn-primary w-full mt-2"
@@ -156,33 +226,34 @@ export default function BillingPage() {
           </div>
 
           {/* Yearly */}
-          <div className="flex flex-col space-y-3 p-5 rounded-[var(--radius-lg)] relative"
-            style={{ background: 'linear-gradient(145deg,rgba(0,229,255,0.06),rgba(201,168,76,0.06))', border: '1px solid rgba(201,168,76,0.3)' }}>
+          <div className="flex flex-col space-y-4 p-5 rounded-[var(--radius-lg)] relative"
+            style={{ background: 'linear-gradient(145deg,rgba(0,229,255,0.04),rgba(201,168,76,0.08))', border: '1px solid rgba(201,168,76,0.35)' }}>
             <div className="absolute -top-3 left-4">
-              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full"
+              <span className="text-[10px] font-bold px-2.5 py-0.5 rounded-full"
                 style={{ background: 'linear-gradient(90deg,#C9A84C,#E8C76A)', color: '#080C10' }}>
                 BEST VALUE
               </span>
             </div>
             <div>
-              <h2 className="text-lg font-bold">Pro Yearly</h2>
-              <p className="text-sm text-cv-muted">Billed once per year. Best value.</p>
+              <h2 className="text-lg font-bold" style={{ color: '#C9A84C' }}>Pro Yearly</h2>
+              <p className="text-sm text-cv-muted mt-0.5">Billed once per year — ~2 months free.</p>
             </div>
-            <div className="flex-1">
-              <ul className="space-y-1.5 text-sm text-cv-muted">
-                <li className="flex items-center gap-2">
-                  <span style={{ color: '#C9A84C' }}>✓</span> Everything in Monthly
-                </li>
-                <li className="flex items-center gap-2">
-                  <span style={{ color: '#C9A84C' }}>✓</span> ~2 months free vs monthly
-                </li>
-                <li className="flex items-center gap-2">
-                  <span style={{ color: '#C9A84C' }}>✓</span> Priority support
-                </li>
-              </ul>
+            <div className="flex-1 space-y-2">
+              {[
+                'Everything in Monthly',
+                '~2 months free vs monthly',
+                'Early access to new features',
+                'Priority support',
+                'Monthly product giveaway',
+              ].map(f => (
+                <div key={f} className="flex items-start gap-2 text-sm text-cv-muted">
+                  <CheckIcon color="#C9A84C" />
+                  <span>{f}</span>
+                </div>
+              ))}
             </div>
             <button
-              className="w-full mt-2 py-2.5 px-4 rounded-full text-sm font-bold transition-opacity"
+              className="w-full mt-2 py-2.5 px-4 rounded-full text-sm font-bold transition-opacity hover:opacity-90"
               style={{ background: 'linear-gradient(90deg,#C9A84C,#E8C76A)', color: '#080C10' }}
               onClick={() => void handleSubscribe('yearly')}
               disabled={loadingPlan !== null}
@@ -193,12 +264,56 @@ export default function BillingPage() {
         </div>
       )}
 
+      {/* Already Pro — upgrade to yearly if on monthly */}
+      {isPro && isMonthly && billingConfigured && (
+        <div className="glass p-5 rounded-[var(--radius-lg)]"
+          style={{ border: '1px solid rgba(201,168,76,0.2)' }}>
+          <h2 className="text-base font-semibold mb-1" style={{ color: '#C9A84C' }}>Upgrade to Yearly</h2>
+          <p className="text-sm text-cv-muted mb-3">
+            Switch to yearly and get early access to new features, priority support, and save ~2 months.
+          </p>
+          <button
+            className="py-2 px-5 rounded-full text-sm font-bold"
+            style={{ background: 'linear-gradient(90deg,#C9A84C,#E8C76A)', color: '#080C10' }}
+            onClick={() => void handleSubscribe('yearly')}
+            disabled={loadingPlan !== null}
+          >
+            {loadingPlan === 'yearly' ? 'Redirecting...' : 'Upgrade to Yearly'}
+          </button>
+        </div>
+      )}
+
+      {/* Yearly perks banner */}
+      {isPro && isYearly && (
+        <div className="glass p-4 rounded-[var(--radius-md)]"
+          style={{ border: '1px solid rgba(201,168,76,0.2)', background: 'rgba(201,168,76,0.04)' }}>
+          <p className="text-sm font-semibold mb-1" style={{ color: '#C9A84C' }}>Yearly Member Perks</p>
+          <div className="space-y-1.5 text-sm text-cv-muted">
+            <div className="flex items-center gap-2"><CheckIcon color="#C9A84C" /><span>Early access to new features before monthly members</span></div>
+            <div className="flex items-center gap-2"><CheckIcon color="#C9A84C" /><span>Monthly product giveaway — check your email each month</span></div>
+            <div className="flex items-center gap-2"><CheckIcon color="#C9A84C" /><span>Priority support response</span></div>
+          </div>
+        </div>
+      )}
+
+      {/* Monthly perks banner */}
+      {isPro && isMonthly && (
+        <div className="glass p-4 rounded-[var(--radius-md)]"
+          style={{ border: '1px solid rgba(0,229,255,0.15)', background: 'rgba(0,229,255,0.03)' }}>
+          <p className="text-sm font-semibold mb-1" style={{ color: '#00E5FF' }}>Monthly Member Perks</p>
+          <div className="space-y-1.5 text-sm text-cv-muted">
+            <div className="flex items-center gap-2"><CheckIcon color="#00E5FF" /><span>Monthly product giveaway — check your email each month</span></div>
+            <div className="flex items-center gap-2"><CheckIcon color="#00E5FF" /><span>All Pro features unlocked</span></div>
+          </div>
+        </div>
+      )}
+
       {/* Manage subscription */}
       {isPro && (
-        <div className="glass p-4 space-y-3">
+        <div className="glass p-4 space-y-3 rounded-[var(--radius-md)]">
           <h2 className="text-base font-semibold">Manage subscription</h2>
           <p className="text-sm text-cv-muted">
-            Update your payment method, download invoices, or cancel your subscription through the Stripe billing portal.
+            Update your payment method, download invoices, or cancel through the Stripe billing portal.
           </p>
           <button
             className="btn-secondary"
@@ -211,7 +326,7 @@ export default function BillingPage() {
       )}
 
       {!billingConfigured && (
-        <div className="glass p-4">
+        <div className="glass p-4 rounded-[var(--radius-md)]">
           <p className="text-sm text-cv-muted">Paid upgrades are not available yet. Free plan features remain fully available.</p>
         </div>
       )}
@@ -219,10 +334,10 @@ export default function BillingPage() {
       {error && <p className="text-sm text-cv-danger">{error}</p>}
 
       {/* Free tier info */}
-      <div className="glass p-4">
-        <h2 className="text-base font-semibold mb-2">Free tier</h2>
+      <div className="glass p-4 rounded-[var(--radius-md)]">
+        <h2 className="text-base font-semibold mb-2">Free Tier</h2>
         <p className="text-sm text-cv-muted leading-relaxed">
-          Card Safe HQ offers a free tier so every collector can get started. Free accounts include basic collection tracking, manual card entry, and limited scans per month. A Pro subscription helps cover Cloudflare and AI costs that power the platform for everyone.
+          Card Safe HQ offers a free tier so every collector can get started. Free accounts include search across all Pokémon TCG products, single card scanning (no AI), basic collection tracking, and a limited deck builder. Upgrade to Pro to unlock AI-powered scanning, grading, live price data, and more.
         </p>
       </div>
     </div>

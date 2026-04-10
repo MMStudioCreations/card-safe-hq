@@ -4,7 +4,12 @@ import { badRequest, notFound, ok } from '../lib/json';
 import { asInt, asString, parseJsonBody } from '../lib/validation';
 
 const VALID_PRODUCT_TYPES = new Set<ProductType>([
-  'single_card', 'booster_pack', 'booster_box', 'etb', 'tin', 'bundle', 'promo_pack', 'other_sealed',
+  'single_card', 'booster_pack', 'booster_box', 'etb', 'elite_trainer_box',
+  'tin', 'mini_tin', 'bundle', 'booster_bundle', 'promo_pack', 'other_sealed',
+  'ultra_premium_collection', 'premium_collection', 'special_collection', 'super_premium_collection',
+  'figure_collection', 'poster_collection', 'pin_collection', 'collection_box',
+  'build_and_battle', 'battle_deck', 'theme_deck', 'blister_pack', 'gift_set',
+  'binder_collection', 'world_championship_deck', 'ex_box',
 ]);
 
 interface CollectionItem {
@@ -94,7 +99,7 @@ export async function createCollectionItem(env: Env, request: Request, user: Use
   if (body instanceof Response) return body;
 
   try {
-    const cardId = asInt(body.card_id, 'card_id', 1, 2_147_483_647);
+    let cardId = asInt(body.card_id, 'card_id', 1, 2_147_483_647);
     const quantity = asInt(body.quantity ?? 1, 'quantity', 1, 1000) ?? 1;
     const conditionNote = asString(body.condition_note, 'condition_note', 500);
     const estimatedGrade = asString(body.estimated_grade, 'estimated_grade', 20);
@@ -103,6 +108,40 @@ export async function createCollectionItem(env: Env, request: Request, user: Use
     const productType = VALID_PRODUCT_TYPES.has(rawProductType as ProductType) ? rawProductType : 'single_card';
     const productName = asString(body.product_name, 'product_name', 500);
     const purchasePrice = asInt(body.purchase_price_cents, 'purchase_price_cents', 0, 100_000_000);
+
+    // ── Search-page fast path: ptcg_id provided ───────────────────────────────
+    // When adding a card from search results, the frontend sends ptcg_id, card_name, set_name, etc.
+    // We look up the card in the pokemon_catalog and create a cards row if needed.
+    const ptcgId = asString(body.ptcg_id, 'ptcg_id', 100);
+    if (ptcgId && !cardId) {
+      const cardName = asString(body.card_name, 'card_name', 500);
+      const setName = asString(body.set_name, 'set_name', 500);
+      const cardNumber = asString(body.card_number, 'card_number', 50);
+      const rarity = asString(body.rarity, 'rarity', 100);
+      const imageUrl = asString(body.image_url, 'image_url', 500);
+
+      // Try to find an existing cards row for this ptcg_id
+      const existingCard = await queryOne<{ id: number }>(
+        env.DB,
+        `SELECT id FROM cards WHERE external_ref = ? OR (game = 'Pokemon' AND card_name = ? AND COALESCE(set_name,'') = COALESCE(?,'') AND COALESCE(card_number,'') = COALESCE(?,'')) LIMIT 1`,
+        [ptcgId, cardName ?? '', setName ?? '', cardNumber ?? ''],
+      );
+
+      if (existingCard) {
+        cardId = existingCard.id;
+      } else {
+        // Create a new cards row from catalog data
+        await run(
+          env.DB,
+          `INSERT INTO cards (game, set_name, card_name, card_number, rarity, image_url, external_ref)
+           VALUES ('Pokemon', ?, ?, ?, ?, ?, ?)`,
+          [setName, cardName, cardNumber, rarity, imageUrl, ptcgId],
+        );
+        const newCard = await queryOne<{ id: number }>(env.DB, 'SELECT id FROM cards WHERE id = last_insert_rowid()');
+        if (!newCard) return badRequest('Failed to create card record');
+        cardId = newCard.id;
+      }
+    }
 
     if (cardId) {
       const card = await queryOne(env.DB, 'SELECT id FROM cards WHERE id = ?', [cardId]);

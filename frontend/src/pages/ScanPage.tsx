@@ -1,7 +1,9 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useEffect, useCallback, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useQueryClient } from '@tanstack/react-query'
+import { Lock } from 'lucide-react'
 import { api, type ScanApiResult } from '../lib/api'
+import { useBillingStatus } from '../lib/hooks'
 import CardCrop from '../components/CardCrop'
 
 type Mode = 'sheet' | 'single'
@@ -39,6 +41,8 @@ export default function ScanPage() {
   const queryClient = useQueryClient()
   const fileInputRef = useRef<HTMLInputElement>(null)
   const dropRef = useRef<HTMLDivElement>(null)
+  const { data: billing } = useBillingStatus()
+  const isPro = billing?.tier === 'pro'
 
   const [mode, setMode] = useState<Mode>('sheet')
   const [state, setState] = useState<State>('idle')
@@ -204,13 +208,16 @@ export default function ScanPage() {
       <div className="glass flex rounded-[var(--radius-lg)] overflow-hidden">
         <button
           type="button"
-          onClick={() => handleModeChange('sheet')}
-          className={`flex-1 py-2.5 text-sm font-medium transition-colors
-            ${mode === 'sheet'
+          onClick={() => isPro ? handleModeChange('sheet') : undefined}
+          className={`flex-1 py-2.5 text-sm font-medium transition-colors flex items-center justify-center gap-2
+            ${mode === 'sheet' && isPro
               ? 'bg-[var(--primary)] text-white'
-              : 'text-cv-muted hover:text-white'}`}
+              : isPro ? 'text-cv-muted hover:text-white' : 'text-cv-muted opacity-60 cursor-not-allowed'}`}
+          title={!isPro ? 'Binder sheet scan requires a Pro subscription' : undefined}
         >
+          {!isPro && <Lock size={12} />}
           Binder Sheet (9-pocket)
+          {!isPro && <span className="text-[10px] ml-1 opacity-70">Pro</span>}
         </button>
         <button
           type="button"
@@ -223,6 +230,19 @@ export default function ScanPage() {
           Single Card
         </button>
       </div>
+
+      {/* Free tier scan notice */}
+      {!isPro && (
+        <div className="glass rounded-[var(--radius-md)] p-3 flex items-start gap-3"
+          style={{ border: '1px solid rgba(201,168,76,0.2)', background: 'rgba(201,168,76,0.04)' }}>
+          <Lock size={14} className="shrink-0 mt-0.5" style={{ color: '#C9A84C' }} />
+          <div className="flex-1 min-w-0">
+            <p className="text-xs font-semibold" style={{ color: '#C9A84C' }}>Free Tier — Single Card Scan Only</p>
+            <p className="text-xs text-cv-muted mt-0.5">Free accounts can scan one card at a time. Upgrade to Pro for binder sheet scanning (9 cards at once) with AI-powered bulk identification.</p>
+            <Link to="/billing" className="text-xs font-semibold mt-1 inline-block" style={{ color: '#C9A84C' }}>Upgrade to Pro →</Link>
+          </div>
+        </div>
+      )}
 
       {(state === 'idle' || state === 'error') && (
         <div className="space-y-4">
@@ -381,10 +401,23 @@ export default function ScanPage() {
       {state === 'done' && mode === 'sheet' && sheetResult && (
         <div className="space-y-6">
           <div className="glass rounded-[var(--radius-lg)] p-5 text-center">
-            <p className="text-2xl font-bold text-[var(--primary)]">{sheetResult.cards_detected}</p>
+            <p className={`text-2xl font-bold ${sheetResult.cards_detected > 0 ? 'text-[var(--primary)]' : 'text-amber-400'}`}>
+              {sheetResult.cards_detected}
+            </p>
             <p className="mt-1 text-sm text-cv-muted">
               {sheetResult.cards_detected === 1 ? 'card' : 'cards'} detected and added to your collection
             </p>
+            {sheetResult.cards_detected === 0 && (
+              <div className="mt-3 text-xs text-cv-muted space-y-1">
+                <p>No cards could be identified. Tips for better results:</p>
+                <ul className="list-disc text-left pl-5 space-y-0.5">
+                  <li>Ensure the image is well-lit and in focus</li>
+                  <li>Use a flat, clean binder page scan</li>
+                  <li>Try the Single Card mode for individual cards</li>
+                  <li>Make sure cards are clearly visible in all 9 pockets</li>
+                </ul>
+              </div>
+            )}
           </div>
 
           {sheetResult.collection_items.length > 0 && (
@@ -432,12 +465,27 @@ export default function ScanPage() {
           )}
 
           <div className="flex gap-3">
-            <Link to="/" className="btn-primary flex-1 text-center">
-              View Full Collection
-            </Link>
-            <button className="btn-ghost" onClick={handleReset} type="button">
-              Scan Another Page
+            {sheetResult.cards_detected > 0 && (
+              <Link to="/" className="btn-primary flex-1 text-center">
+                View Full Collection
+              </Link>
+            )}
+            <button
+              className={sheetResult.cards_detected > 0 ? 'btn-ghost' : 'btn-primary flex-1'}
+              onClick={handleReset}
+              type="button"
+            >
+              {sheetResult.cards_detected > 0 ? 'Scan Another Page' : 'Try Again'}
             </button>
+            {sheetResult.cards_detected === 0 && (
+              <button
+                className="btn-ghost"
+                onClick={() => handleModeChange('single')}
+                type="button"
+              >
+                Try Single Card
+              </button>
+            )}
           </div>
         </div>
       )}
