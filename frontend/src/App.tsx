@@ -1,6 +1,7 @@
 import { Navigate, Route, Routes } from 'react-router-dom'
 import Layout from './components/Layout'
 import ProtectedRoute from './components/ProtectedRoute'
+import SemiProtectedRoute from './components/SemiProtectedRoute'
 import AdminPage from './pages/AdminPage'
 import CardDetailPage from './pages/CardDetailPage'
 import CollectionPage from './pages/CollectionPage'
@@ -20,7 +21,9 @@ import VerifyEmailPage from './pages/VerifyEmailPage'
 import BillingPage from './pages/BillingPage'
 import SearchPage from './pages/SearchPage'
 import AccountPage from './pages/AccountPage'
+import MembershipPage from './pages/MembershipPage'
 
+// Requires login
 function Protected({ children }: { children: React.ReactNode }) {
   return (
     <ProtectedRoute>
@@ -29,22 +32,40 @@ function Protected({ children }: { children: React.ReactNode }) {
   )
 }
 
+// Works for both guests and logged-in users (no redirect to login)
+function Public({ children }: { children: React.ReactNode }) {
+  return (
+    <SemiProtectedRoute>
+      <Layout>{children}</Layout>
+    </SemiProtectedRoute>
+  )
+}
+
 export default function App() {
   return (
     <Routes>
-      <Route path="/login" element={<LoginPage />} />
-      <Route path="/register" element={<RegisterPage />} />
+      {/* Auth pages — no layout */}
+      <Route path="/login"          element={<LoginPage />} />
+      <Route path="/register"       element={<RegisterPage />} />
       <Route path="/forgot-password" element={<ForgotPasswordPage />} />
       <Route path="/reset-password" element={<ResetPasswordPage />} />
-      <Route path="/verify-email" element={<VerifyEmailPage />} />
+      <Route path="/verify-email"   element={<VerifyEmailPage />} />
 
+      {/* Public pages — accessible without login */}
+      <Route path="/search"      element={<Public><SearchPage /></Public>} />
+      <Route path="/sealed"      element={<Public><SearchPage /></Public>} />
+      <Route path="/deck"          element={<Public><DeckBuilderPage /></Public>} />
+      <Route path="/deck-builder"   element={<Public><DeckBuilderPage /></Public>} />
+      <Route path="/membership"  element={<MembershipPage />} />
+
+      {/* Protected pages — require login */}
       <Route path="/"         element={<Protected><CollectionPage /></Protected>} />
       <Route path="/scan"     element={<Protected><ScanPage /></Protected>} />
       <Route path="/upload"   element={<Protected><UploadPage /></Protected>} />
       <Route path="/review"   element={<Protected><ReviewQueuePage /></Protected>} />
-      <Route path="/deck"     element={<Protected><DeckBuilderPage /></Protected>} />
       <Route path="/card/:id" element={<Protected><CardDetailPage /></Protected>} />
       <Route path="/admin"    element={<Protected><AdminPage /></Protected>} />
+      <Route path="/account"  element={<Protected><AccountPage /></Protected>} />
 
       {/* Trades */}
       <Route path="/trades"        element={<Protected><TradesPage /></Protected>} />
@@ -54,11 +75,7 @@ export default function App() {
       {/* Billing */}
       <Route path="/billing" element={<Protected><BillingPage /></Protected>} />
 
-      {/* Sealed Products */}
-      <Route path="/sealed" element={<Protected><SearchPage /></Protected>} />
-      <Route path="/account" element={<Protected><AccountPage /></Protected>} />
-
-      <Route path="*" element={<Navigate to="/" replace />} />
+      <Route path="*" element={<Navigate to="/search" replace />} />
     </Routes>
   )
 }

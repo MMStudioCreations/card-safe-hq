@@ -57,6 +57,8 @@ import {
   handleCreatePortal,
   handleStripeWebhook,
 } from './routes/billing';
+import { handleUpdateProfile, handleChangePassword } from './routes/profile';
+import { handleSealedSync, searchSealedLive } from './routes/sealed-sync';
 
 function parseId(pathname: string): number | null {
   const id = Number(pathname.split('/').pop());
@@ -205,6 +207,18 @@ export default {
       }
       if (method === 'POST' && pathname === '/api/auth/reset-password') {
         return withCors(await handleResetPassword(env, request), request, env);
+      }
+
+      // ── Profile update & password change ─────────────────────────────────────────────
+      if (method === 'PATCH' && pathname === '/api/auth/profile') {
+        const user = await requireAuth(env, request);
+        if (user instanceof Response) return withCors(user, request, env);
+        return withCors(await handleUpdateProfile(env, request, user), request, env);
+      }
+      if (method === 'POST' && pathname === '/api/auth/change-password') {
+        const user = await requireAuth(env, request);
+        if (user instanceof Response) return withCors(user, request, env);
+        return withCors(await handleChangePassword(env, request, user), request, env);
       }
 
       if (method === 'GET' && pathname === '/api/cards') return withCors(await listCards(env, request), request, env);
@@ -533,6 +547,10 @@ export default {
         if (method === 'POST' && pathname === '/api/admin/recrop') {
           return withCors(await handleRecrop(env, request, user), request, env);
         }
+        // Sync sealed products catalog from TCGCSV
+        if (method === 'POST' && pathname === '/api/admin/sync-sealed') {
+          return withCors(await handleSealedSync(env, user), request, env);
+        }
       }
 
       // ── Public catalog lookup (used by vision pipeline) ───────────────────
@@ -646,6 +664,7 @@ export default {
       }
 
       // Universal search — cards from pokemon_catalog + sealed products
+      // NOTE: This endpoint is PUBLIC — no auth required for search
       if (method === 'GET' && pathname === '/api/search') {
         const url = new URL(request.url)
         const q = (url.searchParams.get('q') ?? '').trim()
@@ -675,6 +694,7 @@ export default {
         }
 
         if (category === 'all' || category === 'sealed') {
+          // First try the local DB
           const sealedRows = await env.DB.prepare(
             `SELECT id, name, set_name, product_type, tcgplayer_url,
                     market_price_cents, release_date, tcgplayer_product_id
@@ -688,6 +708,15 @@ export default {
              LIMIT ?`
           ).bind(like, like, q, `${q}%`, Math.ceil(limit * 0.5)).all()
           sealed = sealedRows.results ?? []
+
+          // If DB is empty, fall back to live TCGCSV search
+          if (sealed.length === 0) {
+            try {
+              sealed = await searchSealedLive(q, Math.ceil(limit * 0.5))
+            } catch (liveErr) {
+              console.warn('[search] live sealed fallback failed', liveErr)
+            }
+          }
         }
 
         return withCors(ok({ cards, sealed }), request, env)

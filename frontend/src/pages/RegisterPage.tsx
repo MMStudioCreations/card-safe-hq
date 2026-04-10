@@ -61,6 +61,14 @@ export default function RegisterPage() {
           Already have an account?{' '}
           <Link className="text-cv-primary hover:underline" to="/login">Login</Link>
         </p>
+        <div className="border-t border-cv-border pt-3 space-y-2">
+          <p className="text-center text-xs text-cv-muted">
+            <Link className="text-cv-secondary hover:underline font-medium" to="/membership">View membership plans &amp; pricing</Link>
+          </p>
+          <p className="text-center text-xs text-cv-muted">
+            <Link className="hover:underline" to="/search">Browse without signing in →</Link>
+          </p>
+        </div>
       </form>
     </div>
   )

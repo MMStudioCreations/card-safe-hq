@@ -1,8 +1,8 @@
 import { useState } from 'react'
 import { Navigate } from 'react-router-dom'
 import { useAuth } from '../lib/hooks'
-import { Loader2 } from 'lucide-react'
-import { useQuery } from '@tanstack/react-query'
+import { Loader2, Users, BarChart2, Database, RefreshCw, Shield, Package } from 'lucide-react'
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   BarChart,
   Bar,
@@ -11,14 +11,18 @@ import {
   Tooltip,
   ResponsiveContainer,
 } from 'recharts'
+import { getStoredToken } from '../lib/api'
 
 const ADMIN_EMAIL = 'michaelamarino16@gmail.com'
 const API_BASE = import.meta.env.VITE_API_URL ?? 'https://cardsafehq-api.michaelamarino16.workers.dev'
 
 async function adminFetch<T>(path: string, options?: RequestInit): Promise<T> {
+  const token = getStoredToken()
+  const headers: Record<string, string> = { 'Content-Type': 'application/json' }
+  if (token) headers['Authorization'] = `Bearer ${token}`
   const res = await fetch(`${API_BASE}${path}`, {
     credentials: 'include',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { ...headers, ...(options?.headers ?? {}) },
     ...options,
   })
   const json = await res.json() as { ok: boolean; data?: T; error?: string }
@@ -58,7 +62,7 @@ type ActivityRow = {
   scan_count: number
 }
 
-type Tab = 'overview' | 'users' | 'cards' | 'activity' | 'sql' | 'catalog'
+type Tab = 'overview' | 'users' | 'crm' | 'cards' | 'activity' | 'sql' | 'catalog' | 'sealed'
 
 function StatCard({ label, value }: { label: string; value: string | number }) {
   return (
@@ -529,11 +533,202 @@ function RecropSection() {
   )
 }
 
+// ── CRM Tab ──────────────────────────────────────────────────────────────────
+type CRMUser = {
+  id: number
+  email: string
+  username: string | null
+  created_at: string
+  collection_count: number
+  stripe_customer_id: string | null
+  stripe_subscription_id: string | null
+  stripe_price_id: string | null
+  subscription_status: string | null
+  current_period_end: string | null
+}
+
+function CRMTab() {
+  const [search, setSearch] = useState('')
+  const { data: users, isLoading, error } = useQuery({
+    queryKey: ['admin', 'crm-users'],
+    queryFn: () => adminFetch<CRMUser[]>('/api/admin/users'),
+  })
+
+  const filtered = (users ?? []).filter(u =>
+    !search || u.email.toLowerCase().includes(search.toLowerCase()) ||
+    (u.username ?? '').toLowerCase().includes(search.toLowerCase())
+  )
+
+  const proUsers = (users ?? []).filter(u => u.subscription_status === 'active')
+  const freeUsers = (users ?? []).filter(u => u.subscription_status !== 'active')
+
+  function getPlanLabel(u: CRMUser) {
+    if (!u.stripe_subscription_id || u.subscription_status !== 'active') return 'Free'
+    if (u.stripe_price_id?.includes('yearly') || u.stripe_price_id?.includes('annual') || u.stripe_price_id?.includes('year')) return 'Pro Yearly'
+    return 'Pro Monthly'
+  }
+
+  if (isLoading) return <Loader2 className="h-6 w-6 animate-spin text-cv-secondary mx-auto mt-8" />
+  if (error) return <p className="text-red-400 mt-4">Failed to load CRM data.</p>
+
+  return (
+    <div className="space-y-4">
+      {/* Summary cards */}
+      <div className="grid grid-cols-3 gap-4">
+        <div className="rounded-[var(--radius-md)] bg-cv-surface p-4">
+          <p className="text-xs text-cv-muted uppercase tracking-wider">Total Users</p>
+          <p className="text-2xl font-bold mt-1">{users?.length ?? 0}</p>
+        </div>
+        <div className="rounded-[var(--radius-md)] p-4" style={{ background: 'rgba(0,229,255,0.08)', border: '1px solid rgba(0,229,255,0.2)' }}>
+          <p className="text-xs uppercase tracking-wider" style={{ color: '#00E5FF' }}>Pro Subscribers</p>
+          <p className="text-2xl font-bold mt-1" style={{ color: '#00E5FF' }}>{proUsers.length}</p>
+        </div>
+        <div className="rounded-[var(--radius-md)] bg-cv-surface p-4">
+          <p className="text-xs text-cv-muted uppercase tracking-wider">Free Users</p>
+          <p className="text-2xl font-bold mt-1">{freeUsers.length}</p>
+        </div>
+      </div>
+
+      {/* Search */}
+      <input
+        type="text"
+        value={search}
+        onChange={e => setSearch(e.target.value)}
+        placeholder="Search by email or username..."
+        className="input w-full"
+      />
+
+      {/* User table */}
+      <div className="overflow-x-auto rounded-[var(--radius-md)] bg-cv-surface">
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="border-b border-cv-border text-cv-muted">
+              <th className="text-left px-4 py-3 font-medium">User</th>
+              <th className="text-left px-4 py-3 font-medium">Plan</th>
+              <th className="text-left px-4 py-3 font-medium">Status</th>
+              <th className="text-left px-4 py-3 font-medium">Renews</th>
+              <th className="text-right px-4 py-3 font-medium">Items</th>
+              <th className="text-left px-4 py-3 font-medium">Joined</th>
+            </tr>
+          </thead>
+          <tbody>
+            {filtered.map((u) => {
+              const plan = getPlanLabel(u)
+              const isActive = u.subscription_status === 'active'
+              return (
+                <tr key={u.id} className="border-b border-cv-border last:border-0 hover:bg-cv-hover">
+                  <td className="px-4 py-3">
+                    <p className="text-cv-text font-medium">{u.email}</p>
+                    <p className="text-xs text-cv-muted">{u.username ?? '—'}</p>
+                  </td>
+                  <td className="px-4 py-3">
+                    <span
+                      className="rounded-full px-2 py-0.5 text-xs font-medium"
+                      style={{
+                        background: plan === 'Pro Yearly' ? 'rgba(201,168,76,0.15)' : plan === 'Pro Monthly' ? 'rgba(0,229,255,0.1)' : 'rgba(255,255,255,0.06)',
+                        color: plan === 'Pro Yearly' ? '#C9A84C' : plan === 'Pro Monthly' ? '#00E5FF' : 'var(--cv-muted)',
+                      }}
+                    >
+                      {plan}
+                    </span>
+                  </td>
+                  <td className="px-4 py-3">
+                    <span className={`text-xs ${isActive ? 'text-green-400' : 'text-cv-muted'}`}>
+                      {u.subscription_status ?? 'none'}
+                    </span>
+                  </td>
+                  <td className="px-4 py-3 text-cv-muted text-xs">
+                    {u.current_period_end ? new Date(u.current_period_end).toLocaleDateString() : '—'}
+                  </td>
+                  <td className="px-4 py-3 text-right text-cv-text">{u.collection_count}</td>
+                  <td className="px-4 py-3 text-cv-muted text-xs">{new Date(u.created_at).toLocaleDateString()}</td>
+                </tr>
+              )
+            })}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  )
+}
+
+// ── Sealed Sync Tab ────────────────────────────────────────────────────────────
+type SyncResult = {
+  inserted: number
+  skipped: number
+  groups_processed: number
+  total_groups: number
+  errors: string[]
+}
+
+function SealedSyncTab() {
+  const [syncing, setSyncing] = useState(false)
+  const [result, setResult] = useState<SyncResult | null>(null)
+  const [error, setError] = useState('')
+
+  async function runSync() {
+    setSyncing(true)
+    setResult(null)
+    setError('')
+    try {
+      const data = await adminFetch<SyncResult>('/api/admin/sync-sealed', { method: 'POST' })
+      setResult(data)
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Sync failed')
+    } finally {
+      setSyncing(false)
+    }
+  }
+
+  return (
+    <div className="rounded-[var(--radius-md)] bg-cv-surface p-5 space-y-4">
+      <div>
+        <h3 className="text-sm font-semibold text-cv-text">Sync Sealed Products Catalog</h3>
+        <p className="text-xs text-cv-muted mt-1">
+          Fetches all sealed Pokémon TCG products from TCGCSV (Elite Trainer Boxes, Tins, Booster Bundles, Promo Packs, etc.)
+          and populates the local sealed_products table. Run this to enable sealed product search.
+          Processes up to 100 set groups per run.
+        </p>
+      </div>
+      <button
+        onClick={runSync}
+        disabled={syncing}
+        className="px-4 py-2 rounded-[var(--radius-sm)] text-white text-sm font-medium disabled:opacity-50 hover:opacity-90 transition flex items-center gap-2"
+        style={{ background: 'linear-gradient(90deg, #00E5FF, #0099aa)' }}
+        type="button"
+      >
+        {syncing && <Loader2 className="h-4 w-4 animate-spin" />}
+        {syncing ? 'Syncing...' : 'Sync Sealed Products'}
+      </button>
+      {error && (
+        <div className="rounded-[var(--radius-sm)] bg-red-900/30 border border-red-700 text-red-300 text-sm p-3">{error}</div>
+      )}
+      {result && (
+        <div className="rounded-[var(--radius-sm)] bg-green-900/20 border border-green-700 text-green-300 text-sm p-3 space-y-1">
+          <p className="font-medium">Sync complete!</p>
+          <p>Inserted: {result.inserted} · Skipped: {result.skipped}</p>
+          <p>Groups processed: {result.groups_processed} / {result.total_groups}</p>
+          {result.errors.length > 0 && (
+            <details className="mt-2">
+              <summary className="cursor-pointer text-yellow-400">Errors ({result.errors.length})</summary>
+              <ul className="mt-1 space-y-0.5 text-xs text-yellow-300">
+                {result.errors.map((e, i) => <li key={i}>{e}</li>)}
+              </ul>
+            </details>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
 const TABS: { id: Tab; label: string }[] = [
   { id: 'overview', label: 'Overview' },
+  { id: 'crm', label: 'CRM' },
   { id: 'users', label: 'Users' },
   { id: 'cards', label: 'Cards' },
   { id: 'activity', label: 'Activity' },
+  { id: 'sealed', label: 'Sealed Sync' },
   { id: 'sql', label: 'SQL Runner' },
   { id: 'catalog', label: 'Pokémon Catalog' },
 ]
@@ -578,9 +773,11 @@ export default function AdminPage() {
       </div>
 
       {tab === 'overview' && <OverviewTab />}
+      {tab === 'crm' && <CRMTab />}
       {tab === 'users' && <UsersTab />}
       {tab === 'cards' && <CardsTab />}
       {tab === 'activity' && <ActivityTab />}
+      {tab === 'sealed' && <SealedSyncTab />}
       {tab === 'sql' && <SqlTab />}
       {tab === 'catalog' && <CatalogTab />}
     </div>

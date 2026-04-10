@@ -105,9 +105,24 @@ async function getOrCreateCustomer(env: Env, userId: number, email: string): Pro
 
 // ── GET /api/billing/status ───────────────────────────────────────────────────
 
+const OWNER_EMAIL = 'michaelamarino16@gmail.com';
+
 export async function handleBillingStatus(env: Env, request: Request): Promise<Response> {
   const user = await requireAuth(env, request);
   if (user instanceof Response) return user;
+
+  // Owner always gets yearly Pro access without payment
+  if (user.email === OWNER_EMAIL) {
+    return ok({
+      tier: 'pro',
+      plan: 'yearly',
+      status: 'active',
+      current_period_end: null,
+      cancel_at_period_end: false,
+      billing_configured: isStripeConfigured(env),
+      is_owner: true,
+    });
+  }
 
   const sub = await queryOne<{
     plan: string;

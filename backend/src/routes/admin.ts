@@ -63,10 +63,20 @@ export async function handleAdminUsers(env: Env, user: User): Promise<Response> 
     username: string | null;
     created_at: string;
     collection_count: number;
+    stripe_customer_id: string | null;
+    stripe_subscription_id: string | null;
+    stripe_price_id: string | null;
+    subscription_status: string | null;
+    current_period_end: string | null;
   }>(
     env.DB,
     `SELECT u.id, u.email, u.username, u.created_at,
-            COUNT(ci.id) as collection_count
+            COUNT(ci.id) as collection_count,
+            u.stripe_customer_id,
+            u.stripe_subscription_id,
+            u.stripe_price_id,
+            u.subscription_status,
+            u.current_period_end
      FROM users u
      LEFT JOIN collection_items ci ON ci.user_id = u.id
      GROUP BY u.id

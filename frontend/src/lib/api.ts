@@ -552,6 +552,12 @@ export const api = {
   removeWishlistItem: (ptcgId: string) =>
     http.delete<never, { removed: boolean }>(`/api/wishlist/${encodeURIComponent(ptcgId)}`),
 
+  // ── Profile / account settings ─────────────────────────────────────────────
+  updateProfile: (payload: { username?: string; email?: string }) =>
+    http.patch<never, { updated: boolean }>('/api/auth/profile', payload),
+  changePassword: (payload: { currentPassword: string; newPassword: string }) =>
+    http.post<never, { changed: boolean }>('/api/auth/change-password', payload),
+
   // ── Email auth ────────────────────────────────────────────────────────────────
   verifyEmail: (token: string) =>
     http.post<never, { verified: boolean }>('/api/auth/verify-email', { token }),

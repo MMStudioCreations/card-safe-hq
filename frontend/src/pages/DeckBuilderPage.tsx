@@ -4,7 +4,7 @@ import { useQuery } from '@tanstack/react-query'
 import { Copy, Layers, Lock, Minus, Plus, RefreshCw, Trash2, CheckCircle, XCircle, AlertTriangle } from 'lucide-react'
 import CardCrop from '../components/CardCrop'
 import { api, type CollectionItem } from '../lib/api'
-import { useCollection, useBillingStatus } from '../lib/hooks'
+import { useCollection, useBillingStatus, useAuth } from '../lib/hooks'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -448,6 +448,8 @@ const FREE_DECK_LIMIT = 20
 export default function DeckBuilderPage() {
   const { data: allItems = [], isLoading: collectionLoading } = useCollection(true)
   const { data: billing } = useBillingStatus()
+  const { data: user } = useAuth()
+  const isGuest = !user
   const isPro = billing?.tier === 'pro'
 
   // Game state
@@ -906,6 +908,14 @@ export default function DeckBuilderPage() {
 
           {collectionLoading ? (
             <p className="py-8 text-center text-sm text-cv-muted">Loading collection...</p>
+          ) : isGuest ? (
+            <div className="py-8 text-center space-y-3">
+              <p className="text-sm text-cv-muted">Sign in to use your card collection in deck building.</p>
+              <div className="flex justify-center gap-2">
+                <Link to="/login" className="btn-primary text-xs py-1.5 px-4">Sign In</Link>
+                <Link to="/register" className="btn-secondary text-xs py-1.5 px-4">Register Free</Link>
+              </div>
+            </div>
           ) : filteredPool.length === 0 ? (
             <div className="py-8 text-center">
               <p className="text-sm text-cv-muted">No {game.label} cards in your collection.</p>
