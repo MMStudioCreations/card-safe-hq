@@ -379,6 +379,22 @@ export const api = {
   markNotificationRead: (id: number) =>
     http.patch<never, { marked_read: boolean; notification_id: number }>(`/api/notifications/${id}/read`),
 
+
+  getDashboardSummary: () =>
+    http.get<never, {
+      global: {
+        total_members: number;
+        total_collection_cards: number;
+        total_collection_value_cents: number;
+      };
+      user: {
+        total_cards: number;
+        total_value_cents: number;
+        recent_cards: Array<{ id: number; card_name: string | null; set_name: string | null; card_number: string | null; estimated_value_cents: number | null; created_at: string }>;
+        top_value_cards: Array<{ id: number; card_name: string | null; set_name: string | null; card_number: string | null; estimated_value_cents: number | null }>;
+      };
+    }>('/api/dashboard/summary'),
+
   getCardPricing: (cardId: number | string) =>
     http.get<never, {
       card_id: number;
@@ -503,6 +519,13 @@ export const api = {
   saveDeck: (payload: { name: string; game: string; format: string; cards_json: string }) =>
     http.post<never, { id: number }>('/api/decks', payload),
 
+  listDecksV2: () => http.get<never, Array<{ id: number; name: string; format: string | null; description: string | null; updated_at: string }>>('/api/decks/v2'),
+  createDeckV2: (payload: { name: string; format?: string; description?: string }) => http.post<never, { id: number }>('/api/decks/v2', payload),
+  getDeckV2: (id: number | string) => http.get<never, { id: number; name: string; format: string | null; description: string | null; cards: Array<{ card_id: string; quantity: number }> }>(`/api/decks/v2/${id}`),
+  updateDeckV2: (id: number | string, payload: { name?: string; format?: string; description?: string }) => http.patch<never, { updated: boolean }>(`/api/decks/v2/${id}`, payload),
+  deleteDeckV2: (id: number | string) => http.delete<never, { deleted: boolean }>(`/api/decks/v2/${id}`),
+  setDeckCardV2: (id: number | string, payload: { card_id: string; quantity: number }) => http.post<never, unknown>(`/api/decks/v2/${id}/cards`, payload),
+
   listSavedDecks: () =>
     http.get<never, Array<{
       id: number;
@@ -546,6 +569,7 @@ export const api = {
       status: string | null;
       current_period_end: string | null;
       cancel_at_period_end: boolean;
+      billing_configured?: boolean;
     }>('/api/billing/status'),
   createCheckoutSession: (plan: 'monthly' | 'yearly') =>
     http.post<never, { url: string }>('/api/billing/checkout', { plan }),

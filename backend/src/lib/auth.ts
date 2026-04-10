@@ -3,6 +3,7 @@ import { queryOne, run } from './db';
 import { unauthorized } from './json';
 import { hashPassword } from './auth-utils';
 import { sendVerificationEmail } from './email';
+import { ensureUserSubscription } from './plan';
 
 const COOKIE_NAME = 'cv_session';
 const SESSION_DAYS = 30;
@@ -34,12 +35,15 @@ export async function registerUser(env: Env, input: { email: string; password: s
     throw new Error('Unable to create user');
   }
 
+  await ensureUserSubscription(env, user.id);
+
   // Send email verification
   try {
     const token = generateVerificationToken();
     const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
     await run(env.DB, 'INSERT INTO email_verification_tokens (token, user_id, expires_at) VALUES (?, ?, ?)', [token, user.id, expiresAt]);
-    await sendVerificationEmail(env, user.email, token);
+    const result = await sendVerificationEmail(env, user.email, token);
+    if (!result.ok) console.warn('[register] verification email not sent', result.error);
   } catch (err) {
     // Non-fatal — user can request resend later
     console.warn('[register] Failed to send verification email', err);

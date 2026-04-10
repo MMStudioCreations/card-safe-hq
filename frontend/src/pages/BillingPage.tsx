@@ -8,6 +8,7 @@ type BillingStatus = {
   status: string | null
   current_period_end: string | null
   cancel_at_period_end: boolean
+  billing_configured?: boolean
 }
 
 function formatDate(iso: string | null): string {
@@ -60,6 +61,7 @@ export default function BillingPage() {
   }
 
   const isPro = billing?.tier === 'pro'
+  const billingConfigured = billing?.billing_configured !== false
 
   return (
     <div className="space-y-6 pb-8">
@@ -117,7 +119,7 @@ export default function BillingPage() {
       )}
 
       {/* Plan cards */}
-      {!isPro && (
+      {!isPro && billingConfigured && (
         <div className="grid gap-4 sm:grid-cols-2">
           {/* Monthly */}
           <div className="glass p-5 space-y-3 flex flex-col">
@@ -205,6 +207,12 @@ export default function BillingPage() {
           >
             {loadingPortal ? 'Opening portal...' : 'Open billing portal'}
           </button>
+        </div>
+      )}
+
+      {!billingConfigured && (
+        <div className="glass p-4">
+          <p className="text-sm text-cv-muted">Paid upgrades are not available yet. Free plan features remain fully available.</p>
         </div>
       )}
 

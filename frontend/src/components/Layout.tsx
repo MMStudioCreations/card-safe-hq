@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, type ReactNode } from 'react'
 import { NavLink, useNavigate, Link } from 'react-router-dom'
-import { Camera, FolderKanban, Images, Layers, LogOut, Bell, ArrowLeftRight, Search } from 'lucide-react'
+import { Camera, FolderKanban, Images, Layers, LogOut, Bell, ArrowLeftRight, Search, UserCircle } from 'lucide-react'
 import { useQueryClient, useQuery, useMutation } from '@tanstack/react-query'
 import { api } from '../lib/api'
 import { useAuth, useCollection } from '../lib/hooks'
@@ -15,6 +15,7 @@ const links = [
   { to: '/deck', label: 'Deck Builder', icon: Layers },
   { to: '/trades', label: 'Trades', icon: ArrowLeftRight },
   { to: '/sealed', label: 'Search', icon: Search },
+  { to: '/account', label: 'Account', icon: UserCircle },
 ]
 
 export default function Layout({ children }: Props) {
@@ -63,7 +64,7 @@ export default function Layout({ children }: Props) {
   }
 
   return (
-    <div className="mx-auto min-h-screen w-full max-w-[980px] px-4 pb-24 pt-6 sm:px-6">
+    <div className="mx-auto min-h-screen w-full max-w-[1240px] px-4 pb-24 pt-6 sm:px-6">
       <header className="glass sticky top-3 z-20 mb-6 p-4">
         <div className="flex items-center justify-between gap-3">
           <div className="flex items-center gap-3">
@@ -198,13 +199,13 @@ export default function Layout({ children }: Props) {
         className="flex-1 overflow-y-auto"
         style={{ paddingBottom: 'calc(5rem + env(safe-area-inset-bottom))' }}
       >
-        <div className="max-w-lg mx-auto w-full">
+        <div className="mx-auto w-full max-w-5xl">
           {children}
         </div>
       </main>
 
       {/* Mobile nav */}
-      <nav className="glass fixed inset-x-2 bottom-2 z-30 mx-auto grid max-w-[980px] grid-cols-6 gap-0.5 px-1 py-1.5 sm:hidden" style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}>
+      <nav className="glass fixed inset-x-2 bottom-2 z-30 mx-auto grid max-w-[1240px] grid-cols-7 gap-0.5 px-1 py-1.5 sm:hidden" style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}>
         {links.map((link) => {
           const Icon = link.icon
           const isTrades = link.to === '/trades'
