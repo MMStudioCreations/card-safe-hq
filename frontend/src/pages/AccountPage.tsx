@@ -195,7 +195,7 @@ export default function AccountPage() {
           {activeSection === 'password' && (
             <div className="glass rounded-[var(--radius-lg)] p-6 space-y-6">
               <div className="flex items-center gap-2">
-                <Shield className="h-5 w-5 text-[#f97316]" />
+                <Shield className="h-5 w-5 text-[#D4AF37]" />
                 <h2 className="text-lg font-semibold">Change Password</h2>
               </div>
 
@@ -252,7 +252,7 @@ export default function AccountPage() {
                             className="h-1 flex-1 rounded-full transition-colors"
                             style={{
                               background: level <= strength
-                                ? strength <= 1 ? '#ef4444' : strength <= 2 ? '#f59e0b' : strength <= 3 ? '#22c55e' : '#f97316'
+                                ? strength <= 1 ? '#ef4444' : strength <= 2 ? '#D4AF37' : strength <= 3 ? '#22c55e' : '#D4AF37'
                                 : 'rgba(255,255,255,0.1)'
                             }}
                           />
@@ -310,7 +310,7 @@ export default function AccountPage() {
           {activeSection === 'billing' && (
             <div className="glass rounded-[var(--radius-lg)] p-6 space-y-6">
               <div className="flex items-center gap-2">
-                <CreditCard className="h-5 w-5 text-[#f59e0b]" />
+                <CreditCard className="h-5 w-5 text-[#D4AF37]" />
                 <h2 className="text-lg font-semibold">Billing & Plan</h2>
               </div>
 
@@ -318,27 +318,27 @@ export default function AccountPage() {
               <div className="rounded-[var(--radius-md)] p-4 space-y-3"
                 style={{
                   background: isOwner
-                    ? 'linear-gradient(135deg, rgba(249,115,22,0.12), rgba(245,158,11,0.06))'
+                    ? 'linear-gradient(135deg, rgba(212,175,55,0.12), rgba(212,175,55,0.06))'
                     : isPro
                     ? plan === 'yearly'
-                      ? 'linear-gradient(135deg, rgba(245,158,11,0.12), rgba(245,158,11,0.06))'
-                      : 'linear-gradient(135deg, rgba(249,115,22,0.12), rgba(249,115,22,0.06))'
+                      ? 'linear-gradient(135deg, rgba(212,175,55,0.12), rgba(212,175,55,0.06))'
+                      : 'linear-gradient(135deg, rgba(212,175,55,0.12), rgba(212,175,55,0.06))'
                     : 'rgba(255,255,255,0.04)',
                   border: isOwner
-                    ? '1px solid rgba(249,115,22,0.45)'
+                    ? '1px solid rgba(212,175,55,0.45)'
                     : isPro
                     ? plan === 'yearly'
-                      ? '1px solid rgba(245,158,11,0.35)'
-                      : '1px solid rgba(249,115,22,0.30)'
+                      ? '1px solid rgba(212,175,55,0.35)'
+                      : '1px solid rgba(212,175,55,0.30)'
                     : '1px solid rgba(255,255,255,0.08)',
                 }}
               >
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
                     {isOwner ? (
-                      <Crown className="h-5 w-5 text-[#f59e0b]" />
+                      <Crown className="h-5 w-5 text-[#D4AF37]" />
                     ) : isPro ? (
-                      <Crown className="h-5 w-5" style={{ color: plan === 'yearly' ? '#f59e0b' : '#f97316' }} />
+                      <Crown className="h-5 w-5" style={{ color: plan === 'yearly' ? '#D4AF37' : '#D4AF37' }} />
                     ) : (
                       <Shield className="h-5 w-5 text-cv-muted" />
                     )}
@@ -346,7 +346,7 @@ export default function AccountPage() {
                       {isOwner ? 'Owner — Full Access' : isPro ? (plan === 'yearly' ? 'Pro Yearly' : 'Pro Monthly') : 'Free Plan'}
                     </span>
                   </div>
-                  <span className="text-sm font-bold" style={{ color: isOwner ? '#f59e0b' : isPro ? (plan === 'yearly' ? '#f59e0b' : '#f97316') : 'var(--cv-muted)' }}>
+                  <span className="text-sm font-bold" style={{ color: isOwner ? '#D4AF37' : isPro ? (plan === 'yearly' ? '#D4AF37' : '#D4AF37') : 'var(--cv-muted)' }}>
                     {isOwner ? 'Complimentary' : isPro ? (plan === 'yearly' ? '$100/yr' : '$10/mo') : '$0'}
                   </span>
                 </div>
@@ -416,7 +416,7 @@ export default function AccountPage() {
                     { label: 'Early access features', included: plan === 'yearly' || isOwner },
                   ].map((f) => (
                     <div key={f.label} className={`flex items-center gap-2 text-xs ${f.included ? 'text-cv-text' : 'text-cv-muted'}`}>
-                      <div className={`h-1.5 w-1.5 rounded-full shrink-0 ${f.included ? 'bg-[#f97316]' : 'bg-white/20'}`} />
+                      <div className={`h-1.5 w-1.5 rounded-full shrink-0 ${f.included ? 'bg-[#D4AF37]' : 'bg-white/20'}`} />
                       {f.label}
                     </div>
                   ))}

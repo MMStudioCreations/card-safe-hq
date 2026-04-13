@@ -1,8 +1,8 @@
 {
   "name": "Card Safe HQ",
   "short_name": "CardSafe",
-  "description": "The command center for card collectors",
-  "theme_color": "#0A0A0F",
+  "description": "Protect. Display. Collect. — The premium card accessory brand for serious collectors.",
+  "theme_color": "#D4AF37",
   "background_color": "#0A0A0F",
   "display": "standalone",
   "start_url": "/",

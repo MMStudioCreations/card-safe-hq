@@ -16,7 +16,7 @@ export default function CollectionPage() {
           <button
             key={t}
             className={`px-4 py-1.5 rounded-[var(--radius-sm)] text-sm font-medium transition capitalize ${
-              tab === t ? 'bg-[var(--primary)] text-white' : 'text-cv-muted hover:text-cv-text'
+              tab === t ? 'bg-[var(--primary)] text-black' : 'text-cv-muted hover:text-cv-text'
             }`}
             onClick={() => setTab(t)}
             type="button"

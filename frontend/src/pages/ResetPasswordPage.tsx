@@ -56,11 +56,11 @@ export default function ResetPasswordPage() {
         {/* Logo mark */}
         <div className="flex justify-center mb-2">
           <div className="relative h-12 w-12 overflow-hidden rounded-[var(--radius-md)]"
-            style={{ background: 'linear-gradient(145deg,#1A0D08,#261308)', border: '1px solid rgba(249,115,22,0.35)', boxShadow: '0 0 14px rgba(249,115,22,0.20)' }}>
+            style={{ background: 'linear-gradient(145deg,#0D0D0A,#1A1A10)', border: '1px solid rgba(212,175,55,0.35)', boxShadow: '0 0 14px rgba(212,175,55,0.20)' }}>
             <svg viewBox="0 0 44 44" className="absolute inset-0 h-full w-full" fill="none">
-              <path d="M22 5L8 11v10c0 9.2 5.8 17.8 14 20.6C30.2 38.8 36 30.2 36 21V11L22 5z" stroke="#f97316" strokeWidth="1.6" strokeLinejoin="round" fill="rgba(249,115,22,0.08)"/>
-              <rect x="15" y="16" width="14" height="11" rx="2.5" stroke="#f59e0b" strokeWidth="1.4" fill="rgba(245,158,11,0.10)"/>
-              <circle cx="22" cy="21.5" r="2" fill="#f59e0b"/>
+              <path d="M22 5L8 11v10c0 9.2 5.8 17.8 14 20.6C30.2 38.8 36 30.2 36 21V11L22 5z" stroke="#D4AF37" strokeWidth="1.6" strokeLinejoin="round" fill="rgba(212,175,55,0.08)"/>
+              <rect x="15" y="16" width="14" height="11" rx="2.5" stroke="#D4AF37" strokeWidth="1.4" fill="rgba(212,175,55,0.10)"/>
+              <circle cx="22" cy="21.5" r="2" fill="#D4AF37"/>
             </svg>
             <span className="absolute bottom-1 inset-x-0 text-center text-[7px] font-black tracking-widest" style={{ color: '#F0F6FF' }}>CS</span>
           </div>

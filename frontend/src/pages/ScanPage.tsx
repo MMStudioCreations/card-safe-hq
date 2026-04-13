@@ -235,11 +235,11 @@ export default function ScanPage() {
       {!isPro && (
         <div className="glass rounded-[var(--radius-md)] p-3 flex items-start gap-3"
           style={{ border: '1px solid rgba(201,168,76,0.2)', background: 'rgba(201,168,76,0.04)' }}>
-          <Lock size={14} className="shrink-0 mt-0.5" style={{ color: '#f97316' }} />
+          <Lock size={14} className="shrink-0 mt-0.5" style={{ color: '#D4AF37' }} />
           <div className="flex-1 min-w-0">
-            <p className="text-xs font-semibold" style={{ color: '#f97316' }}>Free Tier — Single Card Scan Only</p>
+            <p className="text-xs font-semibold" style={{ color: '#D4AF37' }}>Free Tier — Single Card Scan Only</p>
             <p className="text-xs text-cv-muted mt-0.5">Free accounts can scan one card at a time. Upgrade to Pro for binder sheet scanning (9 cards at once) with AI-powered bulk identification.</p>
-            <Link to="/billing" className="text-xs font-semibold mt-1 inline-block" style={{ color: '#f97316' }}>Upgrade to Pro →</Link>
+            <Link to="/billing" className="text-xs font-semibold mt-1 inline-block" style={{ color: '#D4AF37' }}>Upgrade to Pro →</Link>
           </div>
         </div>
       )}
