@@ -5,7 +5,7 @@ import SemiProtectedRoute from './components/SemiProtectedRoute'
 import AdminPage from './pages/AdminPage'
 import CardDetailPage from './pages/CardDetailPage'
 import CollectionPage from './pages/CollectionPage'
-import DashboardPage from './pages/DashboardPage'
+import PortfolioPage from './pages/PortfolioPage'
 import DeckBuilderPage from './pages/DeckBuilderPage'
 import LoginPage from './pages/LoginPage'
 import RegisterPage from './pages/RegisterPage'
@@ -22,6 +22,7 @@ import BillingPage from './pages/BillingPage'
 import SearchPage from './pages/SearchPage'
 import AccountPage from './pages/AccountPage'
 import MembershipPage from './pages/MembershipPage'
+import ShopPage from './pages/ShopPage'
 
 // Requires login
 function Protected({ children }: { children: React.ReactNode }) {
@@ -45,32 +46,36 @@ export default function App() {
   return (
     <Routes>
       {/* Auth pages — no layout */}
-      <Route path="/login"          element={<LoginPage />} />
-      <Route path="/register"       element={<RegisterPage />} />
+      <Route path="/login"           element={<LoginPage />} />
+      <Route path="/register"        element={<RegisterPage />} />
       <Route path="/forgot-password" element={<ForgotPasswordPage />} />
-      <Route path="/reset-password" element={<ResetPasswordPage />} />
-      <Route path="/verify-email"   element={<VerifyEmailPage />} />
+      <Route path="/reset-password"  element={<ResetPasswordPage />} />
+      <Route path="/verify-email"    element={<VerifyEmailPage />} />
 
       {/* Public pages — accessible without login */}
       <Route path="/search"      element={<Public><SearchPage /></Public>} />
       <Route path="/sealed"      element={<Public><SearchPage /></Public>} />
-      <Route path="/deck"          element={<Public><DeckBuilderPage /></Public>} />
-      <Route path="/deck-builder"   element={<Public><DeckBuilderPage /></Public>} />
+      <Route path="/shop"        element={<Public><ShopPage /></Public>} />
+      <Route path="/deck"        element={<Public><DeckBuilderPage /></Public>} />
+      <Route path="/deck-builder" element={<Public><DeckBuilderPage /></Public>} />
       <Route path="/membership"  element={<MembershipPage />} />
 
       {/* Protected pages — require login */}
-      <Route path="/"         element={<Protected><CollectionPage /></Protected>} />
-      <Route path="/scan"     element={<Protected><ScanPage /></Protected>} />
-      <Route path="/upload"   element={<Protected><UploadPage /></Protected>} />
-      <Route path="/review"   element={<Protected><ReviewQueuePage /></Protected>} />
-      <Route path="/card/:id" element={<Protected><CardDetailPage /></Protected>} />
-      <Route path="/admin"    element={<Protected><AdminPage /></Protected>} />
-      <Route path="/account"  element={<Protected><AccountPage /></Protected>} />
+      {/* Root → Portfolio (Collectr-style) */}
+      <Route path="/"          element={<Protected><PortfolioPage /></Protected>} />
+      {/* Legacy collection route preserved */}
+      <Route path="/collection" element={<Protected><CollectionPage /></Protected>} />
+      <Route path="/scan"      element={<Protected><ScanPage /></Protected>} />
+      <Route path="/upload"    element={<Protected><UploadPage /></Protected>} />
+      <Route path="/review"    element={<Protected><ReviewQueuePage /></Protected>} />
+      <Route path="/card/:id"  element={<Protected><CardDetailPage /></Protected>} />
+      <Route path="/admin"     element={<Protected><AdminPage /></Protected>} />
+      <Route path="/account"   element={<Protected><AccountPage /></Protected>} />
 
       {/* Trades */}
-      <Route path="/trades"        element={<Protected><TradesPage /></Protected>} />
-      <Route path="/trades/new"    element={<Protected><NewTradePage /></Protected>} />
-      <Route path="/trades/:id"    element={<Protected><TradeDetailPage /></Protected>} />
+      <Route path="/trades"     element={<Protected><TradesPage /></Protected>} />
+      <Route path="/trades/new" element={<Protected><NewTradePage /></Protected>} />
+      <Route path="/trades/:id" element={<Protected><TradeDetailPage /></Protected>} />
 
       {/* Billing */}
       <Route path="/billing" element={<Protected><BillingPage /></Protected>} />

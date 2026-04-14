@@ -1,8 +1,11 @@
 import { useState, useEffect, useRef } from 'react'
-import { ExternalLink, Heart, Package, Plus, Search, ShoppingCart, X } from 'lucide-react'
+import { useSearchParams } from 'react-router-dom'
+import { ExternalLink, Heart, Package, Plus, Search, ShoppingCart, X, Check, LayoutDashboard } from 'lucide-react'
+import { useQueryClient } from '@tanstack/react-query'
 import { api } from '../lib/api'
+import { useAuth } from '../lib/hooks'
 
-// ── Type labels for all sealed product types ──────────────────────────────────
+// ── Type labels ───────────────────────────────────────────────────────────────
 const TYPE_LABELS: Record<string, string> = {
   booster_box: 'Booster Box',
   elite_trainer_box: 'Elite Trainer Box',
@@ -33,7 +36,6 @@ const TYPE_LABELS: Record<string, string> = {
   other_sealed: 'Sealed Product',
 }
 
-// Product type filter groups for the UI
 const PRODUCT_FILTER_GROUPS = [
   { label: 'ETB', value: 'elite_trainer_box' },
   { label: 'Booster Box', value: 'booster_box' },
@@ -43,6 +45,16 @@ const PRODUCT_FILTER_GROUPS = [
   { label: 'Promo Pack', value: 'promo_pack' },
   { label: 'Bundle', value: 'booster_bundle' },
   { label: 'Battle Deck', value: 'battle_deck' },
+]
+
+// ── TCG quick-filter logos (Collectr-style) ───────────────────────────────────
+const TCG_QUICK_FILTERS = [
+  { label: 'Pokémon', emoji: '⚡', query: 'pikachu' },
+  { label: 'Magic', emoji: '🔮', query: 'lightning bolt' },
+  { label: 'Yu-Gi-Oh!', emoji: '👁', query: 'blue eyes' },
+  { label: 'One Piece', emoji: '⚓', query: 'luffy' },
+  { label: 'Lorcana', emoji: '✨', query: 'elsa' },
+  { label: 'Dragon Ball', emoji: '🐉', query: 'goku' },
 ]
 
 type Category = 'all' | 'cards' | 'sealed'
@@ -90,23 +102,22 @@ function getRarityColor(rarity: string | null): { bg: string; text: string } {
   if (r.includes('special illustration') || r.includes('hyper')) return { bg: 'rgba(236,72,153,0.15)', text: '#f472b6' }
   if (r.includes('illustration rare') || r.includes('full art')) return { bg: 'rgba(168,85,247,0.15)', text: '#c084fc' }
   if (r.includes('secret') || r.includes('rainbow')) return { bg: 'rgba(236,72,153,0.12)', text: '#f9a8d4' }
-  if (r.includes('ultra') || r.includes('vmax') || r.includes('vstar')) return { bg: 'rgba(249,115,22,0.15)', text: '#fb923c' }
-  if (r.includes('rare holo') || r.includes('holo')) return { bg: 'rgba(249,115,22,0.12)', text: '#f97316' }
+  if (r.includes('ultra') || r.includes('vmax') || r.includes('vstar')) return { bg: 'rgba(212,175,55,0.15)', text: '#D4AF37' }
+  if (r.includes('rare holo') || r.includes('holo')) return { bg: 'rgba(212,175,55,0.12)', text: '#D4AF37' }
   if (r.includes('rare')) return { bg: 'rgba(99,102,241,0.15)', text: '#818cf8' }
   return { bg: 'rgba(100,116,139,0.12)', text: '#94a3b8' }
 }
 
 function getProductTypeColor(type: string): { bg: string; text: string } {
-  if (type === 'elite_trainer_box') return { bg: 'rgba(249,115,22,0.15)', text: '#f97316' }
-  if (type.includes('premium') || type.includes('ultra')) return { bg: 'rgba(234,88,12,0.15)', text: '#ea580c' }
+  if (type === 'elite_trainer_box') return { bg: 'rgba(212,175,55,0.15)', text: '#D4AF37' }
+  if (type.includes('premium') || type.includes('ultra')) return { bg: 'rgba(212,175,55,0.15)', text: '#D4AF37' }
   if (type === 'booster_box') return { bg: 'rgba(99,102,241,0.15)', text: '#818cf8' }
   if (type === 'tin' || type === 'mini_tin') return { bg: 'rgba(16,185,129,0.12)', text: '#34d399' }
   if (type.includes('collection')) return { bg: 'rgba(168,85,247,0.12)', text: '#c084fc' }
   if (type.includes('promo') || type.includes('ex_box')) return { bg: 'rgba(236,72,153,0.12)', text: '#f472b6' }
-  return { bg: 'rgba(249,115,22,0.12)', text: '#fb923c' }
+  return { bg: 'rgba(212,175,55,0.12)', text: '#D4AF37' }
 }
 
-// Build TCGCSV image URL from productId
 function getSealedImageUrl(product: SealedResult): string | null {
   if (product.image_url) return product.image_url
   if (product.tcgplayer_product_id) {
@@ -116,11 +127,26 @@ function getSealedImageUrl(product: SealedResult): string | null {
 }
 
 // ── Card detail modal ─────────────────────────────────────────────────────────
-function CardDetailModal({ card, onClose }: { card: CardResult; onClose: () => void }) {
+function CardDetailModal({
+  card,
+  onClose,
+  addToPortfolioMode,
+  onAddedToPortfolio,
+}: {
+  card: CardResult
+  onClose: () => void
+  addToPortfolioMode: boolean
+  onAddedToPortfolio?: (id: string) => void
+}) {
   const [addingToCollection, setAddingToCollection] = useState(false)
   const [addingToWishlist, setAddingToWishlist] = useState(false)
   const [added, setAdded] = useState<'collection' | 'wishlist' | null>(null)
   const [addError, setAddError] = useState('')
+  const [condition, setCondition] = useState('Near Mint')
+  const [qty, setQty] = useState(1)
+  const queryClient = useQueryClient()
+
+  const CONDITIONS = ['Near Mint', 'Lightly Played', 'Moderately Played', 'Heavily Played', 'Damaged']
 
   async function handleAddToCollection() {
     setAddingToCollection(true)
@@ -134,8 +160,12 @@ function CardDetailModal({ card, onClose }: { card: CardResult; onClose: () => v
         rarity: card.rarity ?? undefined,
         image_url: card.image_large ?? card.image_small ?? undefined,
         game: 'Pokemon',
+        condition_note: condition,
+        quantity: qty,
       })
+      queryClient.invalidateQueries({ queryKey: ['collection'] })
       setAdded('collection')
+      onAddedToPortfolio?.(card.ptcg_id)
     } catch (err) {
       setAddError((err as Error).message ?? 'Failed to add to collection')
     } finally {
@@ -170,12 +200,12 @@ function CardDetailModal({ card, onClose }: { card: CardResult; onClose: () => v
   return (
     <div
       className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4"
-      style={{ background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(4px)' }}
+      style={{ background: 'rgba(0,0,0,0.75)', backdropFilter: 'blur(6px)' }}
       onClick={onClose}
     >
       <div
         className="glass rounded-[var(--radius-lg)] w-full max-w-sm overflow-hidden"
-        style={{ maxHeight: '90vh', overflowY: 'auto' }}
+        style={{ maxHeight: '92vh', overflowY: 'auto' }}
         onClick={e => e.stopPropagation()}
       >
         {/* Card image */}
@@ -215,11 +245,6 @@ function CardDetailModal({ card, onClose }: { card: CardResult; onClose: () => v
                 {card.hp} HP
               </span>
             )}
-            {card.series && (
-              <span className="text-xs px-2 py-0.5 rounded-full font-medium" style={{ background: 'rgba(100,116,139,0.12)', color: '#94a3b8' }}>
-                {card.series}
-              </span>
-            )}
           </div>
 
           <div className="glass rounded-[var(--radius-md)] p-3 flex items-center justify-between">
@@ -229,24 +254,69 @@ function CardDetailModal({ card, onClose }: { card: CardResult; onClose: () => v
             </span>
           </div>
 
+          {/* Condition + Qty selectors (Collectr-style) */}
+          {added !== 'collection' && (
+            <div className="space-y-2">
+              <div>
+                <label className="text-xs text-cv-muted mb-1 block">Condition</label>
+                <div className="flex gap-1.5 flex-wrap">
+                  {CONDITIONS.map(c => (
+                    <button
+                      key={c}
+                      type="button"
+                      onClick={() => setCondition(c)}
+                      className="text-xs px-2.5 py-1 rounded-full font-medium transition"
+                      style={condition === c
+                        ? { background: 'var(--primary)', color: '#0A0A0C' }
+                        : { background: 'rgba(255,255,255,0.06)', color: 'var(--muted)', border: '1px solid rgba(255,255,255,0.08)' }
+                      }
+                    >
+                      {c}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div className="flex items-center gap-3">
+                <label className="text-xs text-cv-muted">Quantity</label>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setQty(q => Math.max(1, q - 1))}
+                    className="h-7 w-7 rounded-full flex items-center justify-center text-sm font-bold"
+                    style={{ background: 'rgba(255,255,255,0.08)' }}
+                  >−</button>
+                  <span className="text-sm font-bold w-5 text-center">{qty}</span>
+                  <button
+                    type="button"
+                    onClick={() => setQty(q => q + 1)}
+                    className="h-7 w-7 rounded-full flex items-center justify-center text-sm font-bold"
+                    style={{ background: 'rgba(255,255,255,0.08)' }}
+                  >+</button>
+                </div>
+              </div>
+            </div>
+          )}
+
           {addError && <p className="text-xs text-red-400">{addError}</p>}
 
           {added === 'collection' ? (
-            <div className="text-center text-sm font-medium py-2" style={{ color: '#4ECBA0' }}>✓ Added to your collection</div>
+            <div className="text-center text-sm font-medium py-2 flex items-center justify-center gap-2" style={{ color: '#4ECBA0' }}>
+              <Check size={16} /> Added to your portfolio
+            </div>
           ) : added === 'wishlist' ? (
             <div className="text-center text-sm font-medium py-2" style={{ color: '#f472b6' }}>✓ Added to your wishlist</div>
           ) : (
             <div className="grid grid-cols-2 gap-2">
               <button
-                className="btn-primary flex items-center justify-center gap-2 text-sm py-2"
+                className="btn-primary flex items-center justify-center gap-2 text-sm py-2.5"
                 onClick={() => void handleAddToCollection()}
                 disabled={addingToCollection}
               >
                 <Plus size={14} />
-                {addingToCollection ? 'Adding…' : 'Add to Collection'}
+                {addingToCollection ? 'Adding…' : 'Add to Portfolio'}
               </button>
               <button
-                className="btn-ghost flex items-center justify-center gap-2 text-sm py-2"
+                className="btn-ghost flex items-center justify-center gap-2 text-sm py-2.5"
                 onClick={() => void handleAddToWishlist()}
                 disabled={addingToWishlist}
                 style={{ border: '1px solid rgba(244,114,182,0.3)', color: '#f472b6' }}
@@ -275,18 +345,40 @@ function CardDetailModal({ card, onClose }: { card: CardResult; onClose: () => v
 function SealedDetailModal({ product, onClose }: { product: SealedResult; onClose: () => void }) {
   const typeStyle = getProductTypeColor(product.product_type)
   const imageUrl = getSealedImageUrl(product)
+  const [adding, setAdding] = useState(false)
+  const [added, setAdded] = useState(false)
+  const [addError, setAddError] = useState('')
+  const queryClient = useQueryClient()
+
+  async function handleAddToPortfolio() {
+    setAdding(true)
+    setAddError('')
+    try {
+      await api.createCollectionItem({
+        product_type: 'other_sealed',
+        product_name: product.name,
+        set_name: product.set_name,
+        estimated_value_cents: product.market_price_cents ?? undefined,
+      })
+      queryClient.invalidateQueries({ queryKey: ['collection'] })
+      setAdded(true)
+    } catch (err) {
+      setAddError((err as Error).message ?? 'Failed to add')
+    } finally {
+      setAdding(false)
+    }
+  }
 
   return (
     <div
       className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4"
-      style={{ background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(4px)' }}
+      style={{ background: 'rgba(0,0,0,0.75)', backdropFilter: 'blur(6px)' }}
       onClick={onClose}
     >
       <div
         className="glass rounded-[var(--radius-lg)] w-full max-w-sm overflow-hidden"
         onClick={e => e.stopPropagation()}
       >
-        {/* Product image */}
         {imageUrl && (
           <div className="relative bg-zinc-900 flex items-center justify-center" style={{ minHeight: 160 }}>
             <img
@@ -301,8 +393,6 @@ function SealedDetailModal({ product, onClose }: { product: SealedResult; onClos
             </button>
           </div>
         )}
-
-        {/* Header (when no image) */}
         {!imageUrl && (
           <div className="relative p-5 pb-3 flex items-start gap-4">
             <div className="rounded-xl p-3 shrink-0" style={{ background: typeStyle.bg }}>
@@ -325,28 +415,40 @@ function SealedDetailModal({ product, onClose }: { product: SealedResult; onClos
               <p className="text-sm text-cv-muted mt-0.5">{product.set_name}</p>
             </div>
           )}
-
           <span className="inline-block text-xs px-2.5 py-0.5 rounded-full font-medium" style={{ background: typeStyle.bg, color: typeStyle.text }}>
             {TYPE_LABELS[product.product_type] ?? product.product_type}
           </span>
-
           <div className="glass rounded-[var(--radius-md)] p-3 flex items-center justify-between">
             <span className="text-sm text-cv-muted">Market Price</span>
             <span className="text-lg font-bold" style={{ color: 'var(--primary)' }}>
               {formatPrice(product.market_price_cents)}
             </span>
           </div>
-
           {product.release_date && (
             <div className="flex items-center justify-between text-sm">
               <span className="text-cv-muted">Release Date</span>
               <span>{new Date(product.release_date).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}</span>
             </div>
           )}
-
+          {addError && <p className="text-xs text-red-400">{addError}</p>}
+          {added ? (
+            <div className="text-center text-sm font-medium py-2 flex items-center justify-center gap-2" style={{ color: '#4ECBA0' }}>
+              <Check size={16} /> Added to your portfolio
+            </div>
+          ) : (
+            <button
+              type="button"
+              onClick={() => void handleAddToPortfolio()}
+              disabled={adding}
+              className="btn-primary flex items-center justify-center gap-2 text-sm w-full py-2.5"
+            >
+              <Plus size={14} />
+              {adding ? 'Adding…' : 'Add to Portfolio'}
+            </button>
+          )}
           {product.tcgplayer_url && (
             <a href={product.tcgplayer_url} target="_blank" rel="noopener noreferrer"
-              className="btn-primary flex items-center justify-center gap-2 text-sm w-full">
+              className="flex items-center justify-center gap-2 text-sm text-cv-muted hover:text-white transition-colors py-1">
               <ShoppingCart size={14} />
               Buy on TCGPlayer
               <ExternalLink size={12} />
@@ -358,60 +460,69 @@ function SealedDetailModal({ product, onClose }: { product: SealedResult; onClos
   )
 }
 
-// ── Unified grid card component ───────────────────────────────────────────────
-function UnifiedGridItem({ item, onSelectCard, onSelectSealed }: {
+// ── Unified grid card ─────────────────────────────────────────────────────────
+function UnifiedGridItem({
+  item,
+  onSelectCard,
+  onSelectSealed,
+  addedIds,
+  onQuickAdd,
+  addToPortfolioMode,
+}: {
   item: UnifiedResult
   onSelectCard: (c: CardResult) => void
   onSelectSealed: (s: SealedResult) => void
+  addedIds: Set<string>
+  onQuickAdd: (item: UnifiedResult) => void
+  addToPortfolioMode: boolean
 }) {
   const [imgError, setImgError] = useState(false)
+  const key = item._type === 'card' ? item.ptcg_id : String(item.id)
+  const isAdded = addedIds.has(key)
 
   if (item._type === 'card') {
     const rarityStyle = getRarityColor(item.rarity)
     return (
-      <button
-        onClick={() => onSelectCard(item)}
+      <div
+        className="relative group"
         style={{
           background: 'var(--glass-bg)',
-          border: '1px solid var(--glass-border)',
+          border: isAdded ? '1.5px solid rgba(78,203,160,0.5)' : '1px solid var(--glass-border)',
           borderRadius: 14,
-          padding: 0,
-          cursor: 'pointer',
-          textAlign: 'left',
           overflow: 'hidden',
           transition: 'transform 0.15s, border-color 0.15s',
+          cursor: 'pointer',
         }}
-        onMouseEnter={e => {
-          (e.currentTarget as HTMLElement).style.transform = 'translateY(-2px)'
-          ;(e.currentTarget as HTMLElement).style.borderColor = 'rgba(249,115,22,0.35)'
-        }}
-        onMouseLeave={e => {
-          (e.currentTarget as HTMLElement).style.transform = 'translateY(0)'
-          ;(e.currentTarget as HTMLElement).style.borderColor = 'var(--glass-border)'
-        }}
+        onClick={() => onSelectCard(item)}
+        onMouseEnter={e => { (e.currentTarget as HTMLElement).style.transform = 'translateY(-2px)' }}
+        onMouseLeave={e => { (e.currentTarget as HTMLElement).style.transform = 'translateY(0)' }}
       >
         {/* Card image */}
         <div style={{ aspectRatio: '2.5/3.5', background: 'rgba(0,0,0,0.3)', overflow: 'hidden', position: 'relative' }}>
           {item.image_small && !imgError ? (
-            <img
-              src={item.image_small}
-              alt={item.card_name}
-              style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-              loading="lazy"
-              onError={() => setImgError(true)}
-            />
+            <img src={item.image_small} alt={item.card_name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} loading="lazy" onError={() => setImgError(true)} />
           ) : (
             <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 28 }}>🃏</div>
           )}
-          {/* Card type badge */}
-          <div style={{
-            position: 'absolute', top: 5, left: 5,
-            background: 'rgba(0,0,0,0.65)', borderRadius: 6,
-            padding: '1px 5px', fontSize: 9, fontWeight: 700, color: '#94a3b8', letterSpacing: 0.5,
-          }}>CARD</div>
+          <div style={{ position: 'absolute', top: 5, left: 5, background: 'rgba(0,0,0,0.65)', borderRadius: 6, padding: '1px 5px', fontSize: 9, fontWeight: 700, color: '#94a3b8', letterSpacing: 0.5 }}>CARD</div>
+
+          {/* Collectr-style quick-add + button */}
+          <button
+            type="button"
+            onClick={e => { e.stopPropagation(); onQuickAdd(item) }}
+            className="absolute bottom-1.5 right-1.5 h-7 w-7 rounded-full flex items-center justify-center transition-all"
+            style={{
+              background: isAdded ? 'rgba(78,203,160,0.9)' : 'rgba(212,175,55,0.9)',
+              color: '#000',
+              boxShadow: '0 2px 8px rgba(0,0,0,0.4)',
+              opacity: addToPortfolioMode ? 1 : 0,
+            }}
+          >
+            {isAdded ? <Check size={13} /> : <Plus size={13} />}
+          </button>
         </div>
 
-        {/* Card info */}
+        {/* Info */}
         <div style={{ padding: '8px 10px' }}>
           <p style={{ margin: 0, fontWeight: 700, fontSize: 12, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
             {item.card_name}
@@ -428,46 +539,31 @@ function UnifiedGridItem({ item, onSelectCard, onSelectSealed }: {
             {formatPrice(item.tcgplayer_market_cents)}
           </p>
         </div>
-      </button>
+      </div>
     )
   }
 
   // Sealed product
   const typeStyle = getProductTypeColor(item.product_type)
   const imageUrl = getSealedImageUrl(item)
-
   return (
-    <button
-      onClick={() => onSelectSealed(item)}
+    <div
+      className="relative group"
       style={{
         background: 'var(--glass-bg)',
-        border: '1px solid var(--glass-border)',
+        border: isAdded ? '1.5px solid rgba(78,203,160,0.5)' : '1px solid var(--glass-border)',
         borderRadius: 14,
-        padding: 0,
-        cursor: 'pointer',
-        textAlign: 'left',
         overflow: 'hidden',
         transition: 'transform 0.15s, border-color 0.15s',
+        cursor: 'pointer',
       }}
-      onMouseEnter={e => {
-        (e.currentTarget as HTMLElement).style.transform = 'translateY(-2px)'
-        ;(e.currentTarget as HTMLElement).style.borderColor = 'rgba(249,115,22,0.35)'
-      }}
-      onMouseLeave={e => {
-        (e.currentTarget as HTMLElement).style.transform = 'translateY(0)'
-        ;(e.currentTarget as HTMLElement).style.borderColor = 'var(--glass-border)'
-      }}
+      onClick={() => onSelectSealed(item)}
+      onMouseEnter={e => { (e.currentTarget as HTMLElement).style.transform = 'translateY(-2px)' }}
+      onMouseLeave={e => { (e.currentTarget as HTMLElement).style.transform = 'translateY(0)' }}
     >
-      {/* Product image */}
       <div style={{ aspectRatio: '2.5/3.5', background: 'rgba(0,0,0,0.3)', overflow: 'hidden', position: 'relative' }}>
         {imageUrl && !imgError ? (
-          <img
-            src={imageUrl}
-            alt={item.name}
-            style={{ width: '100%', height: '100%', objectFit: 'contain', padding: 6 }}
-            loading="lazy"
-            onError={() => setImgError(true)}
-          />
+          <img src={imageUrl} alt={item.name} style={{ width: '100%', height: '100%', objectFit: 'contain', padding: 6 }} loading="lazy" onError={() => setImgError(true)} />
         ) : (
           <div style={{ width: '100%', height: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
             <div style={{ width: 44, height: 44, borderRadius: 10, background: typeStyle.bg, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
@@ -475,21 +571,24 @@ function UnifiedGridItem({ item, onSelectCard, onSelectSealed }: {
             </div>
           </div>
         )}
-        {/* Sealed badge */}
-        <div style={{
-          position: 'absolute', top: 5, left: 5,
-          background: typeStyle.bg, borderRadius: 6,
-          padding: '1px 5px', fontSize: 9, fontWeight: 700, color: typeStyle.text, letterSpacing: 0.5,
-        }}>
-          {item.product_type === 'elite_trainer_box' ? 'ETB' :
-           item.product_type === 'booster_box' ? 'BOX' :
-           item.product_type === 'tin' ? 'TIN' :
-           item.product_type === 'booster_bundle' ? 'BUNDLE' :
-           'SEALED'}
+        <div style={{ position: 'absolute', top: 5, left: 5, background: typeStyle.bg, borderRadius: 6, padding: '1px 5px', fontSize: 9, fontWeight: 700, color: typeStyle.text, letterSpacing: 0.5 }}>
+          {item.product_type === 'elite_trainer_box' ? 'ETB' : item.product_type === 'booster_box' ? 'BOX' : item.product_type === 'tin' ? 'TIN' : 'SEALED'}
         </div>
+        {/* Quick-add button */}
+        <button
+          type="button"
+          onClick={e => { e.stopPropagation(); onQuickAdd(item) }}
+          className="absolute bottom-1.5 right-1.5 h-7 w-7 rounded-full flex items-center justify-center transition-all"
+          style={{
+            background: isAdded ? 'rgba(78,203,160,0.9)' : 'rgba(212,175,55,0.9)',
+            color: '#000',
+            boxShadow: '0 2px 8px rgba(0,0,0,0.4)',
+            opacity: addToPortfolioMode ? 1 : 0,
+          }}
+        >
+          {isAdded ? <Check size={13} /> : <Plus size={13} />}
+        </button>
       </div>
-
-      {/* Product info */}
       <div style={{ padding: '8px 10px' }}>
         <p style={{ margin: 0, fontWeight: 700, fontSize: 12, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' } as React.CSSProperties}>
           {item.name}
@@ -504,12 +603,22 @@ function UnifiedGridItem({ item, onSelectCard, onSelectSealed }: {
           {formatPrice(item.market_price_cents)}
         </p>
       </div>
-    </button>
+    </div>
   )
 }
 
 // ── Main SearchPage ───────────────────────────────────────────────────────────
 export default function SearchPage() {
+  const [searchParams] = useSearchParams()
+  const { data: user } = useAuth()
+  const queryClient = useQueryClient()
+
+  // If navigated from Portfolio with ?addToPortfolio=1, start in add mode
+  const [addToPortfolioMode, setAddToPortfolioMode] = useState(
+    searchParams.get('addToPortfolio') === '1'
+  )
+  const [addedIds, setAddedIds] = useState<Set<string>>(new Set())
+
   const [query, setQuery] = useState('')
   const [category, setCategory] = useState<Category>('all')
   const [productTypeFilter, setProductTypeFilter] = useState<string>('')
@@ -525,9 +634,7 @@ export default function SearchPage() {
   useEffect(() => {
     if (debounceRef.current) clearTimeout(debounceRef.current)
     if (query.trim().length < 2) {
-      setCards([])
-      setSealed([])
-      setSearched(false)
+      setCards([]); setSealed([]); setSearched(false)
       return
     }
     debounceRef.current = setTimeout(async () => {
@@ -538,9 +645,7 @@ export default function SearchPage() {
         setSealed((result.sealed ?? []).map((s: Omit<SealedResult, '_type'>) => ({ ...s, _type: 'sealed' as const })))
         setSearched(true)
       } catch {
-        setCards([])
-        setSealed([])
-        setSearched(true)
+        setCards([]); setSealed([]); setSearched(true)
       } finally {
         setLoading(false)
       }
@@ -548,56 +653,113 @@ export default function SearchPage() {
     return () => { if (debounceRef.current) clearTimeout(debounceRef.current) }
   }, [query, category])
 
-  // Filter sealed by product type if a filter is active
-  const filteredSealed = productTypeFilter
-    ? sealed.filter(p => p.product_type === productTypeFilter)
-    : sealed
+  const filteredSealed = productTypeFilter ? sealed.filter(p => p.product_type === productTypeFilter) : sealed
 
-  // Build unified results list: interleave cards and sealed products
-  // Strategy: show sealed first if category=sealed, cards first if category=cards,
-  // otherwise interleave (1 sealed per 3 cards to keep variety)
   const unifiedResults: UnifiedResult[] = (() => {
     if (category === 'cards') return cards
     if (category === 'sealed') return filteredSealed
-    // 'all': interleave — cards and sealed mixed together
     const result: UnifiedResult[] = []
     let ci = 0, si = 0
-    const cardArr = cards
-    const sealedArr = filteredSealed
-    while (ci < cardArr.length || si < sealedArr.length) {
-      // 2 cards then 1 sealed (ratio)
-      if (ci < cardArr.length) result.push(cardArr[ci++])
-      if (ci < cardArr.length) result.push(cardArr[ci++])
-      if (si < sealedArr.length) result.push(sealedArr[si++])
+    while (ci < cards.length || si < filteredSealed.length) {
+      if (ci < cards.length) result.push(cards[ci++])
+      if (ci < cards.length) result.push(cards[ci++])
+      if (si < filteredSealed.length) result.push(filteredSealed[si++])
     }
     return result
   })()
 
   const totalResults = cards.length + filteredSealed.length
 
+  // Quick-add: add directly to portfolio without opening modal
+  async function handleQuickAdd(item: UnifiedResult) {
+    if (!user) { setSelectedCard(item._type === 'card' ? item : null); return }
+    const key = item._type === 'card' ? item.ptcg_id : String(item.id)
+    if (addedIds.has(key)) return
+    try {
+      if (item._type === 'card') {
+        await api.createCollectionItem({
+          ptcg_id: item.ptcg_id,
+          card_name: item.card_name,
+          set_name: item.set_name,
+          card_number: item.card_number,
+          rarity: item.rarity ?? undefined,
+          image_url: item.image_large ?? item.image_small ?? undefined,
+          game: 'Pokemon',
+        })
+      } else {
+        await api.createCollectionItem({
+          product_type: 'other_sealed',
+          product_name: item.name,
+          set_name: item.set_name,
+          estimated_value_cents: item.market_price_cents ?? undefined,
+        })
+      }
+      queryClient.invalidateQueries({ queryKey: ['collection'] })
+      setAddedIds(prev => new Set([...prev, key]))
+    } catch {
+      // Fall back to opening the modal
+      if (item._type === 'card') setSelectedCard(item)
+      else setSelectedSealed(item)
+    }
+  }
+
   return (
     <div style={{ maxWidth: 740, margin: '0 auto', padding: '0 12px 80px' }}>
       {/* ── Header ── */}
       <div style={{ paddingTop: 20, paddingBottom: 12 }}>
-        <h1 style={{ fontSize: 22, fontWeight: 700, margin: 0, color: 'var(--text-primary)' }}>
-          Search
-        </h1>
+        <h1 style={{ fontSize: 22, fontWeight: 700, margin: 0, color: 'var(--text-primary)' }}>Search</h1>
         <p style={{ fontSize: 13, color: 'var(--text-secondary)', margin: '4px 0 0' }}>
-          Find any Pokémon TCG card, ETB, tin, promo pack, booster box, and more
+          Find any TCG card, ETB, tin, promo pack, booster box, and more
         </p>
       </div>
 
+      {/* ── Collectr-style "Adding to Portfolio" banner ── */}
+      {user && (
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            padding: '10px 14px',
+            borderRadius: 12,
+            marginBottom: 12,
+            background: addToPortfolioMode ? 'rgba(212,175,55,0.12)' : 'var(--glass-bg)',
+            border: addToPortfolioMode ? '1px solid rgba(212,175,55,0.35)' : '1px solid var(--glass-border)',
+            transition: 'all 0.2s',
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <LayoutDashboard size={15} color={addToPortfolioMode ? '#D4AF37' : 'var(--text-secondary)'} />
+            <span style={{ fontSize: 13, fontWeight: 600, color: addToPortfolioMode ? '#D4AF37' : 'var(--text-secondary)' }}>
+              {addToPortfolioMode
+                ? `Adding to: My Portfolio${addedIds.size > 0 ? ` · ${addedIds.size} added` : ''}`
+                : 'Adding to: My Portfolio'}
+            </span>
+          </div>
+          <button
+            type="button"
+            onClick={() => setAddToPortfolioMode(m => !m)}
+            style={{
+              fontSize: 12,
+              fontWeight: 600,
+              padding: '4px 10px',
+              borderRadius: 20,
+              border: 'none',
+              cursor: 'pointer',
+              background: addToPortfolioMode ? 'rgba(212,175,55,0.2)' : 'rgba(255,255,255,0.08)',
+              color: addToPortfolioMode ? '#D4AF37' : 'var(--text-secondary)',
+            }}
+          >
+            {addToPortfolioMode ? 'Done' : 'Add Mode'}
+          </button>
+        </div>
+      )}
+
       {/* ── Search bar ── */}
       <div style={{
-        position: 'relative',
-        marginBottom: 12,
-        background: 'var(--glass-bg)',
-        border: '1px solid var(--glass-border)',
-        borderRadius: 14,
-        display: 'flex',
-        alignItems: 'center',
-        padding: '0 14px',
-        gap: 10,
+        position: 'relative', marginBottom: 12,
+        background: 'var(--glass-bg)', border: '1px solid var(--glass-border)',
+        borderRadius: 14, display: 'flex', alignItems: 'center', padding: '0 14px', gap: 10,
       }}>
         <Search size={18} color="var(--text-secondary)" style={{ flexShrink: 0 }} />
         <input
@@ -607,25 +769,40 @@ export default function SearchPage() {
           onChange={e => setQuery(e.target.value)}
           placeholder="Search cards, sets, ETBs, tins, promo packs…"
           autoFocus
-          style={{
-            flex: 1,
-            background: 'transparent',
-            border: 'none',
-            outline: 'none',
-            fontSize: 16,
-            color: 'var(--text-primary)',
-            padding: '14px 0',
-          }}
+          style={{ flex: 1, background: 'transparent', border: 'none', outline: 'none', fontSize: 16, color: 'var(--text-primary)', padding: '14px 0' }}
         />
         {query && (
-          <button
-            onClick={() => { setQuery(''); inputRef.current?.focus() }}
-            style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 4, color: 'var(--text-secondary)' }}
-          >
+          <button onClick={() => { setQuery(''); inputRef.current?.focus() }} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 4, color: 'var(--text-secondary)' }}>
             <X size={16} />
           </button>
         )}
       </div>
+
+      {/* ── TCG quick filters (Collectr-style) ── */}
+      {!searched && (
+        <div style={{ marginBottom: 16 }}>
+          <p style={{ fontSize: 11, color: 'var(--text-secondary)', marginBottom: 8, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.08em' }}>Quick Filters</p>
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+            {TCG_QUICK_FILTERS.map(f => (
+              <button
+                key={f.label}
+                onClick={() => setQuery(f.query)}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: 6,
+                  padding: '7px 14px', borderRadius: 20,
+                  border: '1px solid var(--glass-border)',
+                  background: 'var(--glass-bg)',
+                  color: 'var(--text-primary)',
+                  fontSize: 13, fontWeight: 500, cursor: 'pointer',
+                }}
+              >
+                <span>{f.emoji}</span>
+                {f.label}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* ── Category filter ── */}
       <div style={{ display: 'flex', gap: 8, marginBottom: 10, flexWrap: 'wrap' }}>
@@ -634,15 +811,11 @@ export default function SearchPage() {
             key={cat}
             onClick={() => { setCategory(cat); setProductTypeFilter('') }}
             style={{
-              padding: '6px 14px',
-              borderRadius: 20,
+              padding: '6px 14px', borderRadius: 20,
               border: '1px solid var(--glass-border)',
-              background: category === cat ? 'rgba(249,115,22,0.15)' : 'var(--glass-bg)',
-              color: category === cat ? '#f97316' : 'var(--text-secondary)',
-              fontSize: 13,
-              fontWeight: category === cat ? 600 : 400,
-              cursor: 'pointer',
-              transition: 'all 0.15s',
+              background: category === cat ? 'rgba(212,175,55,0.15)' : 'var(--glass-bg)',
+              color: category === cat ? '#D4AF37' : 'var(--text-secondary)',
+              fontSize: 13, fontWeight: category === cat ? 600 : 400, cursor: 'pointer', transition: 'all 0.15s',
             }}
           >
             {cat === 'all' ? 'All Types' : cat === 'cards' ? 'Cards Only' : 'Sealed Products'}
@@ -650,22 +823,12 @@ export default function SearchPage() {
         ))}
       </div>
 
-      {/* ── Product type sub-filter (sealed only) ── */}
+      {/* ── Product type sub-filter ── */}
       {(category === 'sealed' || (category === 'all' && sealed.length > 0)) && (
         <div style={{ display: 'flex', gap: 6, marginBottom: 14, overflowX: 'auto', paddingBottom: 4 }}>
           <button
             onClick={() => setProductTypeFilter('')}
-            style={{
-              padding: '4px 12px',
-              borderRadius: 20,
-              border: '1px solid var(--glass-border)',
-              background: productTypeFilter === '' ? 'rgba(249,115,22,0.15)' : 'var(--glass-bg)',
-              color: productTypeFilter === '' ? '#f97316' : 'var(--text-secondary)',
-              fontSize: 12,
-              fontWeight: productTypeFilter === '' ? 600 : 400,
-              cursor: 'pointer',
-              whiteSpace: 'nowrap',
-            }}
+            style={{ padding: '4px 12px', borderRadius: 20, border: '1px solid var(--glass-border)', background: productTypeFilter === '' ? 'rgba(212,175,55,0.15)' : 'var(--glass-bg)', color: productTypeFilter === '' ? '#D4AF37' : 'var(--text-secondary)', fontSize: 12, fontWeight: productTypeFilter === '' ? 600 : 400, cursor: 'pointer', whiteSpace: 'nowrap' }}
           >
             All Products
           </button>
@@ -673,17 +836,7 @@ export default function SearchPage() {
             <button
               key={value}
               onClick={() => setProductTypeFilter(productTypeFilter === value ? '' : value)}
-              style={{
-                padding: '4px 12px',
-                borderRadius: 20,
-                border: '1px solid var(--glass-border)',
-                background: productTypeFilter === value ? 'rgba(249,115,22,0.15)' : 'var(--glass-bg)',
-                color: productTypeFilter === value ? '#f97316' : 'var(--text-secondary)',
-                fontSize: 12,
-                fontWeight: productTypeFilter === value ? 600 : 400,
-                cursor: 'pointer',
-                whiteSpace: 'nowrap',
-              }}
+              style={{ padding: '4px 12px', borderRadius: 20, border: '1px solid var(--glass-border)', background: productTypeFilter === value ? 'rgba(212,175,55,0.15)' : 'var(--glass-bg)', color: productTypeFilter === value ? '#D4AF37' : 'var(--text-secondary)', fontSize: 12, fontWeight: productTypeFilter === value ? 600 : 400, cursor: 'pointer', whiteSpace: 'nowrap' }}
             >
               {label}
             </button>
@@ -703,8 +856,8 @@ export default function SearchPage() {
       {!loading && !searched && (
         <div style={{ textAlign: 'center', padding: 60, color: 'var(--text-secondary)' }}>
           <Search size={40} style={{ opacity: 0.3, marginBottom: 12 }} />
-          <p style={{ fontSize: 15, margin: 0 }}>Search for any Pokémon TCG product</p>
-          <p style={{ fontSize: 13, marginTop: 6, opacity: 0.7 }}>Cards, ETBs, tins, promo packs, booster boxes, and more</p>
+          <p style={{ fontSize: 15, margin: 0 }}>Search for any TCG card or product</p>
+          <p style={{ fontSize: 13, marginTop: 6, opacity: 0.7 }}>Pokémon, MTG, Yu-Gi-Oh!, One Piece, and more</p>
         </div>
       )}
 
@@ -716,14 +869,16 @@ export default function SearchPage() {
         </div>
       )}
 
-      {/* ── Unified results grid ── */}
+      {/* ── Results grid ── */}
       {!loading && unifiedResults.length > 0 && (
         <div>
           <p style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 12 }}>
             {totalResults} result{totalResults !== 1 ? 's' : ''}
             {cards.length > 0 && filteredSealed.length > 0 && ` · ${cards.length} card${cards.length !== 1 ? 's' : ''}, ${filteredSealed.length} sealed`}
+            {addToPortfolioMode && addedIds.size > 0 && (
+              <span style={{ marginLeft: 8, color: '#4ECBA0', fontWeight: 600 }}>· {addedIds.size} added to portfolio</span>
+            )}
           </p>
-
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(130px, 1fr))', gap: 12 }}>
             {unifiedResults.map(item => (
               <UnifiedGridItem
@@ -731,6 +886,9 @@ export default function SearchPage() {
                 item={item}
                 onSelectCard={setSelectedCard}
                 onSelectSealed={setSelectedSealed}
+                addedIds={addedIds}
+                onQuickAdd={handleQuickAdd}
+                addToPortfolioMode={addToPortfolioMode}
               />
             ))}
           </div>
@@ -739,7 +897,12 @@ export default function SearchPage() {
 
       {/* ── Modals ── */}
       {selectedCard && (
-        <CardDetailModal card={selectedCard} onClose={() => setSelectedCard(null)} />
+        <CardDetailModal
+          card={selectedCard}
+          onClose={() => setSelectedCard(null)}
+          addToPortfolioMode={addToPortfolioMode}
+          onAddedToPortfolio={id => setAddedIds(prev => new Set([...prev, id]))}
+        />
       )}
       {selectedSealed && (
         <SealedDetailModal product={selectedSealed} onClose={() => setSelectedSealed(null)} />
