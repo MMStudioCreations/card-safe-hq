@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useRef, useEffect, useCallback } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { ExternalLink, Heart, Package, Plus, Search, ShoppingCart, X, Check, LayoutDashboard } from 'lucide-react'
 import { useQueryClient } from '@tanstack/react-query'
@@ -506,7 +506,7 @@ function UnifiedGridItem({
           )}
           <div style={{ position: 'absolute', top: 5, left: 5, background: 'rgba(0,0,0,0.65)', borderRadius: 6, padding: '1px 5px', fontSize: 9, fontWeight: 700, color: '#94a3b8', letterSpacing: 0.5 }}>CARD</div>
 
-          {/* Collectr-style quick-add + button */}
+          {/* Collectr-style quick-add + button — always visible */}
           <button
             type="button"
             onClick={e => { e.stopPropagation(); onQuickAdd(item) }}
@@ -515,7 +515,7 @@ function UnifiedGridItem({
               background: isAdded ? 'rgba(78,203,160,0.9)' : 'rgba(212,175,55,0.9)',
               color: '#000',
               boxShadow: '0 2px 8px rgba(0,0,0,0.4)',
-              opacity: addToPortfolioMode ? 1 : 0,
+              opacity: 1,
             }}
           >
             {isAdded ? <Check size={13} /> : <Plus size={13} />}
@@ -574,7 +574,7 @@ function UnifiedGridItem({
         <div style={{ position: 'absolute', top: 5, left: 5, background: typeStyle.bg, borderRadius: 6, padding: '1px 5px', fontSize: 9, fontWeight: 700, color: typeStyle.text, letterSpacing: 0.5 }}>
           {item.product_type === 'elite_trainer_box' ? 'ETB' : item.product_type === 'booster_box' ? 'BOX' : item.product_type === 'tin' ? 'TIN' : 'SEALED'}
         </div>
-        {/* Quick-add button */}
+        {/* Quick-add button — always visible */}
         <button
           type="button"
           onClick={e => { e.stopPropagation(); onQuickAdd(item) }}
@@ -583,7 +583,7 @@ function UnifiedGridItem({
             background: isAdded ? 'rgba(78,203,160,0.9)' : 'rgba(212,175,55,0.9)',
             color: '#000',
             boxShadow: '0 2px 8px rgba(0,0,0,0.4)',
-            opacity: addToPortfolioMode ? 1 : 0,
+            opacity: 1,
           }}
         >
           {isAdded ? <Check size={13} /> : <Plus size={13} />}
@@ -631,27 +631,46 @@ export default function SearchPage() {
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const inputRef = useRef<HTMLInputElement>(null)
 
+  // Default search terms to show cards on page load (Collectr-style)
+  const DEFAULT_QUERIES = ['pikachu', 'charizard', 'mewtwo', 'luffy', 'lightning bolt']
+
+  const runSearch = useCallback(async (q: string, cat: Category) => {
+    setLoading(true)
+    try {
+      const result = await api.universalSearch(q.trim(), cat, 80)
+      setCards((result.cards ?? []).map((c: Omit<CardResult, '_type'>) => ({ ...c, _type: 'card' as const })))
+      setSealed((result.sealed ?? []).map((s: Omit<SealedResult, '_type'>) => ({ ...s, _type: 'sealed' as const })))
+      setSearched(true)
+    } catch {
+      setCards([]); setSealed([]); setSearched(true)
+    } finally {
+      setLoading(false)
+    }
+  }, [])
+
+  // Auto-load popular cards on mount (Collectr-style)
+  useEffect(() => {
+    const randomDefault = DEFAULT_QUERIES[Math.floor(Math.random() * DEFAULT_QUERIES.length)]
+    void runSearch(randomDefault, 'cards')
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
   useEffect(() => {
     if (debounceRef.current) clearTimeout(debounceRef.current)
     if (query.trim().length < 2) {
-      setCards([]); setSealed([]); setSearched(false)
+      // When query is cleared, reload default cards
+      if (query === '') {
+        const randomDefault = DEFAULT_QUERIES[Math.floor(Math.random() * DEFAULT_QUERIES.length)]
+        void runSearch(randomDefault, category)
+      } else {
+        setCards([]); setSealed([]); setSearched(false)
+      }
       return
     }
-    debounceRef.current = setTimeout(async () => {
-      setLoading(true)
-      try {
-        const result = await api.universalSearch(query.trim(), category, 80)
-        setCards((result.cards ?? []).map((c: Omit<CardResult, '_type'>) => ({ ...c, _type: 'card' as const })))
-        setSealed((result.sealed ?? []).map((s: Omit<SealedResult, '_type'>) => ({ ...s, _type: 'sealed' as const })))
-        setSearched(true)
-      } catch {
-        setCards([]); setSealed([]); setSearched(true)
-      } finally {
-        setLoading(false)
-      }
+    debounceRef.current = setTimeout(() => {
+      void runSearch(query.trim(), category)
     }, 350)
     return () => { if (debounceRef.current) clearTimeout(debounceRef.current) }
-  }, [query, category])
+  }, [query, category, runSearch])
 
   const filteredSealed = productTypeFilter ? sealed.filter(p => p.product_type === productTypeFilter) : sealed
 
@@ -852,8 +871,8 @@ export default function SearchPage() {
         </div>
       )}
 
-      {/* ── Empty state ── */}
-      {!loading && !searched && (
+      {/* ── Empty state — only shown when search returned nothing and user has typed ── */}
+      {!loading && !searched && query.trim().length >= 2 && (
         <div style={{ textAlign: 'center', padding: 60, color: 'var(--text-secondary)' }}>
           <Search size={40} style={{ opacity: 0.3, marginBottom: 12 }} />
           <p style={{ fontSize: 15, margin: 0 }}>Search for any TCG card or product</p>

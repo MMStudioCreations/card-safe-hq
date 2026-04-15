@@ -66,6 +66,16 @@ export type CollectionItem = {
   product_type?: 'single_card' | 'booster_pack' | 'booster_box' | 'etb' | 'tin' | 'bundle' | 'promo_pack' | 'other_sealed' | null
   product_name?: string | null
   purchase_price_cents?: number | null
+  // purchase detail fields
+  date_acquired?: string | null
+  notes?: string | null
+  is_sold?: number
+  sold_at?: string | null
+  sold_price_cents?: number | null
+  // price history
+  previous_sold_price_cents?: number | null
+  avg_30d_sold_cents?: number | null
+  rarity?: string | null
 }
 
 export type SalesComp = {

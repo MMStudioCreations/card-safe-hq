@@ -25,6 +25,11 @@ interface CollectionItem {
   product_type: string | null;
   product_name: string | null;
   purchase_price_cents: number | null;
+  date_acquired: string | null;
+  notes: string | null;
+  is_sold: number;
+  sold_at: string | null;
+  sold_price_cents: number | null;
 }
 
 export async function listCollection(env: Env, user: User, request: Request): Promise<Response> {
@@ -108,6 +113,8 @@ export async function createCollectionItem(env: Env, request: Request, user: Use
     const productType = VALID_PRODUCT_TYPES.has(rawProductType as ProductType) ? rawProductType : 'single_card';
     const productName = asString(body.product_name, 'product_name', 500);
     const purchasePrice = asInt(body.purchase_price_cents, 'purchase_price_cents', 0, 100_000_000);
+    const dateAcquired = asString(body.date_acquired, 'date_acquired', 20);
+    const notes = asString(body.notes, 'notes', 2000);
 
     // ── Search-page fast path: ptcg_id provided ───────────────────────────────
     // When adding a card from search results, the frontend sends ptcg_id, card_name, set_name, etc.
@@ -150,9 +157,9 @@ export async function createCollectionItem(env: Env, request: Request, user: Use
 
     await run(
       env.DB,
-      `INSERT INTO collection_items (user_id, card_id, quantity, condition_note, estimated_grade, estimated_value_cents, product_type, product_name, purchase_price_cents)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [user.id, cardId, quantity, conditionNote, estimatedGrade, estimatedValue, productType, productName, purchasePrice],
+      `INSERT INTO collection_items (user_id, card_id, quantity, condition_note, estimated_grade, estimated_value_cents, product_type, product_name, purchase_price_cents, date_acquired, notes)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [user.id, cardId, quantity, conditionNote, estimatedGrade, estimatedValue, productType, productName, purchasePrice, dateAcquired, notes],
     );
 
     const created = await queryOne(env.DB, 'SELECT * FROM collection_items WHERE user_id = ? ORDER BY created_at DESC LIMIT 1', [user.id]);
@@ -222,13 +229,23 @@ export async function updateCollectionItem(env: Env, request: Request, user: Use
       0,
       100_000_000,
     );
+    const dateAcquired = asString(body.date_acquired ?? existing.date_acquired, 'date_acquired', 20);
+    const notes = asString(body.notes ?? existing.notes, 'notes', 2000);
+    const isSold = body.is_sold !== undefined ? (body.is_sold ? 1 : 0) : existing.is_sold;
+    const soldAt = isSold && !existing.sold_at ? (body.sold_at as string ?? new Date().toISOString()) : (existing.sold_at ?? null);
+    const soldPriceCents = asInt(
+      body.sold_price_cents ?? existing.sold_price_cents,
+      'sold_price_cents',
+      0,
+      100_000_000,
+    );
 
     await run(
       env.DB,
       `UPDATE collection_items
-       SET quantity = ?, condition_note = ?, estimated_grade = ?, estimated_value_cents = ?, front_image_url = ?, back_image_url = ?, product_type = ?, product_name = ?, purchase_price_cents = ?, updated_at = CURRENT_TIMESTAMP
+       SET quantity = ?, condition_note = ?, estimated_grade = ?, estimated_value_cents = ?, front_image_url = ?, back_image_url = ?, product_type = ?, product_name = ?, purchase_price_cents = ?, date_acquired = ?, notes = ?, is_sold = ?, sold_at = ?, sold_price_cents = ?, updated_at = CURRENT_TIMESTAMP
        WHERE id = ? AND user_id = ?`,
-      [quantity, conditionNote, estimatedGrade, estimatedValue, frontImageUrl, backImageUrl, productType, productName, purchasePrice, id, user.id],
+      [quantity, conditionNote, estimatedGrade, estimatedValue, frontImageUrl, backImageUrl, productType, productName, purchasePrice, dateAcquired, notes, isSold, soldAt, soldPriceCents, id, user.id],
     );
 
     // If card identity fields changed, update the cards table and clear stale comps

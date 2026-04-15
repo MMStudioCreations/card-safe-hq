@@ -1,0 +1,377 @@
+import { useState, useEffect } from 'react'
+import { X, Minus, Plus, Trash2, Tag, ChevronRight } from 'lucide-react'
+import { useMutation, useQueryClient } from '@tanstack/react-query'
+import { api } from '../lib/api'
+import type { CollectionItem } from '../lib/api'
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+function fmt(cents: number | null | undefined): string {
+  if (cents == null) return '—'
+  return `$${(cents / 100).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+}
+
+function getCardImage(item: CollectionItem): string | null {
+  return item.front_image_url ?? item.card?.image_url ?? item.image_url ?? null
+}
+
+function getDisplayName(item: CollectionItem): string {
+  return item.card_name ?? item.card?.card_name ?? item.product_name ?? 'Unknown Card'
+}
+
+function getSetName(item: CollectionItem): string {
+  return item.set_name ?? item.card?.set_name ?? ''
+}
+
+function getGameLabel(item: CollectionItem): string {
+  return item.game ?? item.card?.game ?? item.sport ?? ''
+}
+
+function getMarketValue(item: CollectionItem): number {
+  return item.latest_sold_price_cents ?? item.estimated_value_cents ?? 0
+}
+
+function getTotalValue(item: CollectionItem, qty: number): number {
+  return getMarketValue(item) * qty
+}
+
+// ── Props ─────────────────────────────────────────────────────────────────────
+interface Props {
+  item: CollectionItem
+  onClose: () => void
+}
+
+const CONDITIONS = ['Near Mint', 'Lightly Played', 'Moderately Played', 'Heavily Played', 'Damaged', 'PSA 10', 'PSA 9', 'PSA 8', 'BGS 9.5', 'BGS 9', 'CGC 10', 'CGC 9.5']
+
+export default function ProductDetailsModal({ item, onClose }: Props) {
+  const queryClient = useQueryClient()
+
+  // Local form state
+  const [qty, setQty] = useState(item.quantity ?? 1)
+  const [pricePaid, setPricePaid] = useState(
+    item.purchase_price_cents != null ? (item.purchase_price_cents / 100).toFixed(2) : ''
+  )
+  const [dateAcquired, setDateAcquired] = useState(item.date_acquired ?? new Date().toISOString().slice(0, 10))
+  const [notes, setNotes] = useState(item.notes ?? '')
+  const [showNotes, setShowNotes] = useState(!!item.notes)
+  const [condition, setCondition] = useState(item.condition_note ?? item.estimated_grade ?? 'Near Mint')
+  const [isSold, setIsSold] = useState(!!(item.is_sold))
+  const [soldPrice, setSoldPrice] = useState(
+    item.sold_price_cents != null ? (item.sold_price_cents / 100).toFixed(2) : ''
+  )
+  const [showSoldFields, setShowSoldFields] = useState(!!(item.is_sold))
+
+  // Sync if item changes
+  useEffect(() => {
+    setQty(item.quantity ?? 1)
+    setPricePaid(item.purchase_price_cents != null ? (item.purchase_price_cents / 100).toFixed(2) : '')
+    setDateAcquired(item.date_acquired ?? new Date().toISOString().slice(0, 10))
+    setNotes(item.notes ?? '')
+    setShowNotes(!!item.notes)
+    setCondition(item.condition_note ?? item.estimated_grade ?? 'Near Mint')
+    setIsSold(!!(item.is_sold))
+    setSoldPrice(item.sold_price_cents != null ? (item.sold_price_cents / 100).toFixed(2) : '')
+    setShowSoldFields(!!(item.is_sold))
+  }, [item.id])
+
+  const marketValue = getMarketValue(item)
+  const totalValue = getTotalValue(item, qty)
+  const paidCents = pricePaid ? Math.round(parseFloat(pricePaid) * 100) : null
+  const unrealizedGain = paidCents != null ? totalValue - paidCents : null
+  const soldCents = soldPrice ? Math.round(parseFloat(soldPrice) * 100) : null
+  const realizedGain = soldCents != null && paidCents != null ? soldCents - paidCents : null
+
+  const saveMutation = useMutation({
+    mutationFn: () => api.updateCollectionItem(item.id, {
+      quantity: qty,
+      condition_note: condition,
+      purchase_price_cents: paidCents ?? undefined,
+      date_acquired: dateAcquired || undefined,
+      notes: notes || undefined,
+      is_sold: isSold ? 1 : 0,
+      sold_price_cents: soldCents ?? undefined,
+    }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['collection'] })
+      onClose()
+    },
+  })
+
+  const deleteMutation = useMutation({
+    mutationFn: () => api.deleteCollectionItem(item.id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['collection'] })
+      onClose()
+    },
+  })
+
+  const img = getCardImage(item)
+  const name = getDisplayName(item)
+  const setName = getSetName(item)
+  const game = getGameLabel(item)
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-end sm:items-center justify-center"
+      style={{ background: 'rgba(0,0,0,0.75)', backdropFilter: 'blur(4px)' }}
+      onClick={(e) => { if (e.target === e.currentTarget) onClose() }}
+    >
+      <div
+        className="w-full max-w-lg rounded-t-2xl sm:rounded-2xl overflow-hidden flex flex-col"
+        style={{
+          background: '#111111',
+          border: '1px solid rgba(212,175,55,0.15)',
+          maxHeight: '92vh',
+        }}
+      >
+        {/* Card image hero */}
+        {img && (
+          <div className="relative w-full" style={{ height: 200, background: '#0A0A0A', overflow: 'hidden' }}>
+            <img src={img} alt={name} className="w-full h-full object-contain" />
+            <div className="absolute inset-0" style={{ background: 'linear-gradient(to bottom, transparent 40%, #111111 100%)' }} />
+          </div>
+        )}
+
+        {/* Card name + set */}
+        <div className="px-5 pt-3 pb-2 flex items-start justify-between">
+          <div>
+            <h2 className="text-lg font-bold leading-tight">{name}</h2>
+            <p className="text-sm text-cv-muted mt-0.5">
+              {game && <span className="capitalize">{game}</span>}
+              {game && setName && <span className="mx-1.5" style={{ color: '#D4AF37' }}>•</span>}
+              {setName && <span style={{ color: '#D4AF37' }}>{setName}</span>}
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="h-8 w-8 rounded-full flex items-center justify-center shrink-0"
+            style={{ background: 'rgba(255,255,255,0.06)' }}
+          >
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+
+        {/* Header bar */}
+        <div className="flex items-center justify-between px-5 py-2 border-t border-b" style={{ borderColor: 'rgba(255,255,255,0.06)' }}>
+          <span className="text-xs font-semibold uppercase tracking-wider text-cv-muted">Product Details</span>
+          <button
+            type="button"
+            onClick={() => saveMutation.mutate()}
+            disabled={saveMutation.isPending}
+            className="text-sm font-semibold"
+            style={{ color: '#D4AF37' }}
+          >
+            {saveMutation.isPending ? 'Saving…' : 'Save'}
+          </button>
+        </div>
+
+        {/* Scrollable body */}
+        <div className="flex-1 overflow-y-auto px-5 py-4 space-y-5">
+          {/* Condition */}
+          <div>
+            <p className="text-sm font-semibold mb-2">Condition</p>
+            <div className="flex flex-wrap gap-1.5">
+              {CONDITIONS.map(c => (
+                <button
+                  key={c}
+                  type="button"
+                  onClick={() => setCondition(c)}
+                  className="px-2.5 py-1 rounded-full text-xs font-medium border transition"
+                  style={condition === c
+                    ? { background: 'rgba(212,175,55,0.15)', borderColor: '#D4AF37', color: '#D4AF37' }
+                    : { background: 'transparent', borderColor: 'rgba(255,255,255,0.12)', color: 'rgba(255,255,255,0.5)' }
+                  }
+                >
+                  {c}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Quantity + Total Value */}
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm font-semibold mb-2">Quantity</p>
+              <div className="flex items-center gap-3">
+                <button
+                  type="button"
+                  onClick={() => setQty(q => Math.max(1, q - 1))}
+                  className="h-9 w-9 rounded-full flex items-center justify-center border"
+                  style={{ borderColor: '#D4AF37', color: '#D4AF37' }}
+                >
+                  <Minus className="h-4 w-4" />
+                </button>
+                <span className="text-xl font-bold w-8 text-center">{qty}</span>
+                <button
+                  type="button"
+                  onClick={() => setQty(q => Math.min(1000, q + 1))}
+                  className="h-9 w-9 rounded-full flex items-center justify-center border"
+                  style={{ borderColor: '#D4AF37', color: '#D4AF37' }}
+                >
+                  <Plus className="h-4 w-4" />
+                </button>
+              </div>
+            </div>
+            <div className="text-right">
+              <p className="text-xs text-cv-muted">Total Value</p>
+              <p className="text-xl font-black" style={{ color: '#D4AF37' }}>{fmt(totalValue)}</p>
+              <p className="text-[10px] text-cv-muted">Based on Market Value × Qty</p>
+            </div>
+          </div>
+
+          {/* Price Paid */}
+          <div>
+            <p className="text-sm font-semibold mb-1.5">Price Paid (USD)</p>
+            <div
+              className="flex items-center rounded-xl px-4 py-3"
+              style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)' }}
+            >
+              <span className="text-cv-muted mr-2">$</span>
+              <input
+                type="number"
+                min="0"
+                step="0.01"
+                placeholder="0.00"
+                value={pricePaid}
+                onChange={e => setPricePaid(e.target.value)}
+                className="flex-1 bg-transparent text-sm outline-none"
+              />
+              <ChevronRight className="h-4 w-4 text-cv-muted" />
+            </div>
+            <p className="text-[11px] text-cv-muted mt-1">Enter the price paid for each unit. Price must be in USD.</p>
+            {unrealizedGain != null && (
+              <p
+                className="text-xs font-semibold mt-1.5"
+                style={{ color: unrealizedGain >= 0 ? '#4ECBA0' : '#F06060' }}
+              >
+                Unrealized Gain: {unrealizedGain >= 0 ? '+' : ''}{fmt(unrealizedGain)}
+              </p>
+            )}
+          </div>
+
+          {/* Date Acquired */}
+          <div>
+            <p className="text-sm font-semibold mb-1.5">Date Acquired</p>
+            <div
+              className="flex items-center rounded-xl px-4 py-3"
+              style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)' }}
+            >
+              <input
+                type="date"
+                value={dateAcquired}
+                onChange={e => setDateAcquired(e.target.value)}
+                className="flex-1 bg-transparent text-sm outline-none"
+              />
+              <ChevronRight className="h-4 w-4 text-cv-muted" />
+            </div>
+            <p className="text-[11px] text-cv-muted mt-1">Enter the date you acquired this card.</p>
+          </div>
+
+          {/* Notes (expandable) */}
+          {!showNotes ? (
+            <button
+              type="button"
+              onClick={() => setShowNotes(true)}
+              className="text-sm font-medium"
+              style={{ color: '#D4AF37' }}
+            >
+              + Add a Note
+            </button>
+          ) : (
+            <div>
+              <p className="text-sm font-semibold mb-1.5">Note</p>
+              <textarea
+                rows={3}
+                placeholder="Add a note about this card…"
+                value={notes}
+                onChange={e => setNotes(e.target.value)}
+                className="w-full rounded-xl px-4 py-3 text-sm outline-none resize-none"
+                style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)' }}
+              />
+            </div>
+          )}
+
+          {/* Mark as Sold */}
+          {!showSoldFields ? (
+            <button
+              type="button"
+              onClick={() => { setShowSoldFields(true); setIsSold(true) }}
+              className="text-sm font-medium"
+              style={{ color: '#D4AF37' }}
+            >
+              <Tag className="h-3.5 w-3.5 inline mr-1" />
+              Mark as Sold
+            </button>
+          ) : (
+            <div className="rounded-xl p-4 space-y-3" style={{ background: 'rgba(212,175,55,0.06)', border: '1px solid rgba(212,175,55,0.15)' }}>
+              <div className="flex items-center justify-between">
+                <p className="text-sm font-semibold" style={{ color: '#D4AF37' }}>Sold Entry</p>
+                <button
+                  type="button"
+                  onClick={() => { setShowSoldFields(false); setIsSold(false); setSoldPrice('') }}
+                  className="text-xs text-cv-muted hover:text-cv-text"
+                >
+                  Cancel
+                </button>
+              </div>
+              <div>
+                <p className="text-xs text-cv-muted mb-1">Sold Price (USD)</p>
+                <div
+                  className="flex items-center rounded-xl px-4 py-3"
+                  style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)' }}
+                >
+                  <span className="text-cv-muted mr-2">$</span>
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    placeholder="0.00"
+                    value={soldPrice}
+                    onChange={e => setSoldPrice(e.target.value)}
+                    className="flex-1 bg-transparent text-sm outline-none"
+                  />
+                </div>
+              </div>
+              {realizedGain != null && (
+                <p
+                  className="text-sm font-bold"
+                  style={{ color: realizedGain >= 0 ? '#4ECBA0' : '#F06060' }}
+                >
+                  Realized Gain: {realizedGain >= 0 ? '+' : ''}{fmt(realizedGain)}
+                </p>
+              )}
+            </div>
+          )}
+
+          {/* Delete */}
+          <div className="flex items-center justify-between pt-2 border-t" style={{ borderColor: 'rgba(255,255,255,0.06)' }}>
+            <span className="text-xs text-cv-muted">Remove this card from your portfolio</span>
+            <button
+              type="button"
+              onClick={() => { if (confirm('Remove this card from your portfolio?')) deleteMutation.mutate() }}
+              disabled={deleteMutation.isPending}
+              className="flex items-center gap-1.5 text-sm font-semibold"
+              style={{ color: '#F06060' }}
+            >
+              <Trash2 className="h-3.5 w-3.5" />
+              {deleteMutation.isPending ? 'Removing…' : 'Delete Entry'}
+            </button>
+          </div>
+        </div>
+
+        {/* Save button */}
+        <div className="px-5 py-4 border-t" style={{ borderColor: 'rgba(255,255,255,0.06)' }}>
+          <button
+            type="button"
+            onClick={() => saveMutation.mutate()}
+            disabled={saveMutation.isPending}
+            className="w-full py-4 rounded-2xl text-base font-bold text-black transition"
+            style={{ background: 'linear-gradient(90deg, #D4AF37, #B8960C)' }}
+          >
+            {saveMutation.isPending ? 'Saving…' : 'Save'}
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
