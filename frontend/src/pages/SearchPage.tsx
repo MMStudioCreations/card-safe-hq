@@ -96,6 +96,53 @@ function formatPrice(cents: number | null | undefined): string {
   return `$${(cents / 100).toFixed(2)}`
 }
 
+// ── Condition price multipliers (TCGPlayer industry standard) ─────────────────
+const CONDITION_MULTIPLIERS: Record<string, number> = {
+  'Near Mint':        1.00,
+  'Lightly Played':   0.77,
+  'Moderately Played':0.50,
+  'Heavily Played':   0.27,
+  'Damaged':          0.10,
+  // Graded premiums (relative to NM)
+  'PSA 10':           3.00,
+  'PSA 9':            1.35,
+  'PSA 8':            1.10,
+  'BGS 9.5':          3.00,
+  'BGS 9':            1.20,
+  'CGC 10':           2.50,
+  'CGC 9.5':          1.80,
+}
+
+const CONDITION_COLORS: Record<string, { bg: string; text: string }> = {
+  'Near Mint':         { bg: 'rgba(52,211,153,0.15)', text: '#34d399' },
+  'Lightly Played':    { bg: 'rgba(212,175,55,0.15)', text: '#D4AF37' },
+  'Moderately Played': { bg: 'rgba(251,146,60,0.15)', text: '#fb923c' },
+  'Heavily Played':    { bg: 'rgba(239,68,68,0.15)',  text: '#f87171' },
+  'Damaged':           { bg: 'rgba(148,163,184,0.12)', text: '#94a3b8' },
+  'PSA 10':            { bg: 'rgba(212,175,55,0.25)', text: '#D4AF37' },
+  'PSA 9':             { bg: 'rgba(212,175,55,0.18)', text: '#D4AF37' },
+  'PSA 8':             { bg: 'rgba(212,175,55,0.12)', text: '#D4AF37' },
+  'BGS 9.5':           { bg: 'rgba(212,175,55,0.25)', text: '#D4AF37' },
+  'BGS 9':             { bg: 'rgba(212,175,55,0.18)', text: '#D4AF37' },
+  'CGC 10':            { bg: 'rgba(212,175,55,0.22)', text: '#D4AF37' },
+  'CGC 9.5':           { bg: 'rgba(212,175,55,0.16)', text: '#D4AF37' },
+}
+
+// ── eBay URL builder ──────────────────────────────────────────────────────────
+function buildEbaySearchUrl(cardName: string, setName: string, condition?: string, soldOnly = false): string {
+  const query = [cardName, setName].filter(Boolean).join(' ')
+  const encoded = encodeURIComponent(query)
+  // Category 2536 = Collectible Card Games on eBay
+  let url = `https://www.ebay.com/sch/i.html?_nkw=${encoded}&_sacat=2536`
+  if (soldOnly) url += '&LH_Sold=1&LH_Complete=1'
+  // Map condition to eBay LH_ItemCondition codes
+  if (condition === 'Near Mint') url += '&LH_ItemCondition=2750'
+  else if (condition === 'Lightly Played') url += '&LH_ItemCondition=3000'
+  else if (condition === 'Moderately Played' || condition === 'Heavily Played') url += '&LH_ItemCondition=4000'
+  else if (condition === 'Damaged') url += '&LH_ItemCondition=7000'
+  return url
+}
+
 function getRarityColor(rarity: string | null): { bg: string; text: string } {
   if (!rarity) return { bg: 'rgba(99,102,241,0.12)', text: '#818cf8' }
   const r = rarity.toLowerCase()
@@ -147,6 +194,17 @@ function CardDetailModal({
   const queryClient = useQueryClient()
 
   const CONDITIONS = ['Near Mint', 'Lightly Played', 'Moderately Played', 'Heavily Played', 'Damaged']
+  const GRADED_CONDITIONS = ['PSA 10', 'PSA 9', 'PSA 8', 'BGS 9.5', 'BGS 9', 'CGC 10', 'CGC 9.5']
+  const [showGraded, setShowGraded] = useState(false)
+  const [showPriceTable, setShowPriceTable] = useState(false)
+
+  const nmPrice = card.tcgplayer_market_cents ?? 0
+
+  function conditionPrice(cond: string): string {
+    const mult = CONDITION_MULTIPLIERS[cond] ?? 1
+    const cents = Math.round(nmPrice * mult)
+    return formatPrice(cents)
+  }
 
   async function handleAddToCollection() {
     setAddingToCollection(true)
@@ -247,11 +305,62 @@ function CardDetailModal({
             )}
           </div>
 
-          <div className="glass rounded-[var(--radius-md)] p-3 flex items-center justify-between">
-            <span className="text-sm text-cv-muted">Market Price</span>
-            <span className="text-lg font-bold" style={{ color: 'var(--primary)' }}>
-              {formatPrice(card.tcgplayer_market_cents)}
-            </span>
+          {/* Market price + condition price table */}
+          <div className="glass rounded-[var(--radius-md)] p-3 space-y-2">
+            <div className="flex items-center justify-between">
+              <span className="text-sm text-cv-muted">NM Market Price</span>
+              <span className="text-lg font-bold" style={{ color: 'var(--primary)' }}>
+                {formatPrice(card.tcgplayer_market_cents)}
+              </span>
+            </div>
+            {nmPrice > 0 && (
+              <button
+                type="button"
+                onClick={() => setShowPriceTable(p => !p)}
+                style={{ fontSize: 12, color: '#D4AF37', background: 'none', border: 'none', cursor: 'pointer', padding: 0, display: 'flex', alignItems: 'center', gap: 4 }}
+              >
+                {showPriceTable ? '▲' : '▼'} {showPriceTable ? 'Hide' : 'Show'} condition prices
+              </button>
+            )}
+            {showPriceTable && nmPrice > 0 && (
+              <div style={{ marginTop: 8, borderTop: '1px solid rgba(255,255,255,0.06)', paddingTop: 8 }}>
+                <p style={{ fontSize: 10, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 6, fontWeight: 600 }}>Raw Conditions</p>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: '4px 12px' }}>
+                  {CONDITIONS.map(cond => {
+                    const col = CONDITION_COLORS[cond] ?? { bg: 'transparent', text: '#94a3b8' }
+                    const mult = CONDITION_MULTIPLIERS[cond] ?? 1
+                    return (
+                      <>
+                        <div key={`label-${cond}`} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                          <span style={{ display: 'inline-block', width: 8, height: 8, borderRadius: '50%', background: col.text, flexShrink: 0 }} />
+                          <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>{cond}</span>
+                          <span style={{ fontSize: 10, color: 'rgba(255,255,255,0.3)' }}>({Math.round(mult * 100)}%)</span>
+                        </div>
+                        <span key={`val-${cond}`} style={{ fontSize: 12, fontWeight: 700, color: col.text, textAlign: 'right' }}>{conditionPrice(cond)}</span>
+                      </>
+                    )
+                  })}
+                </div>
+                <p style={{ fontSize: 10, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.08em', margin: '10px 0 6px', fontWeight: 600 }}>Graded (est.)</p>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: '4px 12px' }}>
+                  {GRADED_CONDITIONS.map(cond => {
+                    const col = CONDITION_COLORS[cond] ?? { bg: 'transparent', text: '#D4AF37' }
+                    const mult = CONDITION_MULTIPLIERS[cond] ?? 1
+                    return (
+                      <>
+                        <div key={`label-${cond}`} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                          <span style={{ display: 'inline-block', width: 8, height: 8, borderRadius: 2, background: col.text, flexShrink: 0 }} />
+                          <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>{cond}</span>
+                          <span style={{ fontSize: 10, color: 'rgba(255,255,255,0.3)' }}>(~{mult >= 1 ? `${mult}x` : `${Math.round(mult * 100)}%`})</span>
+                        </div>
+                        <span key={`val-${cond}`} style={{ fontSize: 12, fontWeight: 700, color: col.text, textAlign: 'right' }}>{conditionPrice(cond)}</span>
+                      </>
+                    )
+                  })}
+                </div>
+                <p style={{ fontSize: 10, color: 'rgba(255,255,255,0.25)', marginTop: 8 }}>Graded estimates based on NM market price. Actual values vary by population and demand.</p>
+              </div>
+            )}
           </div>
 
           {/* Condition + Qty selectors (Collectr-style) */}
@@ -327,14 +436,52 @@ function CardDetailModal({
             </div>
           )}
 
-          {card.tcgplayer_url && (
-            <a href={card.tcgplayer_url} target="_blank" rel="noopener noreferrer"
-              className="flex items-center justify-center gap-2 text-sm text-cv-muted hover:text-white transition-colors py-1">
-              <ShoppingCart size={14} />
-              Buy on TCGPlayer
+          {/* External links: TCGPlayer + eBay */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+            {card.tcgplayer_url && (
+              <a href={card.tcgplayer_url} target="_blank" rel="noopener noreferrer"
+                style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, fontSize: 13, color: 'var(--text-secondary)', padding: '7px 0', borderRadius: 8, background: 'rgba(255,255,255,0.04)', textDecoration: 'none', transition: 'color 0.15s' }}
+                onMouseEnter={e => (e.currentTarget.style.color = 'white')}
+                onMouseLeave={e => (e.currentTarget.style.color = 'var(--text-secondary)')}
+              >
+                <ShoppingCart size={14} />
+                Buy on TCGPlayer
+                <ExternalLink size={12} />
+              </a>
+            )}
+            {/* eBay live listings */}
+            <a
+              href={buildEbaySearchUrl(card.card_name, card.set_name, condition)}
+              target="_blank"
+              rel="noopener noreferrer"
+              style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, fontSize: 13, padding: '7px 0', borderRadius: 8, background: 'rgba(255,255,255,0.04)', textDecoration: 'none', color: '#e5a100', transition: 'color 0.15s' }}
+              onMouseEnter={e => (e.currentTarget.style.color = '#fbbf24')}
+              onMouseLeave={e => (e.currentTarget.style.color = '#e5a100')}
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" style={{ flexShrink: 0 }}>
+                <path d="M3 7.5C3 6.119 4.119 5 5.5 5H9v2H5.5a.5.5 0 0 0-.5.5v9a.5.5 0 0 0 .5.5H9v2H5.5C4.119 19 3 17.881 3 16.5v-9zM15 5h3.5C19.881 5 21 6.119 21 7.5v9c0 1.381-1.119 2.5-2.5 2.5H15v-2h3.5a.5.5 0 0 0 .5-.5v-9a.5.5 0 0 0-.5-.5H15V5z" fill="currentColor"/>
+                <path d="M9 8h6v8H9z" fill="currentColor" opacity=".4"/>
+              </svg>
+              View eBay Listings ({condition})
               <ExternalLink size={12} />
             </a>
-          )}
+            {/* eBay sold prices */}
+            <a
+              href={buildEbaySearchUrl(card.card_name, card.set_name, condition, true)}
+              target="_blank"
+              rel="noopener noreferrer"
+              style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, fontSize: 13, padding: '7px 0', borderRadius: 8, background: 'rgba(255,255,255,0.04)', textDecoration: 'none', color: 'var(--text-secondary)', transition: 'color 0.15s' }}
+              onMouseEnter={e => (e.currentTarget.style.color = 'white')}
+              onMouseLeave={e => (e.currentTarget.style.color = 'var(--text-secondary)')}
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" style={{ flexShrink: 0 }}>
+                <path d="M9 12l2 2 4-4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                <path d="M21 12c0 4.97-4.03 9-9 9s-9-4.03-9-9 4.03-9 9-9 9 4.03 9 9z" stroke="currentColor" strokeWidth="2"/>
+              </svg>
+              eBay Sold Prices
+              <ExternalLink size={12} />
+            </a>
+          </div>
         </div>
       </div>
     </div>
@@ -446,14 +593,44 @@ function SealedDetailModal({ product, onClose }: { product: SealedResult; onClos
               {adding ? 'Adding…' : 'Add to Portfolio'}
             </button>
           )}
-          {product.tcgplayer_url && (
-            <a href={product.tcgplayer_url} target="_blank" rel="noopener noreferrer"
-              className="flex items-center justify-center gap-2 text-sm text-cv-muted hover:text-white transition-colors py-1">
-              <ShoppingCart size={14} />
-              Buy on TCGPlayer
+          {/* External links: TCGPlayer + eBay */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+            {product.tcgplayer_url && (
+              <a href={product.tcgplayer_url} target="_blank" rel="noopener noreferrer"
+                style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, fontSize: 13, color: 'var(--text-secondary)', padding: '7px 0', borderRadius: 8, background: 'rgba(255,255,255,0.04)', textDecoration: 'none' }}
+              >
+                <ShoppingCart size={14} />
+                Buy on TCGPlayer
+                <ExternalLink size={12} />
+              </a>
+            )}
+            <a
+              href={buildEbaySearchUrl(product.name, product.set_name)}
+              target="_blank"
+              rel="noopener noreferrer"
+              style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, fontSize: 13, padding: '7px 0', borderRadius: 8, background: 'rgba(255,255,255,0.04)', textDecoration: 'none', color: '#e5a100' }}
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" style={{ flexShrink: 0 }}>
+                <path d="M3 7.5C3 6.119 4.119 5 5.5 5H9v2H5.5a.5.5 0 0 0-.5.5v9a.5.5 0 0 0 .5.5H9v2H5.5C4.119 19 3 17.881 3 16.5v-9zM15 5h3.5C19.881 5 21 6.119 21 7.5v9c0 1.381-1.119 2.5-2.5 2.5H15v-2h3.5a.5.5 0 0 0 .5-.5v-9a.5.5 0 0 0-.5-.5H15V5z" fill="currentColor"/>
+                <path d="M9 8h6v8H9z" fill="currentColor" opacity=".4"/>
+              </svg>
+              View eBay Listings
               <ExternalLink size={12} />
             </a>
-          )}
+            <a
+              href={buildEbaySearchUrl(product.name, product.set_name, undefined, true)}
+              target="_blank"
+              rel="noopener noreferrer"
+              style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, fontSize: 13, padding: '7px 0', borderRadius: 8, background: 'rgba(255,255,255,0.04)', textDecoration: 'none', color: 'var(--text-secondary)' }}
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" style={{ flexShrink: 0 }}>
+                <path d="M9 12l2 2 4-4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                <path d="M21 12c0 4.97-4.03 9-9 9s-9-4.03-9-9 4.03-9 9-9 9 4.03 9 9z" stroke="currentColor" strokeWidth="2"/>
+              </svg>
+              eBay Sold Prices
+              <ExternalLink size={12} />
+            </a>
+          </div>
         </div>
       </div>
     </div>

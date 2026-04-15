@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { X, Minus, Plus, Trash2, Tag, ChevronRight } from 'lucide-react'
+import { X, Minus, Plus, Trash2, Tag, ChevronRight, ExternalLink } from 'lucide-react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { api } from '../lib/api'
 import type { CollectionItem } from '../lib/api'
@@ -41,6 +41,30 @@ interface Props {
 }
 
 const CONDITIONS = ['Near Mint', 'Lightly Played', 'Moderately Played', 'Heavily Played', 'Damaged', 'PSA 10', 'PSA 9', 'PSA 8', 'BGS 9.5', 'BGS 9', 'CGC 10', 'CGC 9.5']
+
+// Condition multipliers (TCGPlayer industry standard)
+const COND_MULT: Record<string, number> = {
+  'Near Mint': 1.00, 'Lightly Played': 0.77, 'Moderately Played': 0.50,
+  'Heavily Played': 0.27, 'Damaged': 0.10,
+  'PSA 10': 3.00, 'PSA 9': 1.35, 'PSA 8': 1.10,
+  'BGS 9.5': 3.00, 'BGS 9': 1.20, 'CGC 10': 2.50, 'CGC 9.5': 1.80,
+}
+const COND_COLOR: Record<string, string> = {
+  'Near Mint': '#34d399', 'Lightly Played': '#D4AF37',
+  'Moderately Played': '#fb923c', 'Heavily Played': '#f87171', 'Damaged': '#94a3b8',
+  'PSA 10': '#D4AF37', 'PSA 9': '#D4AF37', 'PSA 8': '#D4AF37',
+  'BGS 9.5': '#D4AF37', 'BGS 9': '#D4AF37', 'CGC 10': '#D4AF37', 'CGC 9.5': '#D4AF37',
+}
+
+function buildEbayUrl(name: string, setName: string, cond?: string, sold = false): string {
+  const q = encodeURIComponent([name, setName].filter(Boolean).join(' '))
+  let url = `https://www.ebay.com/sch/i.html?_nkw=${q}&_sacat=2536`
+  if (sold) url += '&LH_Sold=1&LH_Complete=1'
+  if (cond === 'Near Mint') url += '&LH_ItemCondition=2750'
+  else if (cond === 'Lightly Played') url += '&LH_ItemCondition=3000'
+  else if (cond === 'Moderately Played' || cond === 'Heavily Played') url += '&LH_ItemCondition=4000'
+  return url
+}
 
 export default function ProductDetailsModal({ item, onClose }: Props) {
   const queryClient = useQueryClient()
@@ -217,6 +241,74 @@ export default function ProductDetailsModal({ item, onClose }: Props) {
               <p className="text-xl font-black" style={{ color: '#D4AF37' }}>{fmt(totalValue)}</p>
               <p className="text-[10px] text-cv-muted">Based on Market Value × Qty</p>
             </div>
+          </div>
+
+          {/* Condition-based price table */}
+          {marketValue > 0 && (
+            <div style={{ borderRadius: 12, background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.07)', padding: '12px 14px' }}>
+              <p style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'rgba(255,255,255,0.35)', marginBottom: 10 }}>Estimated Value by Condition</p>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr auto', rowGap: 6, columnGap: 12 }}>
+                {['Near Mint', 'Lightly Played', 'Moderately Played', 'Heavily Played', 'Damaged'].map(c => {
+                  const mult = COND_MULT[c] ?? 1
+                  const val = Math.round(marketValue * mult)
+                  const col = COND_COLOR[c] ?? '#94a3b8'
+                  const isActive = condition === c
+                  return (
+                    <>
+                      <div key={`lbl-${c}`} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                        <span style={{ width: 7, height: 7, borderRadius: '50%', background: col, display: 'inline-block', flexShrink: 0 }} />
+                        <span style={{ fontSize: 12, color: isActive ? 'white' : 'rgba(255,255,255,0.5)', fontWeight: isActive ? 600 : 400 }}>{c}</span>
+                        {isActive && <span style={{ fontSize: 9, background: 'rgba(212,175,55,0.2)', color: '#D4AF37', borderRadius: 20, padding: '1px 5px', fontWeight: 700 }}>SELECTED</span>}
+                      </div>
+                      <span key={`val-${c}`} style={{ fontSize: 12, fontWeight: 700, color: col, textAlign: 'right' }}>{fmt(val)}</span>
+                    </>
+                  )
+                })}
+              </div>
+              <div style={{ borderTop: '1px solid rgba(255,255,255,0.06)', marginTop: 10, paddingTop: 10 }}>
+                <p style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'rgba(255,255,255,0.35)', marginBottom: 8 }}>Graded Estimates</p>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr auto', rowGap: 5, columnGap: 12 }}>
+                  {['PSA 10', 'PSA 9', 'BGS 9.5', 'BGS 9', 'CGC 10', 'CGC 9.5'].map(c => {
+                    const mult = COND_MULT[c] ?? 1
+                    const val = Math.round(marketValue * mult)
+                    const isActive = condition === c
+                    return (
+                      <>
+                        <div key={`lbl-${c}`} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                          <span style={{ width: 7, height: 7, borderRadius: 2, background: '#D4AF37', display: 'inline-block', flexShrink: 0 }} />
+                          <span style={{ fontSize: 12, color: isActive ? 'white' : 'rgba(255,255,255,0.5)', fontWeight: isActive ? 600 : 400 }}>{c}</span>
+                          {isActive && <span style={{ fontSize: 9, background: 'rgba(212,175,55,0.2)', color: '#D4AF37', borderRadius: 20, padding: '1px 5px', fontWeight: 700 }}>SELECTED</span>}
+                        </div>
+                        <span key={`val-${c}`} style={{ fontSize: 12, fontWeight: 700, color: '#D4AF37', textAlign: 'right' }}>~{fmt(val)}</span>
+                      </>
+                    )
+                  })}
+                </div>
+                <p style={{ fontSize: 10, color: 'rgba(255,255,255,0.2)', marginTop: 6 }}>Graded estimates are approximate. Actual values vary by population and demand.</p>
+              </div>
+            </div>
+          )}
+
+          {/* eBay links */}
+          <div style={{ display: 'flex', gap: 8 }}>
+            <a
+              href={buildEbayUrl(name, setName, condition)}
+              target="_blank"
+              rel="noopener noreferrer"
+              style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5, fontSize: 12, fontWeight: 600, padding: '9px 0', borderRadius: 10, background: 'rgba(229,161,0,0.1)', border: '1px solid rgba(229,161,0,0.25)', color: '#e5a100', textDecoration: 'none' }}
+            >
+              eBay Listings
+              <ExternalLink className="h-3 w-3" />
+            </a>
+            <a
+              href={buildEbayUrl(name, setName, condition, true)}
+              target="_blank"
+              rel="noopener noreferrer"
+              style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5, fontSize: 12, fontWeight: 600, padding: '9px 0', borderRadius: 10, background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)', color: 'rgba(255,255,255,0.5)', textDecoration: 'none' }}
+            >
+              Sold Prices
+              <ExternalLink className="h-3 w-3" />
+            </a>
           </div>
 
           {/* Price Paid */}
