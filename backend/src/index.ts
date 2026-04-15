@@ -59,6 +59,7 @@ import {
 } from './routes/billing';
 import { handleUpdateProfile, handleChangePassword } from './routes/profile';
 import { handleSealedSync, searchSealedLive } from './routes/sealed-sync';
+import { handleShopCheckout } from './routes/shop';
 
 function parseId(pathname: string): number | null {
   const id = Number(pathname.split('/').pop());
@@ -604,6 +605,11 @@ export default {
         const id = parseId(pathname.replace('/read', ''));
         if (!id) return withCors(badRequest('Invalid notification id'), request, env);
         if (method === 'PATCH') return withCors(await markNotificationRead(env, request, user, id), request, env);
+      }
+
+      // ── Shop checkout (one-time Stripe purchase) ─────────────────────────────────
+      if (method === 'POST' && pathname === '/api/shop/checkout') {
+        return withCors(await handleShopCheckout(env, request), request, env);
       }
 
       // ── Billing routes ────────────────────────────────────────────────────────────────

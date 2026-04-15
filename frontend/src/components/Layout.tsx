@@ -1,8 +1,8 @@
 import { useState, useRef, useEffect, type ReactNode } from 'react'
 import { NavLink, useNavigate, Link } from 'react-router-dom'
 import {
-  Layers, LogOut, Bell, ArrowLeftRight, Search, UserCircle, Crown,
-  LayoutDashboard, ShoppingBag, Package
+  Layers, LogOut, Bell, ArrowLeftRight, Search, UserCircle,
+  LayoutDashboard, ShoppingBag
 } from 'lucide-react'
 import { useQueryClient, useQuery, useMutation } from '@tanstack/react-query'
 import { api } from '../lib/api'
@@ -25,7 +25,6 @@ const guestLinks = [
   { to: '/search', label: 'Search', icon: Search },
   { to: '/shop', label: 'Shop', icon: ShoppingBag },
   { to: '/deck', label: 'Deck Builder', icon: Layers },
-  { to: '/membership', label: 'Membership', icon: Crown },
 ]
 
 // ── Card Safe HQ Shield Logo ──────────────────────────────────────────────────
@@ -227,9 +226,6 @@ export default function Layout({ children }: Props) {
                 <span className="rounded-full bg-cv-surface px-3 py-2 text-xs text-cv-muted ml-1">
                   {user?.username || user?.email}
                 </span>
-                <NavLink to="/billing" className={({ isActive }) => `btn-ghost text-xs ${isActive ? 'text-[var(--primary)]' : ''}`}>
-                  Billing
-                </NavLink>
                 <button className="btn-ghost" onClick={handleLogout} type="button">
                   <LogOut className="mr-2 h-4 w-4" /> Logout
                 </button>

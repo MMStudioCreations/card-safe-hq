@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react'
 import { NavLink, Link, useNavigate } from 'react-router-dom'
-import { Layers, LogOut, Search, UserCircle, LogIn, ShoppingBag, Crown, LayoutDashboard } from 'lucide-react'
+import { Layers, LogOut, Search, UserCircle, LogIn, ShoppingBag, LayoutDashboard } from 'lucide-react'
 import { useQueryClient } from '@tanstack/react-query'
 import { api } from '../lib/api'
 import { useAuth } from '../lib/hooks'
@@ -22,9 +22,7 @@ export default function GuestLayout({ children }: Props) {
     { to: '/search', label: 'Search', icon: Search },
     { to: '/shop', label: 'Shop', icon: ShoppingBag },
     { to: '/deck', label: 'Deck Builder', icon: Layers },
-    user
-      ? { to: '/', label: 'Portfolio', icon: LayoutDashboard }
-      : { to: '/membership', label: 'Membership', icon: Crown },
+    { to: '/', label: 'Portfolio', icon: LayoutDashboard },
   ]
 
   return (
@@ -87,7 +85,6 @@ export default function GuestLayout({ children }: Props) {
               </>
             ) : (
               <>
-                <Link to="/membership" className="rounded-full px-3 py-2 text-sm text-cv-muted hover:text-cv-text">Pricing</Link>
                 <Link to="/login" className="btn-ghost flex items-center gap-1.5 text-sm"><LogIn className="h-3.5 w-3.5" /> Sign In</Link>
                 <Link to="/register" className="btn-primary text-sm px-4 py-2">Sign Up Free</Link>
               </>

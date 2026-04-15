@@ -18,10 +18,8 @@ import NewTradePage from './pages/NewTradePage'
 import ForgotPasswordPage from './pages/ForgotPasswordPage'
 import ResetPasswordPage from './pages/ResetPasswordPage'
 import VerifyEmailPage from './pages/VerifyEmailPage'
-import BillingPage from './pages/BillingPage'
 import SearchPage from './pages/SearchPage'
 import AccountPage from './pages/AccountPage'
-import MembershipPage from './pages/MembershipPage'
 import ShopPage from './pages/ShopPage'
 
 // Requires login
@@ -58,7 +56,7 @@ export default function App() {
       <Route path="/shop"        element={<Public><ShopPage /></Public>} />
       <Route path="/deck"        element={<Public><DeckBuilderPage /></Public>} />
       <Route path="/deck-builder" element={<Public><DeckBuilderPage /></Public>} />
-      <Route path="/membership"  element={<MembershipPage />} />
+      <Route path="/membership"  element={<Navigate to="/shop" replace />} />
 
       {/* Protected pages — require login */}
       {/* Root → Portfolio (Collectr-style) */}
@@ -77,8 +75,8 @@ export default function App() {
       <Route path="/trades/new" element={<Protected><NewTradePage /></Protected>} />
       <Route path="/trades/:id" element={<Protected><TradeDetailPage /></Protected>} />
 
-      {/* Billing */}
-      <Route path="/billing" element={<Protected><BillingPage /></Protected>} />
+      {/* Billing redirect → shop */}
+      <Route path="/billing" element={<Navigate to="/shop" replace />} />
 
       <Route path="*" element={<Navigate to="/search" replace />} />
     </Routes>
