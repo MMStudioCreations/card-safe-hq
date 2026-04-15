@@ -102,19 +102,22 @@ function PortfolioCardTile({
   selected: boolean; selectMode: boolean; onToggleSelect: (id: number) => void
 }) {
   const value = getCardValue(item)
+  const unitValue = getUnitValue(item)
   const pct = getPctChange(item)
   const img = getCardImage(item)
   const name = getDisplayName(item)
   const set = getSetName(item)
   const cond = item.condition_note ?? item.estimated_grade ?? null
   const qty = item.quantity ?? 1
+  const paid = getPurchaseCost(item)
+  const unrealized = paid > 0 ? value - paid : null
 
   return (
     <div
       className="glass card-hover relative flex flex-col overflow-hidden cursor-pointer group"
       style={{
         borderRadius: 'var(--radius-md)',
-        border: selected ? '1.5px solid var(--primary)' : '1px solid rgba(212,175,55,0.10)',
+        border: selected ? '1.5px solid var(--primary)' : unrealized != null && unrealized >= 0 ? '1px solid rgba(78,203,160,0.20)' : unrealized != null ? '1px solid rgba(240,96,96,0.18)' : '1px solid rgba(212,175,55,0.10)',
       }}
       onClick={() => selectMode ? onToggleSelect(item.id) : onEdit(item)}
     >
@@ -142,9 +145,16 @@ function PortfolioCardTile({
             <Package className="h-8 w-8 text-cv-muted opacity-30" />
           </div>
         )}
-        {value > 0 && (
-          <div className="absolute bottom-1.5 right-1.5 rounded-full px-1.5 py-0.5 text-[10px] font-bold" style={{ background: 'rgba(0,0,0,0.75)', color: '#D4AF37' }}>
-            {fmtShort(value)}
+        {/* Market value badge — always shown when available */}
+        {unitValue > 0 && (
+          <div className="absolute bottom-1.5 right-1.5 rounded-full px-1.5 py-0.5 text-[10px] font-bold" style={{ background: 'rgba(0,0,0,0.82)', color: '#D4AF37', border: '1px solid rgba(212,175,55,0.25)' }}>
+            {fmtShort(unitValue)}
+          </div>
+        )}
+        {/* Tap hint for unpriced cards */}
+        {unitValue > 0 && paid === 0 && (
+          <div className="absolute bottom-1.5 left-1.5 rounded-full px-1.5 py-0.5 text-[9px] font-medium" style={{ background: 'rgba(0,0,0,0.7)', color: 'rgba(255,255,255,0.4)' }}>
+            Set price
           </div>
         )}
       </div>
@@ -161,6 +171,31 @@ function PortfolioCardTile({
           )}
           {qty > 1 && <span className="text-[9px] text-cv-muted ml-auto">×{qty}</span>}
         </div>
+
+        {/* Market value row — always visible */}
+        {value > 0 && (
+          <div className="flex items-center justify-between mt-1 pt-1 border-t" style={{ borderColor: 'rgba(255,255,255,0.06)' }}>
+            <span className="text-[9px] text-cv-muted">Market</span>
+            <span className="text-[11px] font-bold" style={{ color: '#D4AF37' }}>{fmtShort(value)}</span>
+          </div>
+        )}
+
+        {/* Unrealized gain/loss — shown once price paid is set */}
+        {unrealized != null && (
+          <div
+            className="flex items-center justify-between px-1.5 py-1 rounded-lg mt-0.5"
+            style={{ background: unrealized >= 0 ? 'rgba(78,203,160,0.10)' : 'rgba(240,96,96,0.10)' }}
+          >
+            <span className="text-[9px] font-medium" style={{ color: unrealized >= 0 ? '#4ECBA0' : '#F06060' }}>
+              {unrealized >= 0 ? 'Gain' : 'Loss'}
+            </span>
+            <span className="text-[10px] font-bold flex items-center gap-0.5" style={{ color: unrealized >= 0 ? '#4ECBA0' : '#F06060' }}>
+              {unrealized >= 0 ? <ArrowUpRight className="h-2.5 w-2.5" /> : <ArrowDownRight className="h-2.5 w-2.5" />}
+              {unrealized >= 0 ? '+' : ''}{fmtShort(unrealized)}
+            </span>
+          </div>
+        )}
+
         {pct != null && (
           <div className="flex items-center gap-0.5 text-[10px] font-medium mt-0.5" style={{ color: pct >= 0 ? '#4ECBA0' : '#F06060' }}>
             {pct >= 0 ? <ArrowUpRight className="h-3 w-3" /> : <ArrowDownRight className="h-3 w-3" />}

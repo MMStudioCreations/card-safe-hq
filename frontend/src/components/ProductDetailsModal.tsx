@@ -189,6 +189,71 @@ export default function ProductDetailsModal({ item, onClose }: Props) {
           </button>
         </div>
 
+        {/* ── Value hero block ── */}
+        <div
+          className="mx-5 mt-4 rounded-2xl overflow-hidden"
+          style={{
+            background: unrealizedGain == null
+              ? 'rgba(212,175,55,0.06)'
+              : unrealizedGain >= 0
+                ? 'rgba(78,203,160,0.08)'
+                : 'rgba(240,96,96,0.08)',
+            border: unrealizedGain == null
+              ? '1px solid rgba(212,175,55,0.18)'
+              : unrealizedGain >= 0
+                ? '1px solid rgba(78,203,160,0.25)'
+                : '1px solid rgba(240,96,96,0.25)',
+          }}
+        >
+          {/* Market value row */}
+          <div className="flex items-center justify-between px-4 py-3 border-b" style={{ borderColor: 'rgba(255,255,255,0.06)' }}>
+            <div>
+              <p className="text-[10px] font-semibold uppercase tracking-wider text-cv-muted">Market Value</p>
+              <p className="text-2xl font-black mt-0.5" style={{ color: '#D4AF37' }}>
+                {marketValue > 0 ? `$${(marketValue / 100).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '—'}
+              </p>
+              <p className="text-[10px] text-cv-muted mt-0.5">per unit · {qty > 1 ? `×${qty} = $${(totalValue / 100).toFixed(2)} total` : 'single unit'}</p>
+            </div>
+            {unrealizedGain == null ? (
+              <div
+                className="flex flex-col items-center justify-center px-3 py-2 rounded-xl"
+                style={{ background: 'rgba(212,175,55,0.1)', border: '1px dashed rgba(212,175,55,0.3)' }}
+              >
+                <p className="text-[9px] font-bold uppercase tracking-wider" style={{ color: '#D4AF37' }}>Set Price Paid</p>
+                <p className="text-[9px] text-cv-muted mt-0.5">to see gain/loss</p>
+              </div>
+            ) : (
+              <div
+                className="flex flex-col items-center justify-center px-3 py-2 rounded-xl"
+                style={{
+                  background: unrealizedGain >= 0 ? 'rgba(78,203,160,0.12)' : 'rgba(240,96,96,0.12)',
+                  border: `1px solid ${unrealizedGain >= 0 ? 'rgba(78,203,160,0.3)' : 'rgba(240,96,96,0.3)'}`,
+                }}
+              >
+                <p className="text-[9px] font-bold uppercase tracking-wider" style={{ color: unrealizedGain >= 0 ? '#4ECBA0' : '#F06060' }}>
+                  {unrealizedGain >= 0 ? 'Unrealized Gain' : 'Unrealized Loss'}
+                </p>
+                <p className="text-xl font-black mt-0.5" style={{ color: unrealizedGain >= 0 ? '#4ECBA0' : '#F06060' }}>
+                  {unrealizedGain >= 0 ? '+' : ''}{`$${Math.abs(unrealizedGain / 100).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
+                </p>
+                {paidCents != null && (
+                  <p className="text-[9px] text-cv-muted mt-0.5">
+                    Paid ${(paidCents / 100).toFixed(2)} · {unrealizedGain >= 0 ? '+' : ''}{((unrealizedGain / paidCents) * 100).toFixed(1)}%
+                  </p>
+                )}
+              </div>
+            )}
+          </div>
+
+          {/* Cost basis row — shown when price paid is entered */}
+          {paidCents != null && (
+            <div className="flex items-center justify-between px-4 py-2">
+              <span className="text-xs text-cv-muted">Cost Basis</span>
+              <span className="text-xs font-semibold">${(paidCents / 100).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+            </div>
+          )}
+        </div>
+
         {/* Scrollable body */}
         <div className="flex-1 overflow-y-auto px-5 py-4 space-y-5">
           {/* Condition */}
@@ -330,15 +395,7 @@ export default function ProductDetailsModal({ item, onClose }: Props) {
               />
               <ChevronRight className="h-4 w-4 text-cv-muted" />
             </div>
-            <p className="text-[11px] text-cv-muted mt-1">Enter the price paid for each unit. Price must be in USD.</p>
-            {unrealizedGain != null && (
-              <p
-                className="text-xs font-semibold mt-1.5"
-                style={{ color: unrealizedGain >= 0 ? '#4ECBA0' : '#F06060' }}
-              >
-                Unrealized Gain: {unrealizedGain >= 0 ? '+' : ''}{fmt(unrealizedGain)}
-              </p>
-            )}
+            <p className="text-[11px] text-cv-muted mt-1">Enter the price paid for each unit. The gain/loss above updates live as you type.</p>
           </div>
 
           {/* Date Acquired */}
