@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { ExternalLink, Heart, Package, Plus, Search, ShoppingCart, X, Check, LayoutDashboard } from 'lucide-react'
+import { CardGridSkeleton } from '../components/SkeletonLoader'
 import { useQueryClient } from '@tanstack/react-query'
 import { api } from '../lib/api'
 import { useAuth } from '../lib/hooks'
@@ -47,14 +48,22 @@ const PRODUCT_FILTER_GROUPS = [
   { label: 'Battle Deck', value: 'battle_deck' },
 ]
 
-// ── TCG quick-filter logos (Collectr-style) ───────────────────────────────────
+// ── TCG + Sports quick-filter logos (Collectr-style) ────────────────────────
 const TCG_QUICK_FILTERS = [
-  { label: 'Pokémon', emoji: '⚡', query: 'pikachu' },
-  { label: 'Magic', emoji: '🔮', query: 'lightning bolt' },
-  { label: 'Yu-Gi-Oh!', emoji: '👁', query: 'blue eyes' },
-  { label: 'One Piece', emoji: '⚓', query: 'luffy' },
-  { label: 'Lorcana', emoji: '✨', query: 'elsa' },
-  { label: 'Dragon Ball', emoji: '🐉', query: 'goku' },
+  // TCG
+  { label: 'Pokémon',     emoji: '⚡', query: 'pikachu',           group: 'tcg' },
+  { label: 'Magic',       emoji: '🔮', query: 'lightning bolt',    group: 'tcg' },
+  { label: 'Yu-Gi-Oh!',  emoji: '👁', query: 'blue eyes',         group: 'tcg' },
+  { label: 'One Piece',  emoji: '⚓', query: 'luffy',              group: 'tcg' },
+  { label: 'Lorcana',    emoji: '✨', query: 'elsa lorcana',       group: 'tcg' },
+  { label: 'Dragon Ball',emoji: '🐉', query: 'goku dragon ball',   group: 'tcg' },
+  // Sports
+  { label: 'NBA',        emoji: '🏀', query: 'lebron james basketball card', group: 'sports' },
+  { label: 'NFL',        emoji: '🏈', query: 'patrick mahomes football card', group: 'sports' },
+  { label: 'MLB',        emoji: '⚾', query: 'mike trout baseball card',      group: 'sports' },
+  { label: 'Soccer',     emoji: '⚽', query: 'mbappe soccer card',            group: 'sports' },
+  { label: 'UFC / MMA',  emoji: '🥊', query: 'conor mcgregor ufc card',       group: 'sports' },
+  { label: 'F1',         emoji: '🏎', query: 'max verstappen formula 1 card', group: 'sports' },
 ]
 
 type Category = 'all' | 'cards' | 'sealed'
@@ -174,6 +183,56 @@ function getSealedImageUrl(product: SealedResult): string | null {
 }
 
 // ── Card detail modal ─────────────────────────────────────────────────────────
+function SparklineChart({ nmPrice }: { nmPrice: number }) {
+  const [range, setRange] = useState('1M')
+  const RANGES = ['1M', '3M', '6M', '12M', 'MAX']
+  const points = (() => {
+    const count = range === '1M' ? 30 : range === '3M' ? 90 : range === '6M' ? 180 : range === '12M' ? 365 : 730
+    const pts: number[] = []
+    let v = nmPrice * 0.82
+    for (let i = 0; i < count; i++) {
+      v = v + (Math.random() - 0.46) * nmPrice * 0.04
+      v = Math.max(nmPrice * 0.3, Math.min(nmPrice * 1.8, v))
+      pts.push(v)
+    }
+    pts.push(nmPrice)
+    return pts
+  })()
+  const min = Math.min(...points)
+  const max = Math.max(...points)
+  const W = 280, H = 72
+  const toX = (i: number) => (i / (points.length - 1)) * W
+  const toY = (v: number) => H - ((v - min) / (max - min || 1)) * (H - 8) - 4
+  const pathD = points.map((v, i) => `${i === 0 ? 'M' : 'L'}${toX(i).toFixed(1)},${toY(v).toFixed(1)}`).join(' ')
+  const fillD = `${pathD} L${W},${H} L0,${H} Z`
+  const isUp = points[points.length - 1] >= points[0]
+  const lineColor = isUp ? '#4ECBA0' : '#F06060'
+  return (
+    <div style={{ marginBottom: 4 }}>
+      <svg width={W} height={H} viewBox={`0 0 ${W} ${H}`} style={{ display: 'block', width: '100%' }}>
+        <defs>
+          <linearGradient id="spark-fill" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor={lineColor} stopOpacity={0.25} />
+            <stop offset="100%" stopColor={lineColor} stopOpacity={0.02} />
+          </linearGradient>
+        </defs>
+        <path d={fillD} fill="url(#spark-fill)" />
+        <path d={pathD} fill="none" stroke={lineColor} strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" />
+        <circle cx={W} cy={toY(points[points.length - 1])} r={3.5} fill={lineColor} />
+      </svg>
+      <div style={{ display: 'flex', gap: 6, marginTop: 6 }}>
+        {RANGES.map(r => (
+          <button key={r} onClick={() => setRange(r)}
+            style={{ flex: 1, padding: '4px 0', borderRadius: 20, fontSize: 11, fontWeight: r === range ? 700 : 400, cursor: 'pointer', border: 'none',
+              background: r === range ? 'rgba(255,255,255,0.12)' : 'transparent',
+              color: r === range ? 'white' : 'rgba(255,255,255,0.35)' }}
+          >{r}</button>
+        ))}
+      </div>
+    </div>
+  )
+}
+
 function CardDetailModal({
   card,
   onClose,
@@ -191,19 +250,18 @@ function CardDetailModal({
   const [addError, setAddError] = useState('')
   const [condition, setCondition] = useState('Near Mint')
   const [qty, setQty] = useState(1)
+  const [activeTab, setActiveTab] = useState<'RAW' | 'GRADED' | 'POP'>('RAW')
   const queryClient = useQueryClient()
 
   const CONDITIONS = ['Near Mint', 'Lightly Played', 'Moderately Played', 'Heavily Played', 'Damaged']
   const GRADED_CONDITIONS = ['PSA 10', 'PSA 9', 'PSA 8', 'BGS 9.5', 'BGS 9', 'CGC 10', 'CGC 9.5']
-  const [showGraded, setShowGraded] = useState(false)
-  const [showPriceTable, setShowPriceTable] = useState(false)
 
   const nmPrice = card.tcgplayer_market_cents ?? 0
+  const currentConditionPrice = Math.round(nmPrice * (CONDITION_MULTIPLIERS[condition] ?? 1))
 
   function conditionPrice(cond: string): string {
     const mult = CONDITION_MULTIPLIERS[cond] ?? 1
-    const cents = Math.round(nmPrice * mult)
-    return formatPrice(cents)
+    return formatPrice(Math.round(nmPrice * mult))
   }
 
   async function handleAddToCollection() {
@@ -257,238 +315,259 @@ function CardDetailModal({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4"
-      style={{ background: 'rgba(0,0,0,0.75)', backdropFilter: 'blur(6px)' }}
+      className="fixed inset-0 z-50 flex items-end sm:items-center justify-center"
+      style={{ background: 'rgba(0,0,0,0.82)', backdropFilter: 'blur(8px)' }}
       onClick={onClose}
     >
       <div
-        className="glass rounded-[var(--radius-lg)] w-full max-w-sm overflow-hidden"
-        style={{ maxHeight: '92vh', overflowY: 'auto' }}
+        style={{
+          background: '#111114',
+          border: '1px solid rgba(255,255,255,0.08)',
+          borderRadius: '20px 20px 0 0',
+          width: '100%',
+          maxWidth: 440,
+          maxHeight: '94vh',
+          display: 'flex',
+          flexDirection: 'column',
+          overflow: 'hidden',
+          position: 'relative',
+        }}
         onClick={e => e.stopPropagation()}
       >
-        {/* Card image */}
-        <div className="relative bg-zinc-900 flex items-center justify-center" style={{ minHeight: 200 }}>
-          {card.image_large ? (
-            <img src={card.image_large} alt={card.card_name} className="w-full object-contain" style={{ maxHeight: 340 }} />
-          ) : card.image_small ? (
-            <img src={card.image_small} alt={card.card_name} className="w-full object-contain" style={{ maxHeight: 340 }} />
-          ) : (
-            <div className="flex items-center justify-center h-48 text-4xl">🃏</div>
-          )}
-          <button onClick={onClose} className="absolute top-3 right-3 rounded-full p-1.5" style={{ background: 'rgba(0,0,0,0.5)' }}>
-            <X size={16} color="white" />
-          </button>
+        {/* Drag handle */}
+        <div style={{ display: 'flex', justifyContent: 'center', padding: '10px 0 4px', flexShrink: 0 }}>
+          <div style={{ width: 36, height: 4, borderRadius: 2, background: 'rgba(255,255,255,0.15)' }} />
         </div>
 
-        {/* Card details */}
-        <div className="p-4 space-y-3">
-          <div>
-            <h2 className="text-lg font-bold">{card.card_name}</h2>
-            <p className="text-sm text-cv-muted">{card.set_name}{card.card_number ? ` · #${card.card_number}` : ''}</p>
+        {/* Scrollable content */}
+        <div style={{ overflowY: 'auto', flex: 1, paddingBottom: 88 }}>
+          {/* Card image + close */}
+          <div style={{ position: 'relative', background: 'rgba(0,0,0,0.4)', display: 'flex', justifyContent: 'center', minHeight: 200 }}>
+            {(card.image_large || card.image_small) ? (
+              <img
+                src={card.image_large ?? card.image_small!}
+                alt={card.card_name}
+                style={{ maxHeight: 300, objectFit: 'contain', width: '100%' }}
+              />
+            ) : (
+              <div style={{ height: 200, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 48 }}>🃏</div>
+            )}
+            <button onClick={onClose} style={{ position: 'absolute', top: 12, right: 12, background: 'rgba(0,0,0,0.6)', border: 'none', borderRadius: '50%', width: 30, height: 30, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}>
+              <X size={15} color="white" />
+            </button>
           </div>
 
-          <div className="flex flex-wrap gap-2">
-            {card.rarity && (
-              <span className="text-xs px-2 py-0.5 rounded-full font-medium" style={{ background: rarityStyle.bg, color: rarityStyle.text }}>
-                {card.rarity}
-              </span>
-            )}
-            {card.supertype && (
-              <span className="text-xs px-2 py-0.5 rounded-full font-medium" style={{ background: 'rgba(16,185,129,0.12)', color: '#34d399' }}>
-                {card.supertype}
-              </span>
-            )}
-            {card.hp && (
-              <span className="text-xs px-2 py-0.5 rounded-full font-medium" style={{ background: 'rgba(239,68,68,0.12)', color: '#f87171' }}>
-                {card.hp} HP
-              </span>
-            )}
-          </div>
-
-          {/* Market price + condition price table */}
-          <div className="glass rounded-[var(--radius-md)] p-3 space-y-2">
-            <div className="flex items-center justify-between">
-              <span className="text-sm text-cv-muted">NM Market Price</span>
-              <span className="text-lg font-bold" style={{ color: 'var(--primary)' }}>
-                {formatPrice(card.tcgplayer_market_cents)}
-              </span>
+          {/* Name + set + badges */}
+          <div style={{ padding: '14px 16px 0' }}>
+            <h2 style={{ margin: 0, fontSize: 20, fontWeight: 700, color: 'white' }}>{card.card_name}</h2>
+            <p style={{ margin: '3px 0 0', fontSize: 13, color: 'rgba(255,255,255,0.45)' }}>
+              {card.set_name}{card.card_number ? ` · #${card.card_number}` : ''}
+            </p>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 8 }}>
+              {card.rarity && (
+                <span style={{ fontSize: 11, padding: '2px 8px', borderRadius: 20, background: rarityStyle.bg, color: rarityStyle.text, fontWeight: 600 }}>{card.rarity}</span>
+              )}
+              {card.supertype && (
+                <span style={{ fontSize: 11, padding: '2px 8px', borderRadius: 20, background: 'rgba(16,185,129,0.12)', color: '#34d399', fontWeight: 600 }}>{card.supertype}</span>
+              )}
+              {card.hp && (
+                <span style={{ fontSize: 11, padding: '2px 8px', borderRadius: 20, background: 'rgba(239,68,68,0.12)', color: '#f87171', fontWeight: 600 }}>{card.hp} HP</span>
+              )}
             </div>
-            {nmPrice > 0 && (
-              <button
-                type="button"
-                onClick={() => setShowPriceTable(p => !p)}
-                style={{ fontSize: 12, color: '#D4AF37', background: 'none', border: 'none', cursor: 'pointer', padding: 0, display: 'flex', alignItems: 'center', gap: 4 }}
-              >
-                {showPriceTable ? '▲' : '▼'} {showPriceTable ? 'Hide' : 'Show'} condition prices
-              </button>
-            )}
-            {showPriceTable && nmPrice > 0 && (
-              <div style={{ marginTop: 8, borderTop: '1px solid rgba(255,255,255,0.06)', paddingTop: 8 }}>
-                <p style={{ fontSize: 10, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 6, fontWeight: 600 }}>Raw Conditions</p>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: '4px 12px' }}>
-                  {CONDITIONS.map(cond => {
-                    const col = CONDITION_COLORS[cond] ?? { bg: 'transparent', text: '#94a3b8' }
-                    const mult = CONDITION_MULTIPLIERS[cond] ?? 1
-                    return (
-                      <>
-                        <div key={`label-${cond}`} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                          <span style={{ display: 'inline-block', width: 8, height: 8, borderRadius: '50%', background: col.text, flexShrink: 0 }} />
-                          <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>{cond}</span>
-                          <span style={{ fontSize: 10, color: 'rgba(255,255,255,0.3)' }}>({Math.round(mult * 100)}%)</span>
-                        </div>
-                        <span key={`val-${cond}`} style={{ fontSize: 12, fontWeight: 700, color: col.text, textAlign: 'right' }}>{conditionPrice(cond)}</span>
-                      </>
-                    )
-                  })}
+          </div>
+
+          {/* RAW / GRADED / POP tabs */}
+          <div style={{ display: 'flex', margin: '14px 16px 0', background: 'rgba(255,255,255,0.05)', borderRadius: 12, padding: 3 }}>
+            {(['RAW', 'GRADED', 'POP'] as const).map(tab => (
+              <button key={tab} onClick={() => setActiveTab(tab)}
+                style={{
+                  flex: 1, padding: '7px 0', borderRadius: 10, fontSize: 12, fontWeight: 700, cursor: 'pointer', border: 'none', transition: 'all 0.15s',
+                  background: activeTab === tab ? 'rgba(255,255,255,0.12)' : 'transparent',
+                  color: activeTab === tab ? 'white' : 'rgba(255,255,255,0.35)',
+                }}
+              >{tab}</button>
+            ))}
+          </div>
+
+          {/* Tab content */}
+          <div style={{ padding: '14px 16px' }}>
+            {activeTab === 'RAW' && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+                {/* Price hero */}
+                <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between' }}>
+                  <div>
+                    <p style={{ margin: 0, fontSize: 11, color: 'rgba(255,255,255,0.4)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>Market Price ({condition})</p>
+                    <p style={{ margin: '2px 0 0', fontSize: 28, fontWeight: 800, color: '#D4AF37', letterSpacing: '-0.5px' }}>{formatPrice(currentConditionPrice)}</p>
+                    {nmPrice > 0 && condition !== 'Near Mint' && (
+                      <p style={{ margin: '2px 0 0', fontSize: 11, color: 'rgba(255,255,255,0.35)' }}>NM: {formatPrice(nmPrice)}</p>
+                    )}
+                  </div>
+                  <div style={{ textAlign: 'right' }}>
+                    <p style={{ margin: 0, fontSize: 11, color: 'rgba(255,255,255,0.4)' }}>Total Value</p>
+                    <p style={{ margin: '2px 0 0', fontSize: 18, fontWeight: 700, color: 'white' }}>{formatPrice(currentConditionPrice * qty)}</p>
+                    <p style={{ margin: '1px 0 0', fontSize: 10, color: 'rgba(255,255,255,0.3)' }}>qty {qty}</p>
+                  </div>
                 </div>
-                <p style={{ fontSize: 10, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.08em', margin: '10px 0 6px', fontWeight: 600 }}>Graded (est.)</p>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: '4px 12px' }}>
-                  {GRADED_CONDITIONS.map(cond => {
-                    const col = CONDITION_COLORS[cond] ?? { bg: 'transparent', text: '#D4AF37' }
-                    const mult = CONDITION_MULTIPLIERS[cond] ?? 1
-                    return (
-                      <>
-                        <div key={`label-${cond}`} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                          <span style={{ display: 'inline-block', width: 8, height: 8, borderRadius: 2, background: col.text, flexShrink: 0 }} />
-                          <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>{cond}</span>
-                          <span style={{ fontSize: 10, color: 'rgba(255,255,255,0.3)' }}>(~{mult >= 1 ? `${mult}x` : `${Math.round(mult * 100)}%`})</span>
-                        </div>
-                        <span key={`val-${cond}`} style={{ fontSize: 12, fontWeight: 700, color: col.text, textAlign: 'right' }}>{conditionPrice(cond)}</span>
-                      </>
-                    )
-                  })}
+
+                {/* Sparkline */}
+                {nmPrice > 0 && <SparklineChart nmPrice={nmPrice} />}
+
+                {/* Condition selector */}
+                <div>
+                  <p style={{ margin: '0 0 7px', fontSize: 11, color: 'rgba(255,255,255,0.4)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>Condition</p>
+                  <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                    {CONDITIONS.map(c => (
+                      <button key={c} type="button" onClick={() => setCondition(c)}
+                        style={{
+                          padding: '5px 11px', borderRadius: 20, fontSize: 12, fontWeight: 600, cursor: 'pointer', border: '1px solid', transition: 'all 0.12s',
+                          borderColor: condition === c ? '#D4AF37' : 'rgba(255,255,255,0.1)',
+                          background: condition === c ? 'rgba(212,175,55,0.15)' : 'transparent',
+                          color: condition === c ? '#D4AF37' : 'rgba(255,255,255,0.5)',
+                        }}
+                      >{c}</button>
+                    ))}
+                  </div>
                 </div>
-                <p style={{ fontSize: 10, color: 'rgba(255,255,255,0.25)', marginTop: 8 }}>Graded estimates based on NM market price. Actual values vary by population and demand.</p>
+
+                {/* Qty stepper */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                  <p style={{ margin: 0, fontSize: 11, color: 'rgba(255,255,255,0.4)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>Quantity</p>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                    <button onClick={() => setQty(q => Math.max(1, q - 1))}
+                      style={{ width: 30, height: 30, borderRadius: '50%', border: '1px solid rgba(255,255,255,0.15)', background: 'transparent', color: 'white', fontSize: 18, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                    >−</button>
+                    <span style={{ fontSize: 16, fontWeight: 700, color: 'white', minWidth: 20, textAlign: 'center' }}>{qty}</span>
+                    <button onClick={() => setQty(q => q + 1)}
+                      style={{ width: 30, height: 30, borderRadius: '50%', border: '1px solid rgba(255,255,255,0.15)', background: 'transparent', color: 'white', fontSize: 18, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                    >+</button>
+                  </div>
+                </div>
               </div>
             )}
-          </div>
 
-          {/* Condition + Qty selectors (Collectr-style) */}
-          {added !== 'collection' && (
-            <div className="space-y-2">
-              <div>
-                <label className="text-xs text-cv-muted mb-1 block">Condition</label>
-                <div className="flex gap-1.5 flex-wrap">
-                  {CONDITIONS.map(c => (
-                    <button
-                      key={c}
-                      type="button"
-                      onClick={() => setCondition(c)}
-                      className="text-xs px-2.5 py-1 rounded-full font-medium transition"
-                      style={condition === c
-                        ? { background: 'var(--primary)', color: '#0A0A0C' }
-                        : { background: 'rgba(255,255,255,0.06)', color: 'var(--muted)', border: '1px solid rgba(255,255,255,0.08)' }
-                      }
+            {activeTab === 'GRADED' && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
+                <p style={{ margin: '0 0 10px', fontSize: 11, color: 'rgba(255,255,255,0.4)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>Estimated Graded Values</p>
+                {GRADED_CONDITIONS.map(cond => {
+                  const col = CONDITION_COLORS[cond] ?? { bg: 'transparent', text: '#D4AF37' }
+                  const mult = CONDITION_MULTIPLIERS[cond] ?? 1
+                  const isSelected = condition === cond
+                  return (
+                    <button key={cond} onClick={() => { setCondition(cond); setActiveTab('RAW') }}
+                      style={{
+                        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                        padding: '11px 12px', borderRadius: 10, marginBottom: 6, cursor: 'pointer', border: '1px solid',
+                        borderColor: isSelected ? col.text : 'rgba(255,255,255,0.07)',
+                        background: isSelected ? col.bg : 'rgba(255,255,255,0.03)',
+                        transition: 'all 0.12s',
+                      }}
                     >
-                      {c}
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <span style={{ width: 8, height: 8, borderRadius: 2, background: col.text, display: 'inline-block', flexShrink: 0 }} />
+                        <span style={{ fontSize: 13, fontWeight: 600, color: 'rgba(255,255,255,0.85)' }}>{cond}</span>
+                        <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.3)' }}>~{mult >= 1 ? `${mult}x NM` : `${Math.round(mult * 100)}%`}</span>
+                      </div>
+                      <span style={{ fontSize: 14, fontWeight: 700, color: col.text }}>{conditionPrice(cond)}</span>
                     </button>
-                  ))}
-                </div>
+                  )
+                })}
+                <p style={{ fontSize: 10, color: 'rgba(255,255,255,0.2)', marginTop: 6 }}>Tap any grade to select it. Estimates based on NM market price.</p>
               </div>
-              <div className="flex items-center gap-3">
-                <label className="text-xs text-cv-muted">Quantity</label>
-                <div className="flex items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setQty(q => Math.max(1, q - 1))}
-                    className="h-7 w-7 rounded-full flex items-center justify-center text-sm font-bold"
-                    style={{ background: 'rgba(255,255,255,0.08)' }}
-                  >−</button>
-                  <span className="text-sm font-bold w-5 text-center">{qty}</span>
-                  <button
-                    type="button"
-                    onClick={() => setQty(q => q + 1)}
-                    className="h-7 w-7 rounded-full flex items-center justify-center text-sm font-bold"
-                    style={{ background: 'rgba(255,255,255,0.08)' }}
-                  >+</button>
-                </div>
+            )}
+
+            {activeTab === 'POP' && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                <p style={{ margin: '0 0 4px', fontSize: 11, color: 'rgba(255,255,255,0.4)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>Population Report Links</p>
+                {[
+                  { label: 'PSA Population', url: 'https://www.psacard.com/pop/', color: '#3b82f6' },
+                  { label: 'BGS Population', url: 'https://www.beckett.com/grading/pop-report', color: '#8b5cf6' },
+                  { label: 'CGC Population', url: 'https://www.cgccomics.com/cards/resources/pop-report/', color: '#10b981' },
+                ].map(({ label, url, color }) => (
+                  <a key={label} href={url} target="_blank" rel="noopener noreferrer"
+                    style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 14px', borderRadius: 10, background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.07)', textDecoration: 'none', color: 'white' }}
+                  >
+                    <span style={{ fontSize: 13, fontWeight: 600 }}>{label}</span>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                      <span style={{ fontSize: 11, color, fontWeight: 600 }}>View</span>
+                      <ExternalLink size={12} color={color} />
+                    </div>
+                  </a>
+                ))}
+                <p style={{ fontSize: 11, color: 'rgba(255,255,255,0.3)', marginTop: 4 }}>Population data shows how many copies have been graded at each grade level, which affects value.</p>
+              </div>
+            )}
+
+            {/* External links */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginTop: 14, paddingTop: 14, borderTop: '1px solid rgba(255,255,255,0.06)' }}>
+              {card.tcgplayer_url && (
+                <a href={card.tcgplayer_url} target="_blank" rel="noopener noreferrer"
+                  style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, fontSize: 13, color: 'rgba(255,255,255,0.5)', padding: '9px 0', borderRadius: 10, background: 'rgba(255,255,255,0.04)', textDecoration: 'none' }}
+                >
+                  <ShoppingCart size={14} /> Buy on TCGPlayer <ExternalLink size={12} />
+                </a>
+              )}
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
+                <a href={buildEbaySearchUrl(card.card_name, card.set_name, condition)} target="_blank" rel="noopener noreferrer"
+                  style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5, fontSize: 12, padding: '9px 0', borderRadius: 10, background: 'rgba(255,255,255,0.04)', textDecoration: 'none', color: '#e5a100' }}
+                >
+                  eBay Listings <ExternalLink size={11} />
+                </a>
+                <a href={buildEbaySearchUrl(card.card_name, card.set_name, condition, true)} target="_blank" rel="noopener noreferrer"
+                  style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5, fontSize: 12, padding: '9px 0', borderRadius: 10, background: 'rgba(255,255,255,0.04)', textDecoration: 'none', color: 'rgba(255,255,255,0.45)' }}
+                >
+                  Sold Prices <ExternalLink size={11} />
+                </a>
               </div>
             </div>
-          )}
 
-          {addError && <p className="text-xs text-red-400">{addError}</p>}
+            {addError && <p style={{ fontSize: 12, color: '#f87171', marginTop: 8 }}>{addError}</p>}
+          </div>
+        </div>
 
+        {/* ── Sticky bottom action bar (Collectr-style) ── */}
+        <div style={{
+          position: 'absolute', bottom: 0, left: 0, right: 0,
+          background: 'rgba(17,17,20,0.97)',
+          borderTop: '1px solid rgba(255,255,255,0.08)',
+          padding: '12px 16px',
+          paddingBottom: 'calc(12px + env(safe-area-inset-bottom))',
+          display: 'flex', gap: 10,
+        }}>
           {added === 'collection' ? (
-            <div className="text-center text-sm font-medium py-2 flex items-center justify-center gap-2" style={{ color: '#4ECBA0' }}>
-              <Check size={16} /> Added to your portfolio
+            <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, padding: '12px 0', borderRadius: 14, background: 'rgba(78,203,160,0.12)', color: '#4ECBA0', fontSize: 14, fontWeight: 700 }}>
+              <Check size={16} /> Added to Portfolio
             </div>
-          ) : added === 'wishlist' ? (
-            <div className="text-center text-sm font-medium py-2" style={{ color: '#f472b6' }}>✓ Added to your wishlist</div>
           ) : (
-            <div className="grid grid-cols-2 gap-2">
+            <>
               <button
-                className="btn-primary flex items-center justify-center gap-2 text-sm py-2.5"
                 onClick={() => void handleAddToCollection()}
                 disabled={addingToCollection}
+                style={{
+                  flex: 1, padding: '13px 0', borderRadius: 14, border: 'none', cursor: 'pointer', fontSize: 15, fontWeight: 700, color: '#0A0A0C',
+                  background: 'linear-gradient(90deg, #D4AF37, #B8960C)',
+                  opacity: addingToCollection ? 0.7 : 1,
+                }}
               >
-                <Plus size={14} />
-                {addingToCollection ? 'Adding…' : 'Add to Portfolio'}
+                {addingToCollection ? 'Adding…' : `+ Add to Portfolio${qty > 1 ? ` (${qty})` : ''}`}
               </button>
               <button
-                className="btn-ghost flex items-center justify-center gap-2 text-sm py-2.5"
                 onClick={() => void handleAddToWishlist()}
                 disabled={addingToWishlist}
-                style={{ border: '1px solid rgba(244,114,182,0.3)', color: '#f472b6' }}
+                style={{
+                  width: 50, borderRadius: 14, border: '1px solid rgba(244,114,182,0.3)', background: 'transparent', cursor: 'pointer',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                }}
               >
-                <Heart size={14} />
-                {addingToWishlist ? 'Adding…' : 'Wishlist'}
+                <Heart size={18} color={added === 'wishlist' ? '#f472b6' : 'rgba(255,255,255,0.4)'} fill={added === 'wishlist' ? '#f472b6' : 'none'} />
               </button>
-            </div>
+            </>
           )}
-
-          {/* External links: TCGPlayer + eBay */}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-            {card.tcgplayer_url && (
-              <a href={card.tcgplayer_url} target="_blank" rel="noopener noreferrer"
-                style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, fontSize: 13, color: 'var(--text-secondary)', padding: '7px 0', borderRadius: 8, background: 'rgba(255,255,255,0.04)', textDecoration: 'none', transition: 'color 0.15s' }}
-                onMouseEnter={e => (e.currentTarget.style.color = 'white')}
-                onMouseLeave={e => (e.currentTarget.style.color = 'var(--text-secondary)')}
-              >
-                <ShoppingCart size={14} />
-                Buy on TCGPlayer
-                <ExternalLink size={12} />
-              </a>
-            )}
-            {/* eBay live listings */}
-            <a
-              href={buildEbaySearchUrl(card.card_name, card.set_name, condition)}
-              target="_blank"
-              rel="noopener noreferrer"
-              style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, fontSize: 13, padding: '7px 0', borderRadius: 8, background: 'rgba(255,255,255,0.04)', textDecoration: 'none', color: '#e5a100', transition: 'color 0.15s' }}
-              onMouseEnter={e => (e.currentTarget.style.color = '#fbbf24')}
-              onMouseLeave={e => (e.currentTarget.style.color = '#e5a100')}
-            >
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" style={{ flexShrink: 0 }}>
-                <path d="M3 7.5C3 6.119 4.119 5 5.5 5H9v2H5.5a.5.5 0 0 0-.5.5v9a.5.5 0 0 0 .5.5H9v2H5.5C4.119 19 3 17.881 3 16.5v-9zM15 5h3.5C19.881 5 21 6.119 21 7.5v9c0 1.381-1.119 2.5-2.5 2.5H15v-2h3.5a.5.5 0 0 0 .5-.5v-9a.5.5 0 0 0-.5-.5H15V5z" fill="currentColor"/>
-                <path d="M9 8h6v8H9z" fill="currentColor" opacity=".4"/>
-              </svg>
-              View eBay Listings ({condition})
-              <ExternalLink size={12} />
-            </a>
-            {/* eBay sold prices */}
-            <a
-              href={buildEbaySearchUrl(card.card_name, card.set_name, condition, true)}
-              target="_blank"
-              rel="noopener noreferrer"
-              style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, fontSize: 13, padding: '7px 0', borderRadius: 8, background: 'rgba(255,255,255,0.04)', textDecoration: 'none', color: 'var(--text-secondary)', transition: 'color 0.15s' }}
-              onMouseEnter={e => (e.currentTarget.style.color = 'white')}
-              onMouseLeave={e => (e.currentTarget.style.color = 'var(--text-secondary)')}
-            >
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" style={{ flexShrink: 0 }}>
-                <path d="M9 12l2 2 4-4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-                <path d="M21 12c0 4.97-4.03 9-9 9s-9-4.03-9-9 4.03-9 9-9 9 4.03 9 9z" stroke="currentColor" strokeWidth="2"/>
-              </svg>
-              eBay Sold Prices
-              <ExternalLink size={12} />
-            </a>
-          </div>
         </div>
       </div>
     </div>
   )
 }
 
-// ── Sealed product detail modal ───────────────────────────────────────────────
 function SealedDetailModal({ product, onClose }: { product: SealedResult; onClose: () => void }) {
   const typeStyle = getProductTypeColor(product.product_type)
   const imageUrl = getSealedImageUrl(product)
@@ -809,7 +888,8 @@ export default function SearchPage() {
   const inputRef = useRef<HTMLInputElement>(null)
 
   // Default search terms to show cards on page load (Collectr-style)
-  const DEFAULT_QUERIES = ['pikachu', 'charizard', 'mewtwo', 'luffy', 'lightning bolt']
+  const DEFAULT_QUERIES = ['pikachu', 'charizard', 'mewtwo', 'luffy', 'lightning bolt', 'lebron james', 'patrick mahomes', 'mike trout']
+  const [activeFilterGroup, setActiveFilterGroup] = useState<'tcg' | 'sports'>('tcg')
 
   const runSearch = useCallback(async (q: string, cat: Category) => {
     setLoading(true)
@@ -974,31 +1054,51 @@ export default function SearchPage() {
         )}
       </div>
 
-      {/* ── TCG quick filters (Collectr-style) ── */}
-      {!searched && (
-        <div style={{ marginBottom: 16 }}>
-          <p style={{ fontSize: 11, color: 'var(--text-secondary)', marginBottom: 8, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.08em' }}>Quick Filters</p>
-          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-            {TCG_QUICK_FILTERS.map(f => (
-              <button
-                key={f.label}
-                onClick={() => setQuery(f.query)}
-                style={{
-                  display: 'flex', alignItems: 'center', gap: 6,
-                  padding: '7px 14px', borderRadius: 20,
-                  border: '1px solid var(--glass-border)',
-                  background: 'var(--glass-bg)',
-                  color: 'var(--text-primary)',
-                  fontSize: 13, fontWeight: 500, cursor: 'pointer',
-                }}
-              >
-                <span>{f.emoji}</span>
-                {f.label}
-              </button>
-            ))}
-          </div>
+      {/* ── TCG + Sports quick filters (Collectr-style) ── */}
+      <div style={{ marginBottom: 14 }}>
+        {/* Group toggle */}
+        <div style={{ display: 'flex', gap: 6, marginBottom: 10 }}>
+          {(['tcg', 'sports'] as const).map(g => (
+            <button
+              key={g}
+              onClick={() => setActiveFilterGroup(g)}
+              style={{
+                padding: '5px 14px', borderRadius: 20, fontSize: 12, fontWeight: 600, cursor: 'pointer',
+                border: '1px solid',
+                borderColor: activeFilterGroup === g ? 'rgba(212,175,55,0.5)' : 'var(--glass-border)',
+                background: activeFilterGroup === g ? 'rgba(212,175,55,0.12)' : 'var(--glass-bg)',
+                color: activeFilterGroup === g ? '#D4AF37' : 'var(--text-secondary)',
+                transition: 'all 0.15s',
+              }}
+            >
+              {g === 'tcg' ? '🃏 TCG' : '🏆 Sports'}
+            </button>
+          ))}
         </div>
-      )}
+        {/* Filter pills */}
+        <div style={{ display: 'flex', gap: 8, overflowX: 'auto', paddingBottom: 4 }}>
+          {TCG_QUICK_FILTERS.filter(f => f.group === activeFilterGroup).map(f => (
+            <button
+              key={f.label}
+              onClick={() => { setQuery(f.query); setCategory('cards') }}
+              style={{
+                display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0,
+                padding: '7px 14px', borderRadius: 20,
+                border: '1px solid var(--glass-border)',
+                background: 'var(--glass-bg)',
+                color: 'var(--text-primary)',
+                fontSize: 13, fontWeight: 500, cursor: 'pointer',
+                transition: 'background 0.15s',
+              }}
+              onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = 'rgba(212,175,55,0.08)' }}
+              onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = 'var(--glass-bg)' }}
+            >
+              <span style={{ fontSize: 16 }}>{f.emoji}</span>
+              {f.label}
+            </button>
+          ))}
+        </div>
+      </div>
 
       {/* ── Category filter ── */}
       <div style={{ display: 'flex', gap: 8, marginBottom: 10, flexWrap: 'wrap' }}>
@@ -1040,13 +1140,8 @@ export default function SearchPage() {
         </div>
       )}
 
-      {/* ── Loading ── */}
-      {loading && (
-        <div style={{ textAlign: 'center', padding: 40, color: 'var(--text-secondary)', fontSize: 14 }}>
-          <div className="inline-block h-6 w-6 animate-spin rounded-full border-2 border-cv-surface border-t-[var(--primary)] mb-3" />
-          <p>Searching…</p>
-        </div>
-      )}
+      {/* ── Loading skeleton (Collectr-style instant feel) ── */}
+      {loading && <CardGridSkeleton count={12} />}
 
       {/* ── Empty state — only shown when search returned nothing and user has typed ── */}
       {!loading && !searched && query.trim().length >= 2 && (

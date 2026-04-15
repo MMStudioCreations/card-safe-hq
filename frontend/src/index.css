@@ -207,4 +207,25 @@ a {
     from { opacity: 0; transform: translateY(8px); }
     to   { opacity: 1; transform: translateY(0); }
   }
+
+  @keyframes skeleton-shimmer {
+    0%   { background-position: 200% 0; }
+    100% { background-position: -200% 0; }
+  }
+
+  .slide-in {
+    animation: slideInRight 0.22s cubic-bezier(0.25, 0.46, 0.45, 0.94) forwards;
+  }
+  @keyframes slideInRight {
+    from { opacity: 0; transform: translateX(18px); }
+    to   { opacity: 1; transform: translateX(0); }
+  }
+
+  .slide-out {
+    animation: slideOutLeft 0.18s cubic-bezier(0.55, 0, 1, 0.45) forwards;
+  }
+  @keyframes slideOutLeft {
+    from { opacity: 1; transform: translateX(0); }
+    to   { opacity: 0; transform: translateX(-18px); }
+  }
 }

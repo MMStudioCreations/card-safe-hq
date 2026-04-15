@@ -10,6 +10,7 @@ import { api } from '../lib/api'
 import { useAuth, useCollection } from '../lib/hooks'
 import type { CollectionItem } from '../lib/api'
 import ProductDetailsModal from '../components/ProductDetailsModal'
+import { PortfolioStatsSkeleton, CardGridSkeleton } from '../components/SkeletonLoader'
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 function fmt(cents: number | null | undefined): string {
@@ -703,7 +704,7 @@ export default function PortfolioPage() {
 
           <p className="text-xs text-cv-muted">{filtered.length} of {collection.length} items{search && ` matching "${search}"`}</p>
 
-          {isLoading && <div className="text-center py-12 text-cv-muted text-sm">Loading your collection…</div>}
+          {isLoading && <CardGridSkeleton count={12} />}
 
           {!isLoading && filtered.length === 0 && (
             <div className="glass rounded-[var(--radius-lg)] p-10 text-center space-y-3">
@@ -720,7 +721,7 @@ export default function PortfolioPage() {
           )}
 
           {!isLoading && filtered.length > 0 && view === 'grid' && (
-            <div className="grid grid-cols-3 gap-2 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6">
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
               {filtered.map(item => (
                 <PortfolioCardTile
                   key={item.id} item={item}
