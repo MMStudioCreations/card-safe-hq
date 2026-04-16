@@ -98,7 +98,25 @@ type SealedResult = {
   _type: 'sealed'
 }
 
-type UnifiedResult = CardResult | SealedResult
+type SportsCardResult = {
+  _type: 'sports'
+  id: string
+  card_name: string
+  set_name: string
+  card_number: string
+  year: string
+  rarity: string
+  sport: string
+  card_type: string
+  condition: string
+  image_small: string | null
+  image_large: string | null
+  market_price_cents: number | null
+  ebay_url: string
+  seller: string
+}
+
+type UnifiedResult = CardResult | SealedResult | SportsCardResult
 
 function formatPrice(cents: number | null | undefined): string {
   if (!cents) return '—'
@@ -880,10 +898,12 @@ export default function SearchPage() {
   const [productTypeFilter, setProductTypeFilter] = useState<string>('')
   const [cards, setCards] = useState<CardResult[]>([])
   const [sealed, setSealed] = useState<SealedResult[]>([])
+  const [sportsCards, setSportsCards] = useState<SportsCardResult[]>([])
   const [loading, setLoading] = useState(false)
   const [searched, setSearched] = useState(false)
   const [selectedCard, setSelectedCard] = useState<CardResult | null>(null)
   const [selectedSealed, setSelectedSealed] = useState<SealedResult | null>(null)
+  const [selectedSports, setSelectedSports] = useState<SportsCardResult | null>(null)
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const inputRef = useRef<HTMLInputElement>(null)
 
@@ -907,33 +927,81 @@ export default function SearchPage() {
     }
   }, [])
 
-  // Auto-load popular cards on mount (Collectr-style)
+  const runSportsSearch = useCallback(async (q: string, sport?: string) => {
+    setLoading(true)
+    setSportsCards([])
+    setCards([])
+    setSealed([])
+    try {
+      const result = await api.sportsSearch(q.trim(), sport ?? 'sports', 1, 40)
+      const mapped: SportsCardResult[] = (result.data ?? []).map((item) => {
+        const marketStr = item.prices?.market ?? item.prices?.mid ?? item.prices?.low ?? ''
+        const marketCents = marketStr ? Math.round(parseFloat(marketStr.replace(/[^0-9.]/g, '')) * 100) : null
+        return {
+          _type: 'sports' as const,
+          id: item.id,
+          card_name: item.name,
+          set_name: item.set ?? '',
+          card_number: item.number ?? '',
+          year: item.year ?? '',
+          rarity: item.rarity ?? '',
+          sport: item.sport ?? sport ?? '',
+          card_type: item.card_type ?? '',
+          condition: item.condition ?? '',
+          image_small: item.images?.small ?? item.image ?? null,
+          image_large: item.images?.large ?? item.image ?? null,
+          market_price_cents: marketCents,
+          ebay_url: item.ebayUrl ?? item.tcgplayer?.url ?? '',
+          seller: item.seller ?? '',
+        }
+      })
+      setSportsCards(mapped)
+      setSearched(true)
+    } catch {
+      setSportsCards([])
+      setSearched(true)
+    } finally {
+      setLoading(false)
+    }
+  }, [])
+
+  // Auto-load popular TCG cards on mount (Collectr-style)
   useEffect(() => {
-    const randomDefault = DEFAULT_QUERIES[Math.floor(Math.random() * DEFAULT_QUERIES.length)]
+    const randomDefault = TCG_DEFAULT_QUERIES[Math.floor(Math.random() * TCG_DEFAULT_QUERIES.length)]
     void runSearch(randomDefault, 'cards')
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (debounceRef.current) clearTimeout(debounceRef.current)
     if (query.trim().length < 2) {
-      // When query is cleared, reload default cards
       if (query === '') {
-        const randomDefault = DEFAULT_QUERIES[Math.floor(Math.random() * DEFAULT_QUERIES.length)]
-        void runSearch(randomDefault, category)
+        if (activeFilterGroup === 'sports') {
+          const pick = SPORTS_DEFAULT_QUERIES[Math.floor(Math.random() * SPORTS_DEFAULT_QUERIES.length)]
+          void runSportsSearch(pick)
+        } else {
+          const randomDefault = TCG_DEFAULT_QUERIES[Math.floor(Math.random() * TCG_DEFAULT_QUERIES.length)]
+          void runSearch(randomDefault, category)
+        }
       } else {
-        setCards([]); setSealed([]); setSearched(false)
+        setCards([]); setSealed([]); setSportsCards([]); setSearched(false)
       }
       return
     }
     debounceRef.current = setTimeout(() => {
-      void runSearch(query.trim(), category)
+      if (activeFilterGroup === 'sports') {
+        void runSportsSearch(query.trim())
+      } else {
+        void runSearch(query.trim(), category)
+      }
     }, 350)
     return () => { if (debounceRef.current) clearTimeout(debounceRef.current) }
-  }, [query, category, runSearch])
+  }, [query, category, activeFilterGroup, runSearch, runSportsSearch])
 
   const filteredSealed = productTypeFilter ? sealed.filter(p => p.product_type === productTypeFilter) : sealed
+  const isSportsMode = activeFilterGroup === 'sports'
 
   const unifiedResults: UnifiedResult[] = (() => {
+    if (isSportsMode) return sportsCards
     if (category === 'cards') return cards
     if (category === 'sealed') return filteredSealed
     const result: UnifiedResult[] = []
@@ -946,12 +1014,15 @@ export default function SearchPage() {
     return result
   })()
 
-  const totalResults = cards.length + filteredSealed.length
+  const totalResults = isSportsMode ? sportsCards.length : (cards.length + filteredSealed.length)
 
   // Quick-add: add directly to portfolio without opening modal
   async function handleQuickAdd(item: UnifiedResult) {
-    if (!user) { setSelectedCard(item._type === 'card' ? item : null); return }
-    const key = item._type === 'card' ? item.ptcg_id : String(item.id)
+    if (!user) {
+      if (item._type === 'card') setSelectedCard(item)
+      return
+    }
+    const key = item._type === 'card' ? item.ptcg_id : item._type === 'sports' ? `sports-${item.id}` : String(item.id)
     if (addedIds.has(key)) return
     try {
       if (item._type === 'card') {
@@ -963,6 +1034,16 @@ export default function SearchPage() {
           rarity: item.rarity ?? undefined,
           image_url: item.image_large ?? item.image_small ?? undefined,
           game: 'Pokemon',
+        })
+      } else if (item._type === 'sports') {
+        await api.createCollectionItem({
+          card_name: item.card_name,
+          set_name: item.set_name,
+          card_number: item.card_number,
+          rarity: item.rarity || item.card_type || item.sport || undefined,
+          image_url: item.image_large ?? item.image_small ?? undefined,
+          game: item.sport || 'Sports',
+          estimated_value_cents: item.market_price_cents ?? undefined,
         })
       } else {
         await api.createCollectionItem({
@@ -1065,11 +1146,14 @@ export default function SearchPage() {
               key={g}
               onClick={() => {
                 setActiveFilterGroup(g)
-                // Auto-load a random card from the selected group
-                const pool = g === 'tcg' ? TCG_DEFAULT_QUERIES : SPORTS_DEFAULT_QUERIES
-                const pick = pool[Math.floor(Math.random() * pool.length)]
                 setQuery('')
-                void runSearch(pick, 'cards')
+                if (g === 'sports') {
+                  const pick = SPORTS_DEFAULT_QUERIES[Math.floor(Math.random() * SPORTS_DEFAULT_QUERIES.length)]
+                  void runSportsSearch(pick)
+                } else {
+                  const pick = TCG_DEFAULT_QUERIES[Math.floor(Math.random() * TCG_DEFAULT_QUERIES.length)]
+                  void runSearch(pick, 'cards')
+                }
               }}
               style={{
                 padding: '5px 14px', borderRadius: 20, fontSize: 12, fontWeight: 600, cursor: 'pointer',
@@ -1089,7 +1173,15 @@ export default function SearchPage() {
           {TCG_QUICK_FILTERS.filter(f => f.group === activeFilterGroup).map(f => (
             <button
               key={f.label}
-              onClick={() => { setQuery(f.query); setCategory('cards'); void runSearch(f.query, 'cards') }}
+              onClick={() => {
+                setQuery(f.query)
+                if (f.group === 'sports') {
+                  void runSportsSearch(f.query, f.label.toLowerCase())
+                } else {
+                  setCategory('cards')
+                  void runSearch(f.query, 'cards')
+                }
+              }}
               style={{
                 display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0,
                 padding: '7px 14px', borderRadius: 20,
@@ -1182,10 +1274,11 @@ export default function SearchPage() {
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(130px, 1fr))', gap: 12 }}>
             {unifiedResults.map(item => (
               <UnifiedGridItem
-                key={item._type === 'card' ? `card-${item.ptcg_id}` : `sealed-${item.id}`}
+                key={item._type === 'card' ? `card-${item.ptcg_id}` : item._type === 'sports' ? `sports-${item.id}` : `sealed-${item.id}`}
                 item={item}
                 onSelectCard={setSelectedCard}
                 onSelectSealed={setSelectedSealed}
+                onSelectSports={setSelectedSports}
                 addedIds={addedIds}
                 onQuickAdd={handleQuickAdd}
                 addToPortfolioMode={addToPortfolioMode}
@@ -1207,6 +1300,168 @@ export default function SearchPage() {
       {selectedSealed && (
         <SealedDetailModal product={selectedSealed} onClose={() => setSelectedSealed(null)} />
       )}
+      {selectedSports && (
+        <SportsCardDetailModal card={selectedSports} onClose={() => setSelectedSports(null)} onAddedToPortfolio={id => setAddedIds(prev => new Set([...prev, id]))} />
+      )}
+    </div>
+  )
+}
+
+// ── Sports Card Detail Modal ──────────────────────────────────────────────────
+function SportsCardDetailModal({ card, onClose, onAddedToPortfolio }: {
+  card: SportsCardResult
+  onClose: () => void
+  onAddedToPortfolio: (id: string) => void
+}) {
+  const { data: user } = useAuth()
+  const queryClient = useQueryClient()
+  const [qty, setQty] = useState(1)
+  const [condition, setCondition] = useState('Near Mint')
+  const [adding, setAdding] = useState(false)
+  const [added, setAdded] = useState(false)
+
+  const sportEmoji: Record<string, string> = {
+    nba: '🏀', basketball: '🏀', nfl: '🏈', football: '🏈',
+    mlb: '⚾', baseball: '⚾', soccer: '⚽', ufc: '🥊', mma: '🥊', f1: '🏎',
+  }
+  const sportKey = (card.sport ?? '').toLowerCase()
+  const emoji = Object.entries(sportEmoji).find(([k]) => sportKey.includes(k))?.[1] ?? '🏆'
+
+  const nmPrice = card.market_price_cents ?? 0
+  const condMultiplier = CONDITION_MULTIPLIERS[condition] ?? 1
+  const condPrice = Math.round(nmPrice * condMultiplier)
+
+  const ebayLiveUrl = `https://www.ebay.com/sch/i.html?_nkw=${encodeURIComponent(card.card_name + ' ' + card.set_name)}&_sacat=212`
+  const ebaySoldUrl = ebayLiveUrl + '&LH_Sold=1&LH_Complete=1'
+
+  async function handleAdd() {
+    if (!user) return
+    setAdding(true)
+    try {
+      await api.createCollectionItem({
+        card_name: card.card_name,
+        set_name: card.set_name,
+        card_number: card.card_number,
+        rarity: card.card_type || card.rarity || card.sport || undefined,
+        image_url: card.image_large ?? card.image_small ?? undefined,
+        game: card.sport || 'Sports',
+        quantity: qty,
+        estimated_value_cents: condPrice || undefined,
+      })
+      queryClient.invalidateQueries({ queryKey: ['collection'] })
+      onAddedToPortfolio(`sports-${card.id}`)
+      setAdded(true)
+      setTimeout(onClose, 1200)
+    } catch { /* ignore */ } finally {
+      setAdding(false)
+    }
+  }
+
+  return (
+    <div style={{ position: 'fixed', inset: 0, zIndex: 1000, display: 'flex', alignItems: 'flex-end', justifyContent: 'center', background: 'rgba(0,0,0,0.7)' }} onClick={onClose}>
+      <div style={{ width: '100%', maxWidth: 480, background: 'var(--surface)', borderRadius: '20px 20px 0 0', maxHeight: '90vh', overflowY: 'auto', paddingBottom: 90 }} onClick={e => e.stopPropagation()}>
+        {/* Drag handle */}
+        <div style={{ display: 'flex', justifyContent: 'center', padding: '12px 0 4px' }}>
+          <div style={{ width: 36, height: 4, borderRadius: 2, background: 'rgba(255,255,255,0.2)' }} />
+        </div>
+        {/* Card image */}
+        <div style={{ padding: '0 20px 16px', display: 'flex', gap: 16 }}>
+          <div style={{ width: 100, flexShrink: 0, aspectRatio: '2.5/3.5', borderRadius: 10, overflow: 'hidden', background: 'rgba(0,0,0,0.3)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            {card.image_large || card.image_small ? (
+              <img src={card.image_large ?? card.image_small ?? ''} alt={card.card_name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+            ) : (
+              <span style={{ fontSize: 36 }}>{emoji}</span>
+            )}
+          </div>
+          <div style={{ flex: 1 }}>
+            <p style={{ margin: 0, fontWeight: 700, fontSize: 16, color: 'var(--text-primary)' }}>{card.card_name}</p>
+            <p style={{ margin: '4px 0 0', fontSize: 13, color: 'var(--text-secondary)' }}>{card.set_name}</p>
+            {card.year && <p style={{ margin: '2px 0 0', fontSize: 12, color: 'var(--text-secondary)' }}>{card.year}</p>}
+            <div style={{ display: 'flex', gap: 6, marginTop: 8, flexWrap: 'wrap' }}>
+              {card.sport && <span style={{ fontSize: 11, padding: '2px 8px', borderRadius: 20, background: 'rgba(212,175,55,0.15)', color: '#D4AF37', fontWeight: 600 }}>{card.sport.toUpperCase()}</span>}
+              {card.card_type && <span style={{ fontSize: 11, padding: '2px 8px', borderRadius: 20, background: 'rgba(99,102,241,0.12)', color: '#818cf8', fontWeight: 500 }}>{card.card_type}</span>}
+              {card.rarity && <span style={{ fontSize: 11, padding: '2px 8px', borderRadius: 20, background: 'rgba(168,85,247,0.12)', color: '#c084fc', fontWeight: 500 }}>{card.rarity}</span>}
+            </div>
+          </div>
+        </div>
+
+        {/* Price hero */}
+        <div style={{ margin: '0 20px 16px', padding: '14px 16px', borderRadius: 12, background: 'rgba(212,175,55,0.08)', border: '1px solid rgba(212,175,55,0.2)' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <div>
+              <p style={{ margin: 0, fontSize: 11, color: 'var(--text-secondary)' }}>Market Value</p>
+              <p style={{ margin: '2px 0 0', fontSize: 22, fontWeight: 700, color: '#D4AF37' }}>
+                {nmPrice ? `$${(nmPrice / 100).toFixed(2)}` : '—'}
+              </p>
+            </div>
+            <div style={{ textAlign: 'right' }}>
+              <p style={{ margin: 0, fontSize: 11, color: 'var(--text-secondary)' }}>At {condition}</p>
+              <p style={{ margin: '2px 0 0', fontSize: 18, fontWeight: 700, color: 'var(--text-primary)' }}>
+                {condPrice ? `$${(condPrice / 100).toFixed(2)}` : '—'}
+              </p>
+            </div>
+          </div>
+        </div>
+
+        {/* Condition price table */}
+        <div style={{ margin: '0 20px 16px' }}>
+          <p style={{ margin: '0 0 8px', fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: 0.5 }}>Estimated Value by Condition</p>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
+            {Object.entries(CONDITION_MULTIPLIERS).map(([cond, mult]) => {
+              const price = nmPrice ? Math.round(nmPrice * mult) : null
+              const isSelected = condition === cond
+              const colors = CONDITION_COLORS[cond] ?? { bg: 'rgba(100,116,139,0.12)', text: '#94a3b8' }
+              return (
+                <button
+                  key={cond}
+                  onClick={() => setCondition(cond)}
+                  style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 10px', borderRadius: 8, background: isSelected ? colors.bg : 'rgba(255,255,255,0.03)', border: `1px solid ${isSelected ? colors.text : 'var(--glass-border)'}`, cursor: 'pointer', transition: 'all 0.15s' }}
+                >
+                  <span style={{ fontSize: 11, color: isSelected ? colors.text : 'var(--text-secondary)', fontWeight: isSelected ? 600 : 400 }}>{cond}</span>
+                  <span style={{ fontSize: 11, fontWeight: 700, color: isSelected ? colors.text : 'var(--text-primary)' }}>{price ? `$${(price / 100).toFixed(2)}` : '—'}</span>
+                </button>
+              )
+            })}
+          </div>
+        </div>
+
+        {/* eBay links */}
+        <div style={{ margin: '0 20px 16px', display: 'flex', gap: 8 }}>
+          <a href={ebayLiveUrl} target="_blank" rel="noopener noreferrer" style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, padding: '10px 0', borderRadius: 10, background: 'rgba(255,255,255,0.05)', border: '1px solid var(--glass-border)', color: 'var(--text-primary)', fontSize: 13, fontWeight: 500, textDecoration: 'none' }}>
+            <ExternalLink size={14} /> eBay Listings
+          </a>
+          <a href={ebaySoldUrl} target="_blank" rel="noopener noreferrer" style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, padding: '10px 0', borderRadius: 10, background: 'rgba(255,255,255,0.05)', border: '1px solid var(--glass-border)', color: 'var(--text-secondary)', fontSize: 13, fontWeight: 500, textDecoration: 'none' }}>
+            <ShoppingCart size={14} /> Sold Prices
+          </a>
+        </div>
+
+        {/* Quantity */}
+        <div style={{ margin: '0 20px 16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 16px', borderRadius: 12, background: 'rgba(255,255,255,0.04)', border: '1px solid var(--glass-border)' }}>
+          <span style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-primary)' }}>Quantity</span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+            <button onClick={() => setQty(q => Math.max(1, q - 1))} style={{ width: 32, height: 32, borderRadius: '50%', border: '1px solid var(--glass-border)', background: 'rgba(255,255,255,0.06)', color: 'var(--text-primary)', fontSize: 18, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>−</button>
+            <span style={{ fontSize: 18, fontWeight: 700, color: 'var(--text-primary)', minWidth: 24, textAlign: 'center' }}>{qty}</span>
+            <button onClick={() => setQty(q => q + 1)} style={{ width: 32, height: 32, borderRadius: '50%', border: '1px solid rgba(212,175,55,0.4)', background: 'rgba(212,175,55,0.12)', color: '#D4AF37', fontSize: 18, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>+</button>
+          </div>
+        </div>
+
+        {/* Sticky add button */}
+        <div style={{ position: 'sticky', bottom: 0, padding: '12px 20px', background: 'var(--surface)', borderTop: '1px solid var(--glass-border)' }}>
+          {user ? (
+            <button
+              onClick={handleAdd}
+              disabled={adding || added}
+              style={{ width: '100%', padding: '14px 0', borderRadius: 12, border: 'none', background: added ? 'rgba(78,203,160,0.9)' : 'linear-gradient(135deg, #D4AF37, #B8960C)', color: '#000', fontSize: 15, fontWeight: 700, cursor: adding || added ? 'default' : 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}
+            >
+              {added ? <><Check size={18} /> Added to Portfolio!</> : adding ? 'Adding...' : `+ Add to Portfolio (${qty})`}
+            </button>
+          ) : (
+            <button onClick={onClose} style={{ width: '100%', padding: '14px 0', borderRadius: 12, border: 'none', background: 'linear-gradient(135deg, #D4AF37, #B8960C)', color: '#000', fontSize: 15, fontWeight: 700, cursor: 'pointer' }}>
+              Sign in to Add to Portfolio
+            </button>
+          )}
+        </div>
+      </div>
     </div>
   )
 }

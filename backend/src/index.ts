@@ -60,6 +60,7 @@ import {
 import { handleUpdateProfile, handleChangePassword } from './routes/profile';
 import { handleSealedSync, searchSealedLive } from './routes/sealed-sync';
 import { handleShopCheckout } from './routes/shop';
+import { handleSportsSearch, handleSportsSoldSearch } from './routes/sports';
 import { handleShopWebhook } from './routes/shop-webhook';
 
 function parseId(pathname: string): number | null {
@@ -606,6 +607,13 @@ export default {
         const id = parseId(pathname.replace('/read', ''));
         if (!id) return withCors(badRequest('Invalid notification id'), request, env);
         if (method === 'PATCH') return withCors(await markNotificationRead(env, request, user, id), request, env);
+      }
+      // ── Sports card search (eBay Browse API) ──────────────────────────────────
+      if (method === 'GET' && pathname === '/api/sports/search') {
+        return withCors(await handleSportsSearch(env, request), request, env);
+      }
+      if (method === 'GET' && pathname === '/api/sports/sold') {
+        return withCors(await handleSportsSoldSearch(env, request), request, env);
       }
       // ── Shop checkout (one-time Stripe purchase) ─────────────────────────────────
       if (method === 'POST' && pathname === '/api/shop/checkout') {
