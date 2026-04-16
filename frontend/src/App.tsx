@@ -59,8 +59,10 @@ export default function App() {
       <Route path="/membership"  element={<Navigate to="/shop" replace />} />
 
       {/* Protected pages — require login */}
-      {/* Root → Portfolio (Collectr-style) */}
-      <Route path="/"          element={<Protected><PortfolioPage /></Protected>} />
+      {/* Root → Search (public, no login wall) */}
+      <Route path="/"          element={<Navigate to="/search" replace />} />
+      {/* Portfolio — protected, prompts sign-in for guests */}
+      <Route path="/portfolio" element={<Protected><PortfolioPage /></Protected>} />
       {/* Legacy collection route preserved */}
       <Route path="/collection" element={<Protected><CollectionPage /></Protected>} />
       <Route path="/scan"      element={<Protected><ScanPage /></Protected>} />
@@ -79,6 +81,8 @@ export default function App() {
       <Route path="/billing" element={<Navigate to="/shop" replace />} />
 
       <Route path="*" element={<Navigate to="/search" replace />} />
+      {/* /home alias */}
+      <Route path="/home" element={<Navigate to="/search" replace />} />
     </Routes>
   )
 }

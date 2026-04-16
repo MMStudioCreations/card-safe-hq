@@ -120,10 +120,7 @@ export default function LoginPage() {
           Need an account?{' '}
           <Link className="text-cv-primary hover:underline" to="/register">Register</Link>
         </p>
-        <div className="border-t border-cv-border pt-3 space-y-2">
-          <p className="text-center text-xs text-cv-muted">
-            <Link className="hover:underline font-medium" style={{ color: '#D4AF37' }} to="/membership">View membership plans &amp; pricing</Link>
-          </p>
+        <div className="border-t border-cv-border pt-3">
           <p className="text-center text-xs text-cv-muted">
             <Link className="hover:underline" to="/search">Browse without signing in →</Link>
           </p>
