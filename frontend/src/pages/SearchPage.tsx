@@ -5,6 +5,7 @@ import { CardGridSkeleton } from '../components/SkeletonLoader'
 import { useQueryClient } from '@tanstack/react-query'
 import { api } from '../lib/api'
 import { useAuth } from '../lib/hooks'
+import ProGate from '../components/ProGate'
 
 // ── Type labels ───────────────────────────────────────────────────────────────
 const TYPE_LABELS: Record<string, string> = {
@@ -951,6 +952,7 @@ export default function SearchPage() {
     searchParams.get('addToPortfolio') === '1'
   )
   const [addedIds, setAddedIds] = useState<Set<string>>(new Set())
+  const [proGateMessage, setProGateMessage] = useState<string | null>(null)
 
   const [query, setQuery] = useState('')
   const [category, setCategory] = useState<Category>('all')
@@ -1114,15 +1116,28 @@ export default function SearchPage() {
       }
       queryClient.invalidateQueries({ queryKey: ['collection'] })
       setAddedIds(prev => new Set([...prev, key]))
-    } catch {
+    } catch (err) {
+      // Check for Pro limit error — show upgrade prompt
+      if ((err as any).code === 'pro_required') {
+        setProGateMessage((err as Error).message)
+        return
+      }
       // Fall back to opening the modal
       if (item._type === 'card') setSelectedCard(item)
-      else setSelectedSealed(item)
+      else if (item._type === 'sealed') setSelectedSealed(item)
+      else if (item._type === 'sports') setSelectedSports(item)
     }
   }
 
   return (
     <div style={{ maxWidth: 740, margin: '0 auto', padding: '0 12px 80px' }}>
+      {/* ── Pro upgrade gate ── */}
+      {proGateMessage && (
+        <ProGate
+          message={proGateMessage}
+          onDismiss={() => setProGateMessage(null)}
+        />
+      )}
       {/* ── Header ── */}
       <div style={{ paddingTop: 20, paddingBottom: 12 }}>
         <h1 style={{ fontSize: 22, fontWeight: 700, margin: 0, color: 'var(--text-primary)' }}>Search</h1>

@@ -2,6 +2,10 @@ import type { Env, User, ProductType } from '../types';
 import { queryAll, queryOne, run } from '../lib/db';
 import { badRequest, notFound, ok } from '../lib/json';
 import { asInt, asString, parseJsonBody } from '../lib/validation';
+import { isUserPro } from './billing';
+
+// Free tier: max 1,000 collection items
+const FREE_COLLECTION_LIMIT = 1_000;
 
 const VALID_PRODUCT_TYPES = new Set<ProductType>([
   'single_card', 'booster_pack', 'booster_box', 'etb', 'elite_trainer_box',
@@ -104,6 +108,27 @@ export async function createCollectionItem(env: Env, request: Request, user: Use
   if (body instanceof Response) return body;
 
   try {
+    // ── Pro limit check: free users capped at 1,000 items ───────────────────────
+    const pro = await isUserPro(env, user.id, user.email);
+    if (!pro) {
+      const countRow = await queryOne<{ cnt: number }>(
+        env.DB,
+        `SELECT COUNT(*) AS cnt FROM collection_items WHERE user_id = ?`,
+        [user.id],
+      );
+      if ((countRow?.cnt ?? 0) >= FREE_COLLECTION_LIMIT) {
+        return new Response(
+          JSON.stringify({
+            ok: false,
+            code: 'pro_required',
+            limit: FREE_COLLECTION_LIMIT,
+            message: `Free accounts are limited to ${FREE_COLLECTION_LIMIT} collection items. Upgrade to Pro for unlimited storage.`,
+          }),
+          { status: 402, headers: { 'content-type': 'application/json' } },
+        );
+      }
+    }
+    // ──────────────────────────────────────────────────────────────────────────────────
     let cardId = asInt(body.card_id, 'card_id', 1, 2_147_483_647);
     const quantity = asInt(body.quantity ?? 1, 'quantity', 1, 1000) ?? 1;
     const conditionNote = asString(body.condition_note, 'condition_note', 500);

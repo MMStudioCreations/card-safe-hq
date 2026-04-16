@@ -16,6 +16,10 @@
 import type { Env, User } from '../types';
 import { queryAll, queryOne, run } from '../lib/db';
 import { badRequest, notFound, ok, serverError } from '../lib/json';
+import { isUserPro } from './billing';
+
+// Free tier: max 5 active (pending) trades at a time
+const FREE_TRADE_LIMIT = 5;
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -86,6 +90,28 @@ export async function createTrade(env: Env, request: Request, user: User): Promi
   if (recipient_id === user.id) return badRequest('Cannot trade with yourself');
   if (!Array.isArray(offer_item_ids) || offer_item_ids.length === 0) return badRequest('offer_item_ids must be a non-empty array');
   if (!Array.isArray(request_item_ids) || request_item_ids.length === 0) return badRequest('request_item_ids must be a non-empty array');
+
+  // ── Pro limit check: free users capped at 5 active trades ─────────────────────
+  const pro = await isUserPro(env, user.id, user.email);
+  if (!pro) {
+    const activeRow = await queryOne<{ cnt: number }>(
+      env.DB,
+      `SELECT COUNT(*) AS cnt FROM trades WHERE initiator_id = ? AND status = 'pending'`,
+      [user.id],
+    );
+    if ((activeRow?.cnt ?? 0) >= FREE_TRADE_LIMIT) {
+      return new Response(
+        JSON.stringify({
+          ok: false,
+          code: 'pro_required',
+          limit: FREE_TRADE_LIMIT,
+          message: `Free accounts are limited to ${FREE_TRADE_LIMIT} active trades. Upgrade to Pro for unlimited trading.`,
+        }),
+        { status: 402, headers: { 'content-type': 'application/json' } },
+      );
+    }
+  }
+  // ──────────────────────────────────────────────────────────────────────────────────
 
   // Verify recipient exists
   const recipient = await queryOne<{ id: number; username: string | null; email: string }>(

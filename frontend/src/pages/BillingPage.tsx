@@ -155,19 +155,20 @@ export default function BillingPage() {
           <div className="p-3 text-center w-20" style={{ color: '#D4AF37' }}>Yearly</div>
         </div>
         {[
-          { feature: 'Search — cards, ETBs, tins, promos, all TCG products', free: true, monthly: true, yearly: true },
-          { feature: 'Single card scan (manual identification)', free: true, monthly: true, yearly: true },
-          { feature: 'Basic collection tracking', free: true, monthly: true, yearly: true },
-          { feature: 'Limited deck builder (up to 20 cards)', free: true, monthly: true, yearly: true },
-          { feature: 'Unlimited collection', free: false, monthly: true, yearly: true },
+          { feature: 'Search — TCG cards, ETBs, tins, promos, booster boxes', free: true, monthly: true, yearly: true },
+          { feature: 'Sports card search (NBA, NFL, MLB, Soccer, UFC, F1)', free: true, monthly: true, yearly: true },
+          { feature: 'Collection tracking (up to 1,000 items)', free: true, monthly: true, yearly: true },
+          { feature: 'Deck builder (up to 3 saved decks)', free: true, monthly: true, yearly: true },
+          { feature: 'Wishlist & want list', free: true, monthly: true, yearly: true },
+          { feature: 'Unlimited collection storage', free: false, monthly: true, yearly: true },
+          { feature: 'Unlimited active trades', free: false, monthly: true, yearly: true },
+          { feature: 'Live eBay sold price comparisons', free: false, monthly: true, yearly: true },
+          { feature: 'Portfolio ROI & profit/loss analytics', free: false, monthly: true, yearly: true },
           { feature: 'AI-powered binder sheet scan (9 cards at once)', free: false, monthly: true, yearly: true },
           { feature: 'AI card identification & grading estimates', free: false, monthly: true, yearly: true },
-          { feature: 'Live eBay sold price comparisons', free: false, monthly: true, yearly: true },
-          { feature: 'Full deck builder (60-card decks)', free: false, monthly: true, yearly: true },
+          { feature: 'Unlimited deck builder', free: false, monthly: true, yearly: true },
           { feature: 'AI deck generator from your collection', free: false, monthly: true, yearly: true },
-          { feature: 'Trades marketplace', free: false, monthly: true, yearly: true },
           { feature: 'Set completion checklists', free: false, monthly: true, yearly: true },
-          { feature: 'Wishlist & want list', free: false, monthly: true, yearly: true },
           { feature: 'Monthly product giveaway entry', free: false, monthly: true, yearly: true },
           { feature: 'Early access to new features', free: false, monthly: false, yearly: true },
           { feature: 'Priority support', free: false, monthly: false, yearly: true },
@@ -199,15 +200,16 @@ export default function BillingPage() {
             style={{ border: '1px solid rgba(0,229,255,0.2)' }}>
             <div>
               <h2 className="text-lg font-bold" style={{ color: '#D4AF37' }}>Pro Monthly</h2>
+              <p className="text-2xl font-black mt-1" style={{ color: '#D4AF37' }}>$5<span className="text-sm font-normal text-cv-muted">/month</span></p>
               <p className="text-sm text-cv-muted mt-0.5">Billed every month. Cancel anytime.</p>
             </div>
             <div className="flex-1 space-y-2">
               {[
-                'Unlimited AI card scans',
-                'AI grading estimates',
-                'Live eBay price comps',
+                'Unlimited collection storage',
+                'Unlimited active trades',
+                'Live eBay sold price comps',
+                'AI card scanning & grading',
                 'Full deck builder',
-                'Trades marketplace',
                 'Monthly product giveaway',
               ].map(f => (
                 <div key={f} className="flex items-start gap-2 text-sm text-cv-muted">
@@ -221,7 +223,7 @@ export default function BillingPage() {
               onClick={() => void handleSubscribe('monthly')}
               disabled={loadingPlan !== null}
             >
-              {loadingPlan === 'monthly' ? 'Redirecting...' : 'Subscribe Monthly'}
+              {loadingPlan === 'monthly' ? 'Redirecting...' : 'Subscribe Monthly — $5/mo'}
             </button>
           </div>
 
@@ -236,7 +238,8 @@ export default function BillingPage() {
             </div>
             <div>
               <h2 className="text-lg font-bold" style={{ color: '#D4AF37' }}>Pro Yearly</h2>
-              <p className="text-sm text-cv-muted mt-0.5">Billed once per year — ~2 months free.</p>
+              <p className="text-2xl font-black mt-1" style={{ color: '#D4AF37' }}>$45<span className="text-sm font-normal text-cv-muted">/year</span></p>
+              <p className="text-sm text-cv-muted mt-0.5">Billed once per year — save 25% vs monthly.</p>
             </div>
             <div className="flex-1 space-y-2">
               {[
@@ -258,7 +261,7 @@ export default function BillingPage() {
               onClick={() => void handleSubscribe('yearly')}
               disabled={loadingPlan !== null}
             >
-              {loadingPlan === 'yearly' ? 'Redirecting...' : 'Subscribe Yearly'}
+              {loadingPlan === 'yearly' ? 'Redirecting...' : 'Subscribe Yearly — $45/yr'}
             </button>
           </div>
         </div>

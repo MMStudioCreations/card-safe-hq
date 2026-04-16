@@ -266,9 +266,13 @@ http.interceptors.request.use((config) => {
     }
     return payload.data
   },
-  (error: AxiosError<{ error?: string }>) => {
-    const message = error.response?.data?.error || error.message || 'Network error'
-    return Promise.reject(new Error(message))
+  (error: AxiosError<{ error?: string; message?: string; code?: string }>) => {
+    const data = error.response?.data
+    const message = data?.error || data?.message || error.message || 'Network error'
+    const err = new Error(message) as Error & { code?: string; httpStatus?: number }
+    if (data?.code) err.code = data.code
+    if (error.response?.status) err.httpStatus = error.response.status
+    return Promise.reject(err)
   },
 )
 
