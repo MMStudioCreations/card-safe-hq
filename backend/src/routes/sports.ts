@@ -94,8 +94,17 @@ async function getEbayToken(env: Env): Promise<string> {
 }
 
 // ── Parse a raw eBay item into our normalized card shape ──────────────────────
+function cleanTitle(raw: string): string {
+  // Remove common digital/NFT prefixes that eBay returns
+  return raw
+    .replace(/^\[DIGITAL\]\s*/i, '')
+    .replace(/^\[NFT\]\s*/i, '')
+    .replace(/^\[VIRTUAL\]\s*/i, '')
+    .trim();
+}
+
 function normalizeItem(item: Record<string, unknown>): Record<string, unknown> {
-  const title = (item.title as string) || '';
+  const title = cleanTitle((item.title as string) || '');
   const price = (item.price as { value?: string; currency?: string }) || {};
   const image = (item.image as { imageUrl?: string }) || {};
   const categories = (item.categories as Array<{ categoryId?: string; categoryName?: string }>) || [];
@@ -189,13 +198,16 @@ export async function handleSportsSearch(env: Env, request: Request): Promise<Re
   try {
     const token = await getEbayToken(env);
 
+    // Exclude digital/NFT cards from results — append -digital to every query
+    const physicalQuery = query.toLowerCase().includes('-digital') ? query : `${query} -digital`;
+
     const params = new URLSearchParams({
-      q: query,
+      q: physicalQuery,
       category_ids: categoryId,
       limit: limit.toString(),
       offset: offset.toString(),
       filter: 'buyingOptions:{FIXED_PRICE}',
-      sort: 'price',
+      sort: 'bestMatch',
     });
 
     const resp = await fetch(
@@ -250,11 +262,13 @@ export async function handleSportsSoldSearch(env: Env, request: Request): Promis
 
     // eBay Browse API doesn't support sold listings directly — use live listings
     // sorted by price as a proxy for market value
+    const physicalQ = q.trim().toLowerCase().includes('-digital') ? q.trim() : `${q.trim()} -digital`;
+
     const params = new URLSearchParams({
-      q: q.trim(),
+      q: physicalQ,
       category_ids: categoryId,
       limit: '10',
-      sort: 'price',
+      sort: 'bestMatch',
       filter: 'buyingOptions:{FIXED_PRICE}',
     });
 
