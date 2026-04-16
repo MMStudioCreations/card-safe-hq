@@ -12,9 +12,13 @@
  *   219  = Racing Cards
  *   220  = Wrestling Cards
  *   2536 = Collectible Card Games (TCG — used by existing search)
+ *
+ * IMPORTANT: All responses MUST be wrapped in { ok: true, data: ... } so the
+ * frontend axios interceptor (which checks payload.ok) can unwrap them correctly.
  */
 
 import { Env } from '../types';
+import { ok, error } from '../lib/json';
 
 // ── Category map ──────────────────────────────────────────────────────────────
 const SPORT_CATEGORY: Record<string, string> = {
@@ -60,7 +64,7 @@ async function getEbayToken(env: Env): Promise<string> {
   const clientSecret = env.EBAY_CLIENT_SECRET;
 
   if (!clientId || !clientSecret) {
-    throw new Error('EBAY_CLIENT_ID and EBAY_CLIENT_SECRET must be set');
+    throw new Error('EBAY_CLIENT_ID and EBAY_CLIENT_SECRET must be set in Cloudflare Workers environment variables');
   }
 
   const credentials = btoa(`${clientId}:${clientSecret}`);
@@ -208,33 +212,25 @@ export async function handleSportsSearch(env: Env, request: Request): Promise<Re
     if (!resp.ok) {
       const err = await resp.text();
       console.error('eBay search error:', err);
-      return new Response(JSON.stringify({ error: 'eBay search failed', details: err }), {
-        status: 502,
-        headers: { 'Content-Type': 'application/json' },
-      });
+      return error(`eBay search failed: ${err}`, 502);
     }
 
     const data = await resp.json() as { total?: number; itemSummaries?: Record<string, unknown>[] };
     const items = (data.itemSummaries || []).map(normalizeItem);
 
-    return new Response(
-      JSON.stringify({
-        data: items,
-        totalCount: data.total || 0,
-        page,
-        pageSize: limit,
-        query,
-        sport,
-        source: 'ebay',
-      }),
-      { headers: { 'Content-Type': 'application/json' } }
-    );
+    // Wrap in { ok: true, data: ... } so the frontend axios interceptor can unwrap it
+    return ok({
+      data: items,
+      totalCount: data.total || 0,
+      page,
+      pageSize: limit,
+      query,
+      sport,
+      source: 'ebay',
+    });
   } catch (err) {
     console.error('Sports search error:', err);
-    return new Response(
-      JSON.stringify({ error: 'Sports search unavailable', message: String(err) }),
-      { status: 500, headers: { 'Content-Type': 'application/json' } }
-    );
+    return error(`Sports search unavailable: ${String(err)}`, 500);
   }
 }
 
@@ -246,16 +242,14 @@ export async function handleSportsSoldSearch(env: Env, request: Request): Promis
   const categoryId = SPORT_CATEGORY[sport] || '212';
 
   if (!q.trim()) {
-    return new Response(JSON.stringify({ data: [], totalCount: 0 }), {
-      headers: { 'Content-Type': 'application/json' },
-    });
+    return ok({ data: [], totalCount: 0 });
   }
 
   try {
     const token = await getEbayToken(env);
 
-    // eBay Browse API doesn't support sold listings directly — use the Finding API for comps
-    // We return the live listings sorted by price as a proxy for market value
+    // eBay Browse API doesn't support sold listings directly — use live listings
+    // sorted by price as a proxy for market value
     const params = new URLSearchParams({
       q: q.trim(),
       category_ids: categoryId,
@@ -275,21 +269,14 @@ export async function handleSportsSoldSearch(env: Env, request: Request): Promis
     );
 
     if (!resp.ok) {
-      return new Response(JSON.stringify({ data: [], totalCount: 0 }), {
-        headers: { 'Content-Type': 'application/json' },
-      });
+      return ok({ data: [], totalCount: 0 });
     }
 
     const data = await resp.json() as { total?: number; itemSummaries?: Record<string, unknown>[] };
     const items = (data.itemSummaries || []).map(normalizeItem);
 
-    return new Response(
-      JSON.stringify({ data: items, totalCount: data.total || 0, source: 'ebay_live' }),
-      { headers: { 'Content-Type': 'application/json' } }
-    );
+    return ok({ data: items, totalCount: data.total || 0, source: 'ebay_live' });
   } catch (err) {
-    return new Response(JSON.stringify({ data: [], totalCount: 0 }), {
-      headers: { 'Content-Type': 'application/json' },
-    });
+    return ok({ data: [], totalCount: 0 });
   }
 }
