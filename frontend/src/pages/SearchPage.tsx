@@ -332,6 +332,9 @@ function CardDetailModal({
 
   const rarityStyle = getRarityColor(card.rarity)
 
+  // Build a real TCGPlayer search URL from card name + set name
+  const tcgPlayerSearchUrl = `https://www.tcgplayer.com/search/pokemon/product?q=${encodeURIComponent([card.card_name, card.set_name].filter(Boolean).join(' '))}&view=grid`
+
   return (
     <div
       className="fixed inset-0 z-50 flex items-end sm:items-center justify-center"
@@ -344,7 +347,7 @@ function CardDetailModal({
           border: '1px solid rgba(255,255,255,0.08)',
           borderRadius: '20px 20px 0 0',
           width: '100%',
-          maxWidth: 440,
+          maxWidth: 460,
           maxHeight: '94vh',
           display: 'flex',
           flexDirection: 'column',
@@ -360,38 +363,56 @@ function CardDetailModal({
 
         {/* Scrollable content */}
         <div style={{ overflowY: 'auto', flex: 1, paddingBottom: 88 }}>
-          {/* Card image + close */}
-          <div style={{ position: 'relative', background: 'rgba(0,0,0,0.4)', display: 'flex', justifyContent: 'center', minHeight: 200 }}>
-            {(card.image_large || card.image_small) ? (
-              <img
-                src={card.image_large ?? card.image_small!}
-                alt={card.card_name}
-                style={{ maxHeight: 300, objectFit: 'contain', width: '100%' }}
-              />
-            ) : (
-              <div style={{ height: 200, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 48 }}>🃏</div>
-            )}
-            <button onClick={onClose} style={{ position: 'absolute', top: 12, right: 12, background: 'rgba(0,0,0,0.6)', border: 'none', borderRadius: '50%', width: 30, height: 30, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}>
-              <X size={15} color="white" />
-            </button>
-          </div>
 
-          {/* Name + set + badges */}
-          <div style={{ padding: '14px 16px 0' }}>
-            <h2 style={{ margin: 0, fontSize: 20, fontWeight: 700, color: 'white' }}>{card.card_name}</h2>
-            <p style={{ margin: '3px 0 0', fontSize: 13, color: 'rgba(255,255,255,0.45)' }}>
-              {card.set_name}{card.card_number ? ` · #${card.card_number}` : ''}
-            </p>
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 8 }}>
-              {card.rarity && (
-                <span style={{ fontSize: 11, padding: '2px 8px', borderRadius: 20, background: rarityStyle.bg, color: rarityStyle.text, fontWeight: 600 }}>{card.rarity}</span>
+          {/* ── TOP SECTION: image + card info side by side ── */}
+          <div style={{ display: 'flex', gap: 12, padding: '8px 16px 0', alignItems: 'flex-start' }}>
+            {/* Card image — compact on the left */}
+            <div style={{ flexShrink: 0, width: 110, borderRadius: 10, overflow: 'hidden', background: 'rgba(0,0,0,0.3)' }}>
+              {(card.image_large || card.image_small) ? (
+                <img
+                  src={card.image_large ?? card.image_small!}
+                  alt={card.card_name}
+                  style={{ width: '100%', height: 'auto', display: 'block' }}
+                />
+              ) : (
+                <div style={{ height: 140, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 36 }}>🃏</div>
               )}
-              {card.supertype && (
-                <span style={{ fontSize: 11, padding: '2px 8px', borderRadius: 20, background: 'rgba(16,185,129,0.12)', color: '#34d399', fontWeight: 600 }}>{card.supertype}</span>
-              )}
-              {card.hp && (
-                <span style={{ fontSize: 11, padding: '2px 8px', borderRadius: 20, background: 'rgba(239,68,68,0.12)', color: '#f87171', fontWeight: 600 }}>{card.hp} HP</span>
-              )}
+            </div>
+
+            {/* Card info on the right */}
+            <div style={{ flex: 1, minWidth: 0, paddingTop: 2 }}>
+              {/* Close button */}
+              <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 6 }}>
+                <button onClick={onClose} style={{ background: 'rgba(255,255,255,0.08)', border: 'none', borderRadius: '50%', width: 28, height: 28, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}>
+                  <X size={14} color="rgba(255,255,255,0.7)" />
+                </button>
+              </div>
+              <h2 style={{ margin: 0, fontSize: 17, fontWeight: 700, color: 'white', lineHeight: 1.25 }}>{card.card_name}</h2>
+              <p style={{ margin: '3px 0 0', fontSize: 12, color: 'rgba(255,255,255,0.45)' }}>
+                {card.set_name}{card.card_number ? ` · #${card.card_number}` : ''}
+              </p>
+              {/* Badges */}
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5, marginTop: 7 }}>
+                {card.rarity && (
+                  <span style={{ fontSize: 10, padding: '2px 7px', borderRadius: 20, background: rarityStyle.bg, color: rarityStyle.text, fontWeight: 600 }}>{card.rarity}</span>
+                )}
+                {card.supertype && (
+                  <span style={{ fontSize: 10, padding: '2px 7px', borderRadius: 20, background: 'rgba(16,185,129,0.12)', color: '#34d399', fontWeight: 600 }}>{card.supertype}</span>
+                )}
+                {card.hp && (
+                  <span style={{ fontSize: 10, padding: '2px 7px', borderRadius: 20, background: 'rgba(239,68,68,0.12)', color: '#f87171', fontWeight: 600 }}>{card.hp} HP</span>
+                )}
+              </div>
+              {/* Price hero — immediately visible */}
+              <div style={{ marginTop: 10, padding: '10px 12px', borderRadius: 12, background: 'rgba(212,175,55,0.08)', border: '1px solid rgba(212,175,55,0.2)' }}>
+                <p style={{ margin: 0, fontSize: 10, color: 'rgba(255,255,255,0.4)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>Market Price (NM)</p>
+                <p style={{ margin: '2px 0 0', fontSize: 26, fontWeight: 800, color: '#D4AF37', letterSpacing: '-0.5px', lineHeight: 1 }}>
+                  {nmPrice > 0 ? formatPrice(nmPrice) : <span style={{ fontSize: 14, color: 'rgba(255,255,255,0.3)' }}>No price data</span>}
+                </p>
+                {nmPrice > 0 && (
+                  <p style={{ margin: '3px 0 0', fontSize: 10, color: 'rgba(255,255,255,0.3)' }}>via TCGPlayer</p>
+                )}
+              </div>
             </div>
           </div>
 
@@ -518,13 +539,11 @@ function CardDetailModal({
 
             {/* External links */}
             <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginTop: 14, paddingTop: 14, borderTop: '1px solid rgba(255,255,255,0.06)' }}>
-              {card.tcgplayer_url && (
-                <a href={card.tcgplayer_url} target="_blank" rel="noopener noreferrer"
-                  style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, fontSize: 13, color: 'rgba(255,255,255,0.5)', padding: '9px 0', borderRadius: 10, background: 'rgba(255,255,255,0.04)', textDecoration: 'none' }}
-                >
-                  <ShoppingCart size={14} /> Buy on TCGPlayer <ExternalLink size={12} />
-                </a>
-              )}
+              <a href={tcgPlayerSearchUrl} target="_blank" rel="noopener noreferrer"
+                style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, fontSize: 13, color: 'rgba(255,255,255,0.5)', padding: '9px 0', borderRadius: 10, background: 'rgba(255,255,255,0.04)', textDecoration: 'none' }}
+              >
+                <ShoppingCart size={14} /> Buy on TCGPlayer <ExternalLink size={12} />
+              </a>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
                 <a href={buildEbaySearchUrl(card.card_name, card.set_name, condition)} target="_blank" rel="noopener noreferrer"
                   style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5, fontSize: 12, padding: '9px 0', borderRadius: 10, background: 'rgba(255,255,255,0.04)', textDecoration: 'none', color: '#e5a100' }}
