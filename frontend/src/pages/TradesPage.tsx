@@ -1,7 +1,7 @@
 import { useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { ArrowLeftRight, Plus, Trash2 } from 'lucide-react'
+import { ArrowLeftRight, Plus, Trash2, LogIn, UserPlus } from 'lucide-react'
 import { api } from '../lib/api'
 import { useAuth } from '../lib/hooks'
 import type { TradeRow, TradeStatus } from '../lib/api'
@@ -15,19 +15,60 @@ const STATUS_COLORS: Record<TradeStatus, string> = {
 }
 
 export default function TradesPage() {
-  const { data: user } = useAuth()
+  const { data: user, isLoading: authLoading } = useAuth()
+  const navigate = useNavigate()
   const queryClient = useQueryClient()
   const [filter, setFilter] = useState<TradeStatus | 'all'>('all')
 
   const { data, isLoading } = useQuery({
     queryKey: ['trades'],
     queryFn: () => api.listTrades(),
+    enabled: !!user,
   })
 
   const deleteMutation = useMutation({
     mutationFn: (id: number) => api.deleteTrade(id),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['trades'] }),
   })
+
+  // Show guest sign-in prompt when auth check is done and no user
+  if (!authLoading && !user) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[60vh] px-4 page-enter">
+        <div className="glass p-8 rounded-2xl max-w-sm w-full text-center space-y-5">
+          <div className="flex items-center justify-center w-16 h-16 rounded-full mx-auto mb-2"
+            style={{ background: 'rgba(212,175,55,0.12)', border: '1.5px solid rgba(212,175,55,0.3)' }}>
+            <ArrowLeftRight className="h-8 w-8" style={{ color: '#D4AF37' }} />
+          </div>
+          <div>
+            <h2 className="text-xl font-bold mb-1">Trade Tracker</h2>
+            <p className="text-sm text-cv-muted">
+              Sign in to propose trades, track offers, and manage card swaps with other collectors.
+            </p>
+          </div>
+          <div className="space-y-3">
+            <button
+              type="button"
+              onClick={() => navigate('/login')}
+              className="btn-primary w-full flex items-center justify-center gap-2"
+            >
+              <LogIn className="h-4 w-4" /> Sign In
+            </button>
+            <button
+              type="button"
+              onClick={() => navigate('/register')}
+              className="btn-ghost w-full flex items-center justify-center gap-2"
+            >
+              <UserPlus className="h-4 w-4" /> Create Account
+            </button>
+          </div>
+          <p className="text-xs text-cv-muted">
+            Free to join · No subscription required
+          </p>
+        </div>
+      </div>
+    )
+  }
 
   const trades: TradeRow[] = (data as any) ?? []
   const filtered = filter === 'all' ? trades : trades.filter((t) => t.status === filter)

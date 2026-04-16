@@ -4,7 +4,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   TrendingUp, TrendingDown, Plus, Search, Download, Trash2,
   BarChart2, Star, Package, Layers, X, Eye, EyeOff,
-  ArrowUpRight, ArrowDownRight, CheckSquare, Square
+  ArrowUpRight, ArrowDownRight, CheckSquare, Square, LogIn, UserPlus
 } from 'lucide-react'
 import { api } from '../lib/api'
 import { useAuth, useCollection } from '../lib/hooks'
@@ -254,7 +254,7 @@ function PortfolioListRow({ item, onEdit }: { item: CollectionItem; onEdit: (ite
 
 // ── Main PortfolioPage ────────────────────────────────────────────────────────
 export default function PortfolioPage() {
-  const { data: user } = useAuth()
+  const { data: user, isLoading: authLoading } = useAuth()
   const queryClient = useQueryClient()
   const navigate = useNavigate()
 
@@ -388,6 +388,45 @@ export default function PortfolioPage() {
   }
 
   const TABS = ['overview', 'performance', 'collection'] as const
+
+  // Guest sign-in prompt — shown when auth check is done and no user found
+  if (!authLoading && !user) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[60vh] px-4 page-enter">
+        <div className="glass p-8 rounded-2xl max-w-sm w-full text-center space-y-5">
+          <div className="flex items-center justify-center w-16 h-16 rounded-full mx-auto mb-2"
+            style={{ background: 'rgba(212,175,55,0.12)', border: '1.5px solid rgba(212,175,55,0.3)' }}>
+            <BarChart2 className="h-8 w-8" style={{ color: '#D4AF37' }} />
+          </div>
+          <div>
+            <h2 className="text-xl font-bold mb-1">My Portfolio</h2>
+            <p className="text-sm text-cv-muted">
+              Sign in to track your card collection, monitor market values, and see your gains and losses.
+            </p>
+          </div>
+          <div className="space-y-3">
+            <button
+              type="button"
+              onClick={() => navigate('/login')}
+              className="btn-primary w-full flex items-center justify-center gap-2"
+            >
+              <LogIn className="h-4 w-4" /> Sign In
+            </button>
+            <button
+              type="button"
+              onClick={() => navigate('/register')}
+              className="btn-ghost w-full flex items-center justify-center gap-2"
+            >
+              <UserPlus className="h-4 w-4" /> Create Account
+            </button>
+          </div>
+          <p className="text-xs text-cv-muted">
+            Free to join · No subscription required
+          </p>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="space-y-5 page-enter pb-8">

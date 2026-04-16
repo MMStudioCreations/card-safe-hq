@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect, type ReactNode } from 'react'
 import { NavLink, useNavigate, Link, useLocation } from 'react-router-dom'
 import {
-  Home, Search, ShoppingBag, Layers, ArrowLeftRight,
+  Search, ShoppingBag, Layers, ArrowLeftRight,
   UserCircle, LogOut, Bell, BarChart2
 } from 'lucide-react'
 import { useQueryClient, useQuery, useMutation } from '@tanstack/react-query'
@@ -24,32 +24,34 @@ function ShieldLogo({ size = 32 }: { size?: number }) {
 
 // ── Bottom tab config ─────────────────────────────────────────────────────────
 const BOTTOM_TABS_AUTH = [
-  { to: '/',        label: 'Home',      Icon: Home },
-  { to: '/search',  label: 'Search',    Icon: Search },
-  { to: '/shop',    label: 'Shop',      Icon: ShoppingBag },
+  { to: '/search',    label: 'Search',    Icon: Search },
+  { to: '/shop',      label: 'Shop',      Icon: ShoppingBag },
+  { to: '/deck',      label: 'Decks',     Icon: Layers },
+  { to: '/trades',    label: 'Trades',    Icon: ArrowLeftRight },
   { to: '/portfolio', label: 'Portfolio', Icon: BarChart2 },
-  { to: '/account', label: 'Profile',   Icon: UserCircle },
 ]
 const BOTTOM_TABS_GUEST = [
-  { to: '/search',  label: 'Search',    Icon: Search },
-  { to: '/shop',    label: 'Shop',      Icon: ShoppingBag },
-  { to: '/deck',    label: 'Deck',      Icon: Layers },
-  { to: '/login',   label: 'Sign In',   Icon: UserCircle },
+  { to: '/search',    label: 'Search',    Icon: Search },
+  { to: '/shop',      label: 'Shop',      Icon: ShoppingBag },
+  { to: '/deck',      label: 'Decks',     Icon: Layers },
+  { to: '/trades',    label: 'Trades',    Icon: ArrowLeftRight },
+  { to: '/portfolio', label: 'Portfolio', Icon: BarChart2 },
 ]
 
 // ── Desktop nav links ─────────────────────────────────────────────────────────
 const DESKTOP_AUTH = [
-  { to: '/',          label: 'Home' },
   { to: '/search',    label: 'Search' },
   { to: '/shop',      label: 'Shop' },
-  { to: '/portfolio', label: 'Portfolio' },
   { to: '/deck',      label: 'Deck Builder' },
   { to: '/trades',    label: 'Trades' },
+  { to: '/portfolio', label: 'Portfolio' },
 ]
 const DESKTOP_GUEST = [
-  { to: '/search',  label: 'Search' },
-  { to: '/shop',    label: 'Shop' },
-  { to: '/deck',    label: 'Deck Builder' },
+  { to: '/search',    label: 'Search' },
+  { to: '/shop',      label: 'Shop' },
+  { to: '/deck',      label: 'Deck Builder' },
+  { to: '/trades',    label: 'Trades' },
+  { to: '/portfolio', label: 'Portfolio' },
 ]
 
 // ── Layout ────────────────────────────────────────────────────────────────────

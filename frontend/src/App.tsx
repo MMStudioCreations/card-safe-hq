@@ -61,8 +61,8 @@ export default function App() {
       {/* Protected pages — require login */}
       {/* Root → Search (public, no login wall) */}
       <Route path="/"          element={<Navigate to="/search" replace />} />
-      {/* Portfolio — protected, prompts sign-in for guests */}
-      <Route path="/portfolio" element={<Protected><PortfolioPage /></Protected>} />
+      {/* Portfolio — public route, shows sign-in prompt for guests inside the page */}
+      <Route path="/portfolio" element={<Public><PortfolioPage /></Public>} />
       {/* Legacy collection route preserved */}
       <Route path="/collection" element={<Protected><CollectionPage /></Protected>} />
       <Route path="/scan"      element={<Protected><ScanPage /></Protected>} />
@@ -73,7 +73,7 @@ export default function App() {
       <Route path="/account"   element={<Protected><AccountPage /></Protected>} />
 
       {/* Trades */}
-      <Route path="/trades"     element={<Protected><TradesPage /></Protected>} />
+      <Route path="/trades"     element={<Public><TradesPage /></Public>} />
       <Route path="/trades/new" element={<Protected><NewTradePage /></Protected>} />
       <Route path="/trades/:id" element={<Protected><TradeDetailPage /></Protected>} />
 
