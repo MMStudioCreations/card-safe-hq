@@ -888,7 +888,9 @@ export default function SearchPage() {
   const inputRef = useRef<HTMLInputElement>(null)
 
   // Default search terms to show cards on page load (Collectr-style)
-  const DEFAULT_QUERIES = ['pikachu', 'charizard', 'mewtwo', 'luffy', 'lightning bolt', 'lebron james', 'patrick mahomes', 'mike trout']
+  const TCG_DEFAULT_QUERIES = ['pikachu', 'charizard', 'mewtwo', 'luffy', 'lightning bolt', 'elsa lorcana', 'goku dragon ball']
+  const SPORTS_DEFAULT_QUERIES = ['lebron james basketball card', 'patrick mahomes football card', 'mike trout baseball card', 'mbappe soccer card', 'max verstappen formula 1 card']
+  const DEFAULT_QUERIES = [...TCG_DEFAULT_QUERIES, ...SPORTS_DEFAULT_QUERIES]
   const [activeFilterGroup, setActiveFilterGroup] = useState<'tcg' | 'sports'>('tcg')
 
   const runSearch = useCallback(async (q: string, cat: Category) => {
@@ -1061,7 +1063,14 @@ export default function SearchPage() {
           {(['tcg', 'sports'] as const).map(g => (
             <button
               key={g}
-              onClick={() => setActiveFilterGroup(g)}
+              onClick={() => {
+                setActiveFilterGroup(g)
+                // Auto-load a random card from the selected group
+                const pool = g === 'tcg' ? TCG_DEFAULT_QUERIES : SPORTS_DEFAULT_QUERIES
+                const pick = pool[Math.floor(Math.random() * pool.length)]
+                setQuery('')
+                void runSearch(pick, 'cards')
+              }}
               style={{
                 padding: '5px 14px', borderRadius: 20, fontSize: 12, fontWeight: 600, cursor: 'pointer',
                 border: '1px solid',
@@ -1080,7 +1089,7 @@ export default function SearchPage() {
           {TCG_QUICK_FILTERS.filter(f => f.group === activeFilterGroup).map(f => (
             <button
               key={f.label}
-              onClick={() => { setQuery(f.query); setCategory('cards') }}
+              onClick={() => { setQuery(f.query); setCategory('cards'); void runSearch(f.query, 'cards') }}
               style={{
                 display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0,
                 padding: '7px 14px', borderRadius: 20,

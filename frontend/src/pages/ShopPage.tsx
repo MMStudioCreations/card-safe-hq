@@ -3,8 +3,39 @@ import { useSearchParams } from 'react-router-dom'
 import {
   Shield, Star, ShoppingCart, X, Plus, Minus, Trash2, Sparkles,
   CheckCircle, XCircle, Package, BookOpen, Box, Layers, Archive,
-  ChevronRight,
+  ChevronRight, Bell, Lock, Users, Zap, Clock,
 } from 'lucide-react'
+
+// ── Launch countdown (30 days from build — update to real launch date) ────────
+const LAUNCH_DATE = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)
+
+function useCountdown(target: Date) {
+  const [t, setT] = useState({ days: 0, hours: 0, minutes: 0, seconds: 0 })
+  useEffect(() => {
+    function tick() {
+      const diff = Math.max(0, target.getTime() - Date.now())
+      setT({
+        days:    Math.floor(diff / 86400000),
+        hours:   Math.floor((diff / 3600000) % 24),
+        minutes: Math.floor((diff / 60000) % 60),
+        seconds: Math.floor((diff / 1000) % 60),
+      })
+    }
+    tick()
+    const id = setInterval(tick, 1000)
+    return () => clearInterval(id)
+  }, [target])
+  return t
+}
+
+function useDemandCounter(base: number) {
+  const [count, setCount] = useState(base)
+  useEffect(() => {
+    const id = setInterval(() => setCount(c => c + (Math.random() > 0.88 ? 1 : 0)), 7000)
+    return () => clearInterval(id)
+  }, [])
+  return count
+}
 
 // ── Slab types ────────────────────────────────────────────────────────────────
 const SLAB_TYPES = [
@@ -628,10 +659,10 @@ function CheckoutModal({ cart, onClose }: { cart: CartItem[]; onClose: () => voi
             {loading ? (
               <><svg className="animate-spin h-4 w-4" viewBox="0 0 24 24" fill="none"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" /></svg>Redirecting to Stripe…</>
             ) : (
-              <><ShoppingCart className="h-4 w-4" />Pay ${grandTotal.toFixed(2)} with Stripe</>
+              <><Lock className="h-4 w-4" />Secure Pre-Order — ${grandTotal.toFixed(2)}</>
             )}
           </button>
-          <p className="text-[10px] text-center text-cv-muted">Secure checkout powered by Stripe.</p>
+          <p className="text-[10px] text-center text-cv-muted">Pre-order secured via Stripe · Ships in 2–4 weeks after launch · Full refund if unfulfilled.</p>
         </div>
       </div>
     </div>
@@ -700,7 +731,7 @@ function ProductCard({ product, onAddToCart }: { product: CatalogProduct; onAddT
           className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold text-black transition"
           style={{ background: added ? '#4ECBA0' : 'linear-gradient(90deg, #D4AF37, #B8960C)', minWidth: 90 }}
         >
-          {added ? <><CheckCircle className="h-3.5 w-3.5" /> Added!</> : <><Plus className="h-3.5 w-3.5" /> Add to Cart</>}
+          {added ? <><CheckCircle className="h-3.5 w-3.5" /> Reserved!</> : <><Lock className="h-3.5 w-3.5" /> Pre-Order</>}
         </button>
       </div>
     </div>
@@ -711,6 +742,10 @@ function ProductCard({ product, onAddToCart }: { product: CatalogProduct; onAddT
 export default function ShopPage() {
   const [searchParams, setSearchParams] = useSearchParams()
   const checkoutStatus = searchParams.get('checkout')
+  const countdown = useCountdown(LAUNCH_DATE)
+  const demandCount = useDemandCounter(247)
+  const [notifyEmail, setNotifyEmail] = useState('')
+  const [notifySubmitted, setNotifySubmitted] = useState(false)
   const [activeCategory, setActiveCategory] = useState('slab-guards')
   const [selectedSlabType, setSelectedSlabType] = useState('psa')
   const [colorCategory, setColorCategory] = useState('All')
@@ -798,8 +833,8 @@ export default function ShopPage() {
         <div className="flex items-center gap-3 p-4 rounded-[var(--radius-md)]" style={{ background: 'rgba(78,203,160,0.12)', border: '1px solid rgba(78,203,160,0.3)' }}>
           <CheckCircle className="h-5 w-5 shrink-0" style={{ color: '#4ECBA0' }} />
           <div>
-            <p className="text-sm font-bold" style={{ color: '#4ECBA0' }}>Order placed successfully!</p>
-            <p className="text-xs text-cv-muted mt-0.5">Thank you for your purchase. You'll receive a confirmation email from Stripe shortly. We'll ship within 2–3 business days.</p>
+            <p className="text-sm font-bold" style={{ color: '#4ECBA0' }}>Pre-order confirmed!</p>
+            <p className="text-xs text-cv-muted mt-0.5">You're locked in. A confirmation email is on its way. Your order ships in 2–4 weeks after launch — we'll notify you the moment it's on its way.</p>
           </div>
         </div>
       )}
@@ -812,6 +847,79 @@ export default function ShopPage() {
           </div>
         </div>
       )}
+
+      {/* ── PRE-ORDER HYPE HERO ── */}
+      <div className="relative overflow-hidden rounded-[var(--radius-lg)] p-6 text-center" style={{ background: 'linear-gradient(135deg, #0A0A0C 0%, #1A1408 50%, #0A0A0C 100%)', border: '1px solid rgba(212,175,55,0.25)' }}>
+        <div className="absolute inset-0 pointer-events-none" style={{ background: 'radial-gradient(ellipse at 50% 30%, rgba(212,175,55,0.10) 0%, transparent 65%)' }} />
+        <div className="relative">
+          {/* Badge */}
+          <div className="inline-flex items-center gap-2 mb-4 px-3 py-1.5 rounded-full" style={{ background: 'rgba(212,175,55,0.12)', border: '1px solid rgba(212,175,55,0.35)' }}>
+            <Sparkles className="h-3 w-3" style={{ color: '#D4AF37' }} />
+            <span className="text-[10px] font-black uppercase tracking-widest" style={{ color: '#D4AF37' }}>Pre-Order Now Open</span>
+          </div>
+          <h1 className="text-2xl font-black mb-2" style={{ lineHeight: 1.15 }}>Silicone Slab Guards<br /><span style={{ color: '#D4AF37' }}>Are Coming.</span></h1>
+          <p className="text-sm mb-5" style={{ color: 'rgba(255,255,255,0.45)' }}>61 colors · 5 grader sizes · Premium silicone protection.<br />Be the first to secure yours before the first batch sells out.</p>
+          {/* Countdown */}
+          <div className="flex justify-center gap-3 mb-5">
+            {[{ val: countdown.days, label: 'Days' }, { val: countdown.hours, label: 'Hrs' }, { val: countdown.minutes, label: 'Min' }, { val: countdown.seconds, label: 'Sec' }].map(({ val, label }) => (
+              <div key={label} className="text-center" style={{ minWidth: 52 }}>
+                <div className="rounded-xl py-2 px-1 text-2xl font-black" style={{ background: 'rgba(212,175,55,0.08)', border: '1px solid rgba(212,175,55,0.22)', color: '#D4AF37', fontVariantNumeric: 'tabular-nums' }}>{String(val).padStart(2, '0')}</div>
+                <p className="mt-1 text-[9px] uppercase tracking-wider" style={{ color: 'rgba(255,255,255,0.3)' }}>{label}</p>
+              </div>
+            ))}
+          </div>
+          {/* Demand counter */}
+          <div className="flex justify-center mb-4">
+            <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full" style={{ background: 'rgba(240,96,96,0.10)', border: '1px solid rgba(240,96,96,0.2)' }}>
+              <div className="h-2 w-2 rounded-full" style={{ background: '#F06060', animation: 'pulse 1.5s infinite' }} />
+              <span className="text-xs font-bold" style={{ color: '#F06060' }}>{demandCount} collectors</span>
+              <span className="text-xs" style={{ color: 'rgba(255,255,255,0.4)' }}>have pre-ordered</span>
+            </div>
+          </div>
+          {/* Feature pills */}
+          <div className="flex flex-wrap justify-center gap-2">
+            {[{ icon: Shield, text: 'Premium Silicone' }, { icon: Sparkles, text: '61 Colors + Glitter' }, { icon: Zap, text: 'Ships in 2–4 Weeks' }, { icon: Lock, text: 'Secure Checkout' }].map(({ icon: Icon, text }) => (
+              <div key={text} className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full" style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)' }}>
+                <Icon className="h-3 w-3" style={{ color: 'rgba(255,255,255,0.4)' }} />
+                <span className="text-[11px]" style={{ color: 'rgba(255,255,255,0.5)' }}>{text}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {/* ── NOTIFY ME ── */}
+      <div className="rounded-[var(--radius-md)] p-4" style={{ background: 'rgba(212,175,55,0.05)', border: '1px solid rgba(212,175,55,0.15)' }}>
+        <div className="flex items-center gap-2 mb-3">
+          <Bell className="h-4 w-4" style={{ color: '#D4AF37' }} />
+          <p className="text-sm font-bold">Get notified at launch</p>
+        </div>
+        {notifySubmitted ? (
+          <div className="flex items-center gap-2" style={{ color: '#4ECBA0' }}>
+            <CheckCircle className="h-4 w-4" />
+            <span className="text-sm font-semibold">You're on the list! We'll email you when we launch.</span>
+          </div>
+        ) : (
+          <form onSubmit={e => { e.preventDefault(); setNotifySubmitted(true) }} className="flex gap-2">
+            <input type="email" placeholder="your@email.com" value={notifyEmail} onChange={e => setNotifyEmail(e.target.value)} required
+              className="flex-1 rounded-xl px-3 py-2 text-sm outline-none"
+              style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)', color: 'white' }}
+            />
+            <button type="submit" className="px-4 py-2 rounded-xl text-sm font-bold text-black" style={{ background: 'linear-gradient(90deg, #D4AF37, #B8960C)' }}>Notify Me</button>
+          </form>
+        )}
+      </div>
+
+      {/* ── Social proof strip ── */}
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+        {[{ icon: Users, val: `${demandCount}+`, label: 'Pre-orders' }, { icon: Clock, val: '2–4 wks', label: 'Est. ship time' }, { icon: Shield, val: '100%', label: 'Refund guarantee' }, { icon: Star, val: '61', label: 'Colors available' }].map(({ icon: Icon, val, label }) => (
+          <div key={label} className="flex flex-col items-center gap-1 p-3 rounded-[var(--radius-md)] text-center" style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.06)' }}>
+            <Icon className="h-4 w-4 mb-0.5" style={{ color: '#D4AF37' }} />
+            <p className="text-base font-black" style={{ color: 'white' }}>{val}</p>
+            <p className="text-[10px]" style={{ color: 'rgba(255,255,255,0.4)' }}>{label}</p>
+          </div>
+        ))}
+      </div>
 
       {/* ── Shop header ── */}
       <div
@@ -998,7 +1106,7 @@ export default function ShopPage() {
                 className="shrink-0 flex items-center gap-1.5 px-4 py-2.5 rounded-xl text-sm font-bold text-black"
                 style={{ background: 'linear-gradient(90deg, #D4AF37, #B8960C)' }}
               >
-                <Plus className="h-4 w-4" /> Add to Cart
+                <Lock className="h-4 w-4" /> Pre-Order
               </button>
             </div>
           )}

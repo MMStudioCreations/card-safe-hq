@@ -31,25 +31,7 @@ export default function GuestLayout({ children }: Props) {
         <div className="flex items-center justify-between gap-3">
           {/* Logo */}
           <Link to={user ? '/' : '/search'} className="flex items-center gap-3">
-            <div
-              className="relative h-11 w-11 shrink-0 overflow-hidden rounded-[var(--radius-md)]"
-              style={{
-                background: 'linear-gradient(145deg, #0D0D0A 0%, #1A1A10 100%)',
-                border: '1px solid rgba(212,175,55,0.40)',
-                boxShadow: '0 0 14px rgba(212,175,55,0.18)',
-              }}
-            >
-              <svg viewBox="0 0 44 44" className="absolute inset-0 h-full w-full" fill="none">
-                <path d="M22 4L7 10.5v10.8c0 9.6 6.1 18.6 15 21.7 8.9-3.1 15-12.1 15-21.7V10.5L22 4z"
-                  stroke="#D4AF37" strokeWidth="1.5" strokeLinejoin="round" fill="rgba(212,175,55,0.07)" />
-                <path d="M22 8L10 13.5v8.8c0 7.6 4.8 14.7 12 17.2 7.2-2.5 12-9.6 12-17.2V13.5L22 8z"
-                  stroke="rgba(212,175,55,0.30)" strokeWidth="0.8" strokeLinejoin="round" fill="none" />
-                <rect x="15" y="16" width="14" height="11" rx="2" stroke="#D4AF37" strokeWidth="1.3" fill="rgba(212,175,55,0.10)" />
-                <path d="M21.5 18.5 C18.5 18.5 16.5 19.8 16.5 21.5 C16.5 23.2 18.5 24.5 21.5 24.5"
-                  stroke="#D4AF37" strokeWidth="1.4" strokeLinecap="round" fill="none" />
-              </svg>
-              <span className="absolute bottom-0.5 inset-x-0 text-center font-black tracking-widest" style={{ color: '#D4AF37', fontSize: '6px' }}>CS</span>
-            </div>
+            <img src="/logo.png" alt="Card Safe HQ" style={{ width: 44, height: 44, borderRadius: 10, objectFit: 'cover', flexShrink: 0 }} />
             <div>
               <h1 className="text-lg font-bold tracking-wide">Card Safe HQ</h1>
               <p className="text-cv-muted tracking-widest uppercase" style={{ fontSize: '9px', letterSpacing: '0.12em' }}>
