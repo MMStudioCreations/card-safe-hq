@@ -739,6 +739,7 @@ function UnifiedGridItem({
   item,
   onSelectCard,
   onSelectSealed,
+  onSelectSports,
   addedIds,
   onQuickAdd,
   addToPortfolioMode,
@@ -746,13 +747,71 @@ function UnifiedGridItem({
   item: UnifiedResult
   onSelectCard: (c: CardResult) => void
   onSelectSealed: (s: SealedResult) => void
+  onSelectSports: (s: SportsCardResult) => void
   addedIds: Set<string>
   onQuickAdd: (item: UnifiedResult) => void
   addToPortfolioMode: boolean
 }) {
   const [imgError, setImgError] = useState(false)
-  const key = item._type === 'card' ? item.ptcg_id : String(item.id)
+  const key = item._type === 'card' ? item.ptcg_id : item._type === 'sports' ? `sports-${item.id}` : String(item.id)
   const isAdded = addedIds.has(key)
+
+  if (item._type === 'sports') {
+    return (
+      <div
+        className="relative group"
+        style={{
+          background: 'var(--glass-bg)',
+          border: isAdded ? '1.5px solid rgba(78,203,160,0.5)' : '1px solid var(--glass-border)',
+          borderRadius: 14,
+          overflow: 'hidden',
+          transition: 'transform 0.15s, border-color 0.15s',
+          cursor: 'pointer',
+        }}
+        onClick={() => onSelectSports(item)}
+        onMouseEnter={e => { (e.currentTarget as HTMLElement).style.transform = 'translateY(-2px)' }}
+        onMouseLeave={e => { (e.currentTarget as HTMLElement).style.transform = 'translateY(0)' }}
+      >
+        <div style={{ aspectRatio: '2.5/3.5', background: 'rgba(0,0,0,0.3)', overflow: 'hidden', position: 'relative' }}>
+          {item.image_small && !imgError ? (
+            <img src={item.image_small} alt={item.card_name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} loading="lazy" onError={() => setImgError(true)} />
+          ) : (
+            <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 28 }}>🏆</div>
+          )}
+          <div style={{ position: 'absolute', top: 5, left: 5, background: 'rgba(212,175,55,0.2)', borderRadius: 6, padding: '1px 5px', fontSize: 9, fontWeight: 700, color: '#D4AF37', letterSpacing: 0.5 }}>SPORTS</div>
+          <button
+            type="button"
+            onClick={e => { e.stopPropagation(); onQuickAdd(item) }}
+            className="absolute bottom-1.5 right-1.5 h-7 w-7 rounded-full flex items-center justify-center transition-all"
+            style={{
+              background: isAdded ? 'rgba(78,203,160,0.9)' : 'rgba(212,175,55,0.9)',
+              color: '#000',
+              boxShadow: '0 2px 8px rgba(0,0,0,0.4)',
+              opacity: 1,
+            }}
+          >
+            {isAdded ? <Check size={13} /> : <Plus size={13} />}
+          </button>
+        </div>
+        <div style={{ padding: '8px 10px' }}>
+          <p style={{ margin: 0, fontWeight: 700, fontSize: 12, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            {item.card_name}
+          </p>
+          <p style={{ margin: '2px 0 0', fontSize: 11, color: 'var(--text-secondary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            {item.set_name || item.sport}
+          </p>
+          {item.rarity && (
+            <span style={{ display: 'inline-block', marginTop: 4, fontSize: 10, padding: '1px 6px', borderRadius: 20, background: 'rgba(212,175,55,0.15)', color: '#D4AF37', fontWeight: 500 }}>
+              {item.rarity}
+            </span>
+          )}
+          <p style={{ margin: '4px 0 0', fontSize: 12, fontWeight: 700, color: 'var(--primary)' }}>
+            {item.market_price_cents ? `$${(item.market_price_cents / 100).toFixed(2)}` : '—'}
+          </p>
+        </div>
+      </div>
+    )
+  }
 
   if (item._type === 'card') {
     const rarityStyle = getRarityColor(item.rarity)
@@ -1276,9 +1335,9 @@ export default function SearchPage() {
               <UnifiedGridItem
                 key={item._type === 'card' ? `card-${item.ptcg_id}` : item._type === 'sports' ? `sports-${item.id}` : `sealed-${item.id}`}
                 item={item}
-                onSelectCard={setSelectedCard}
-                onSelectSealed={setSelectedSealed}
-                onSelectSports={setSelectedSports}
+                onSelectCard={c => { window.scrollTo({ top: 0, behavior: 'smooth' }); setSelectedCard(c) }}
+                onSelectSealed={s => { window.scrollTo({ top: 0, behavior: 'smooth' }); setSelectedSealed(s) }}
+                onSelectSports={s => { window.scrollTo({ top: 0, behavior: 'smooth' }); setSelectedSports(s) }}
                 addedIds={addedIds}
                 onQuickAdd={handleQuickAdd}
                 addToPortfolioMode={addToPortfolioMode}
