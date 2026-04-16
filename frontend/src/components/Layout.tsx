@@ -28,6 +28,7 @@ const BOTTOM_TABS_AUTH = [
   { to: '/shop',      label: 'Shop',      Icon: ShoppingBag },
   { to: '/deck',      label: 'Decks',     Icon: Layers },
   { to: '/trades',    label: 'Trades',    Icon: ArrowLeftRight },
+  { to: '/portfolio', label: 'Portfolio', Icon: BarChart2 },
   { to: '/account',   label: 'Account',   Icon: UserCircle },
 ]
 const BOTTOM_TABS_GUEST = [
