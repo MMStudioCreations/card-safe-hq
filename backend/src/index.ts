@@ -60,6 +60,7 @@ import {
 import { handleUpdateProfile, handleChangePassword } from './routes/profile';
 import { handleSealedSync, searchSealedLive } from './routes/sealed-sync';
 import { handleShopCheckout } from './routes/shop';
+import { handleShopWebhook } from './routes/shop-webhook';
 
 function parseId(pathname: string): number | null {
   const id = Number(pathname.split('/').pop());
@@ -606,13 +607,15 @@ export default {
         if (!id) return withCors(badRequest('Invalid notification id'), request, env);
         if (method === 'PATCH') return withCors(await markNotificationRead(env, request, user, id), request, env);
       }
-
       // ── Shop checkout (one-time Stripe purchase) ─────────────────────────────────
       if (method === 'POST' && pathname === '/api/shop/checkout') {
         return withCors(await handleShopCheckout(env, request), request, env);
       }
-
-      // ── Billing routes ────────────────────────────────────────────────────────────────
+      // Stripe webhook for shop pre-orders (no CORS needed — called by Stripe servers)
+      if (method === 'POST' && pathname === '/api/shop/webhook') {
+        return handleShopWebhook(env, request);
+      }
+      // ── Billing routes ────────────────────────────────────────────────────────────
       // Stripe webhook — no auth, raw body needed
       if (method === 'POST' && pathname === '/api/billing/webhook') {
         return await handleStripeWebhook(env, request);

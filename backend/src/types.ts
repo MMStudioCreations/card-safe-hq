@@ -19,6 +19,7 @@ export interface Env {
   STRIPE_SECRET_KEY?: string;
   STRIPE_PUBLISHABLE_KEY?: string;
   STRIPE_WEBHOOK_SECRET?: string;
+  SHOP_OWNER_EMAIL?: string;
   STRIPE_PRICE_ID_MONTHLY?: string;
   STRIPE_PRICE_ID_YEARLY?: string;
 }
