@@ -14,6 +14,10 @@ const sportMap: Record<string, string> = {
 
 export default function CardTile({ collectionItem }: Props) {
   const navigate = useNavigate()
+  const handleOpenCard = () => {
+    window.scrollTo({ top: 0, behavior: 'auto' })
+    navigate(`/card/${collectionItem.id}`)
+  }
 
   const displayName = collectionItem.card_name
     || collectionItem.player_name
@@ -87,7 +91,7 @@ export default function CardTile({ collectionItem }: Props) {
   )
 
   return (
-    <button className="glass text-left p-3 w-full" onClick={() => navigate(`/card/${collectionItem.id}`)} type="button">
+    <button className="glass text-left p-3 w-full" onClick={handleOpenCard} type="button">
       <div className="w-full rounded-[var(--radius-md)] overflow-hidden bg-zinc-900" style={{ aspectRatio: '2.5/3.5' }}>
         {imageSection}
       </div>
