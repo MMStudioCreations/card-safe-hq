@@ -347,7 +347,7 @@ export default function AccountPage() {
                     </span>
                   </div>
                   <span className="text-sm font-bold" style={{ color: isOwner ? '#D4AF37' : isPro ? (plan === 'yearly' ? '#D4AF37' : '#D4AF37') : 'var(--cv-muted)' }}>
-                    {isOwner ? 'Complimentary' : isPro ? (plan === 'yearly' ? '$100/yr' : '$10/mo') : '$0'}
+                    {isOwner ? 'Complimentary' : isPro ? (plan === 'yearly' ? '$45/yr' : '$5/mo') : '$0'}
                   </span>
                 </div>
 

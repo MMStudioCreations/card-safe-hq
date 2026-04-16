@@ -21,6 +21,7 @@ import VerifyEmailPage from './pages/VerifyEmailPage'
 import SearchPage from './pages/SearchPage'
 import AccountPage from './pages/AccountPage'
 import ShopPage from './pages/ShopPage'
+import BillingPage from './pages/BillingPage'
 
 // Requires login
 function Protected({ children }: { children: React.ReactNode }) {
@@ -56,7 +57,7 @@ export default function App() {
       <Route path="/shop"        element={<Public><ShopPage /></Public>} />
       <Route path="/deck"        element={<Public><DeckBuilderPage /></Public>} />
       <Route path="/deck-builder" element={<Public><DeckBuilderPage /></Public>} />
-      <Route path="/membership"  element={<Navigate to="/shop" replace />} />
+      <Route path="/membership"  element={<Public><BillingPage /></Public>} />
 
       {/* Protected pages — require login */}
       {/* Root → Search (public, no login wall) */}
@@ -77,8 +78,8 @@ export default function App() {
       <Route path="/trades/new" element={<Protected><NewTradePage /></Protected>} />
       <Route path="/trades/:id" element={<Protected><TradeDetailPage /></Protected>} />
 
-      {/* Billing redirect → shop */}
-      <Route path="/billing" element={<Navigate to="/shop" replace />} />
+      {/* Billing — subscription management (public so guests can subscribe) */}
+      <Route path="/billing" element={<Public><BillingPage /></Public>} />
 
       <Route path="*" element={<Navigate to="/search" replace />} />
       {/* /home alias */}

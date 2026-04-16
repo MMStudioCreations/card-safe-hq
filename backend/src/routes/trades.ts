@@ -17,6 +17,7 @@ import type { Env, User } from '../types';
 import { queryAll, queryOne, run } from '../lib/db';
 import { badRequest, notFound, ok, serverError } from '../lib/json';
 import { isUserPro } from './billing';
+import { sendTradeNotificationEmail } from '../lib/email';
 
 // Free tier: max 5 active (pending) trades at a time
 const FREE_TRADE_LIMIT = 5;
@@ -153,7 +154,7 @@ export async function createTrade(env: Env, request: Request, user: User): Promi
     await run(env.DB, `INSERT INTO trade_items (trade_id, collection_item_id, direction) VALUES (?, ?, 'request')`, [tradeId, itemId]);
   }
 
-  // Notify recipient
+  // Notify recipient (in-app + email)
   const initiatorName = user.username ?? user.email;
   await createNotification(
     env, recipient_id, 'trade_offer',
@@ -161,6 +162,12 @@ export async function createTrade(env: Env, request: Request, user: User): Promi
     message ?? `${initiatorName} wants to trade ${offer_item_ids.length} item(s) for ${request_item_ids.length} of yours.`,
     tradeId,
   );
+  // Fire trade email to recipient (non-blocking)
+  sendTradeNotificationEmail(env, recipient.email, {
+    type: 'new_offer',
+    tradeId,
+    otherUsername: initiatorName,
+  }).catch(err => console.error('[trades] Failed to send new_offer email', err));
 
   return ok({ trade_id: tradeId, status: 'pending' }, 201);
 }
@@ -270,6 +277,24 @@ export async function updateTradeStatus(env: Env, request: Request, user: User, 
     `Trade updated`;
 
   await createNotification(env, notifyUserId, notifType, notifTitle, null, tradeId);
+
+  // Send email notification to the other party
+  const otherUserId = isInitiator ? trade.recipient_id : trade.initiator_id;
+  const otherUser = await queryOne<{ email: string; username: string | null }>(
+    env.DB, 'SELECT email, username FROM users WHERE id = ?', [otherUserId],
+  );
+  if (otherUser) {
+    const emailType = status === 'accepted' ? 'accepted' as const :
+                      status === 'declined' ? 'declined' as const :
+                      status === 'completed' ? 'completed' as const : null;
+    if (emailType) {
+      sendTradeNotificationEmail(env, otherUser.email, {
+        type: emailType,
+        tradeId,
+        otherUsername: actorName,
+      }).catch(err => console.error('[trades] Failed to send', emailType, 'email', err));
+    }
+  }
 
   return ok({ trade_id: tradeId, status });
 }

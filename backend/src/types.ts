@@ -9,9 +9,9 @@ export interface Env {
   POKEMON_TCG_API_KEY?: string;
   ADMIN_EMAIL?: string;
   // Email
-  RESEND_API_KEY?: string; // legacy
-  MAILEROO_API_KEY?: string;
-  MAIL_FROM?: string;
+  RESEND_API_KEY?: string;       // Resend.com API key — primary email provider
+  MAILEROO_API_KEY?: string;     // legacy — no longer used
+  MAIL_FROM?: string;            // e.g. "Card Safe HQ <noreply@cardsafehq.com>"
   APP_URL?: string; // legacy
   APP_BASE_URL?: string;
   ENFORCE_EMAIL_VERIFICATION?: string;

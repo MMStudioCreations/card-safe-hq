@@ -12,7 +12,7 @@ import type { Env } from '../types';
 import { queryOne, run } from '../lib/db';
 import { hashPassword } from '../lib/auth-utils';
 import { sendVerificationEmail, sendPasswordResetEmail } from '../lib/email';
-import { isEmailConfigured } from '../lib/config';
+
 import { badRequest, ok } from '../lib/json';
 import { asEmail, parseJsonBody } from '../lib/validation';
 import { getCurrentUser } from '../lib/auth';
@@ -82,7 +82,7 @@ export async function handleResendVerification(env: Env, request: Request): Prom
   );
 
   const sent = await sendVerificationEmail(env, userRow.email, token);
-  if (!sent.ok && !isEmailConfigured(env)) {
+  if (!sent.ok && !env.RESEND_API_KEY) {
     return ok({ sent: false, message: 'Email delivery is temporarily unavailable.' });
   }
   return ok({ sent: sent.ok });
@@ -127,7 +127,7 @@ export async function handleForgotPassword(env: Env, request: Request): Promise<
     }
   }
 
-  if (!isEmailConfigured(env)) {
+  if (!env.RESEND_API_KEY) {
     return ok({ sent: false, message: 'Email delivery is temporarily unavailable.' });
   }
 

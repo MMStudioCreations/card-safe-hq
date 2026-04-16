@@ -28,7 +28,7 @@ const BOTTOM_TABS_AUTH = [
   { to: '/shop',      label: 'Shop',      Icon: ShoppingBag },
   { to: '/deck',      label: 'Decks',     Icon: Layers },
   { to: '/trades',    label: 'Trades',    Icon: ArrowLeftRight },
-  { to: '/portfolio', label: 'Portfolio', Icon: BarChart2 },
+  { to: '/account',   label: 'Account',   Icon: UserCircle },
 ]
 const BOTTOM_TABS_GUEST = [
   { to: '/search',    label: 'Search',    Icon: Search },
@@ -45,6 +45,7 @@ const DESKTOP_AUTH = [
   { to: '/deck',      label: 'Deck Builder' },
   { to: '/trades',    label: 'Trades' },
   { to: '/portfolio', label: 'Portfolio' },
+  { to: '/account',   label: 'Account' },
 ]
 const DESKTOP_GUEST = [
   { to: '/search',    label: 'Search' },
@@ -217,14 +218,16 @@ export default function Layout({ children }: Props) {
 
             {/* Auth controls — desktop only */}
             {!isGuest ? (
-              <button
-                className="hidden sm:flex items-center gap-1.5 text-xs text-cv-muted hover:text-white transition-colors"
-                onClick={handleLogout}
-                type="button"
-              >
-                <LogOut className="h-3.5 w-3.5" />
-                Logout
-              </button>
+              <div className="hidden sm:flex items-center gap-2">
+                <button
+                  className="flex items-center gap-1.5 text-xs text-cv-muted hover:text-white transition-colors"
+                  onClick={handleLogout}
+                  type="button"
+                >
+                  <LogOut className="h-3.5 w-3.5" />
+                  Logout
+                </button>
+              </div>
             ) : (
               <div className="hidden sm:flex items-center gap-2">
                 <Link to="/login" className="text-sm text-cv-muted hover:text-white transition-colors">Sign In</Link>

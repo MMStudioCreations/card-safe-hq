@@ -7,7 +7,7 @@
  * Environment variables required:
  *   STRIPE_SECRET_KEY        — sk_live_... or sk_test_...
  *   STRIPE_WEBHOOK_SECRET    — whsec_... (from Stripe dashboard webhook settings)
- *   MAILEROO_API_KEY         — for sending emails
+ *   RESEND_API_KEY            — for sending emails (Resend.com)
  *   MAIL_FROM                — e.g. "Card Safe HQ <orders@cardsafehq.com>"
  *   SHOP_OWNER_EMAIL         — your email address to receive order notifications
  *   APP_URL / APP_BASE_URL   — https://cardsafehq.com

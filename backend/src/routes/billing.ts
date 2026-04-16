@@ -103,9 +103,30 @@ async function getOrCreateCustomer(env: Env, userId: number, email: string): Pro
   return customer.id;
 }
 
-// ── GET /api/billing/status ───────────────────────────────────────────────────
+// ── Pro status helper (used by collection.ts and trades.ts to gate features) ──────
 
 const OWNER_EMAIL = 'michaelamarino16@gmail.com';
+
+/**
+ * Returns true if the user has an active Pro subscription.
+ * The app owner is always considered Pro regardless of payment.
+ * Import this in collection.ts and trades.ts to enforce free-tier limits.
+ */
+export async function isUserPro(env: Env, userId: number, userEmail: string): Promise<boolean> {
+  if (userEmail === OWNER_EMAIL) return true;
+  const sub = await queryOne<{ plan: string; status: string }>(
+    env.DB,
+    `SELECT plan, status FROM subscriptions WHERE user_id = ?`,
+    [userId],
+  );
+  if (!sub) return false;
+  return (
+    (sub.plan === 'monthly' || sub.plan === 'yearly') &&
+    (sub.status === 'active' || sub.status === 'trialing')
+  );
+}
+
+// ── GET /api/billing/status ───────────────────────────────────────────────────
 
 export async function handleBillingStatus(env: Env, request: Request): Promise<Response> {
   const user = await requireAuth(env, request);
