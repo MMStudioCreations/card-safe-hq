@@ -197,6 +197,16 @@ export type SealedProduct = {
   created_at: string
 }
 
+export type ApiPriceResponse = {
+  card_name: string;
+  set_name: string | null;
+  source: 'tcgfast' | 'pricecharting';
+  price_nm: number | null;
+  price_psa10: number | null;
+  cached: boolean;
+  fetched_at: string;
+}
+
 export type Notification = {
   id: number
   type: string
@@ -431,6 +441,15 @@ export const api = {
       ptcg_legalities?: Record<string, string>;
       tcgplayer_url?: string;
     }>(`/api/pricing/${cardId}`),
+
+  getPriceByCardId: (cardId: string) => {
+    const colonIdx = cardId.indexOf(':')
+    const source = colonIdx >= 0 ? cardId.slice(0, colonIdx) : cardId
+    const identifier = colonIdx >= 0 ? cardId.slice(colonIdx + 1) : ''
+    return http.get<never, ApiPriceResponse>(
+      `/api/prices/${source}:${encodeURIComponent(identifier)}`,
+    )
+  },
 
   getPokemonSets: (all?: boolean) =>
     http.get<never, {
