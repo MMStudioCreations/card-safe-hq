@@ -62,6 +62,8 @@ import { handleSealedSync, searchSealedLive } from './routes/sealed-sync';
 import { handleShopCheckout } from './routes/shop';
 import { handleSportsSearch, handleSportsSoldSearch } from './routes/sports';
 import { handleShopWebhook } from './routes/shop-webhook';
+import { getPriceByCardId } from './workers/prices';
+import { runPriceSync } from './workers/price-sync';
 
 function parseId(pathname: string): number | null {
   const id = Number(pathname.split('/').pop());
@@ -659,6 +661,11 @@ export default {
         return withCors(ok({ products: rows.results ?? [], total: rows.results?.length ?? 0 }), request, env)
       }
 
+      // On-demand price lookup (TCGFast or PriceCharting via cache)
+      if (method === 'GET' && pathname.startsWith('/api/prices/')) {
+        return withCors(await getPriceByCardId(env, request), request, env);
+      }
+
       // Refresh price for a sealed product or card from TCGCSV
       if (method === 'POST' && pathname === '/api/prices/refresh') {
         const body = await request.json() as { tcgplayer_product_id: number; type: 'sealed' | 'card' }
@@ -747,9 +754,9 @@ export default {
   },
 
   async scheduled(_event: ScheduledEvent, env: Env): Promise<void> {
-    // Clean up expired rate limit entries daily
     await env.DB.prepare(
       "DELETE FROM rate_limits WHERE expires_at < datetime('now')"
     ).run();
+    await runPriceSync(env);
   },
 };

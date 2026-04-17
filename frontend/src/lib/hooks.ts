@@ -69,6 +69,16 @@ export function useCompsHistory(cardId: number | undefined) {
   })
 }
 
+export function usePriceByCardId(cardId?: string) {
+  return useQuery({
+    queryKey: ['api-prices', cardId],
+    queryFn: () => api.getPriceByCardId(cardId!),
+    enabled: Boolean(cardId),
+    staleTime: 1000 * 60 * 60,
+    retry: false,
+  })
+}
+
 export function useBillingStatus() {
   return useQuery({
     queryKey: ['billing-status'],

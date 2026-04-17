@@ -7,7 +7,7 @@ import {
   ResponsiveContainer, ReferenceLine,
 } from 'recharts'
 import { api } from '../lib/api'
-import { queryKeys, useCollectionItem, useComps, useGrade, useCompsHistory } from '../lib/hooks'
+import { queryKeys, useCollectionItem, useComps, useGrade, useCompsHistory, usePriceByCardId } from '../lib/hooks'
 import CardCrop from '../components/CardCrop'
 
 // ── Recharts Price Chart ──────────────────────────────────────────────────────
@@ -185,6 +185,15 @@ const PriceChart = ({
   )
 }
 
+// ── Helpers ───────────────────────────────────────────────────────────────────
+
+function hoursAgo(isoString: string): string {
+  const ms = Date.now() - new Date(isoString).getTime()
+  const h = Math.floor(ms / (1000 * 60 * 60))
+  if (h < 1) return 'less than 1 hour ago'
+  return `${h} hour${h === 1 ? '' : 's'} ago`
+}
+
 // ── Main Page ─────────────────────────────────────────────────────────────────
 
 export default function CardDetailPage() {
@@ -193,7 +202,26 @@ export default function CardDetailPage() {
   const navigate = useNavigate()
   const { data: item, isLoading } = useCollectionItem(id)
   const cardId = item?.card_id ?? undefined
-  const { data: comps } = useComps(cardId)
+
+  // Build cardId for the new /api/prices endpoint
+  const priceApiCardId = (() => {
+    if (!item) return undefined
+    const game = (item.game ?? '').toLowerCase()
+    const isTcg = game === 'pokemon' || game.includes('pokemon')
+    const identifier = isTcg
+      ? (item.external_ref ?? item.card_number ?? item.card_name ?? '')
+      : (item.card_name ?? '')
+    if (!identifier) return undefined
+    return isTcg ? `tcgfast:${identifier}` : `pricecharting:${identifier}`
+  })()
+
+  const { data: apiPrices, error: apiPricesError } = usePriceByCardId(priceApiCardId)
+
+  // eBay comps are only auto-fetched as fallback when the price API returns 404/502
+  const priceApiFailed =
+    apiPricesError != null &&
+    ((apiPricesError as any).httpStatus === 404 || (apiPricesError as any).httpStatus === 502)
+  const { data: comps } = useComps(priceApiFailed ? cardId : undefined)
   const { data: historyData } = useCompsHistory(cardId)
   const { data: grade, refetch: refetchGrade } = useGrade(item?.id)
   const [showFront, setShowFront] = useState(true)
@@ -571,6 +599,49 @@ export default function CardDetailPage() {
         {/* ── Market Prices ── */}
         <article className="glass p-4">
           <h2 className="mb-3 text-lg font-semibold">Market Prices</h2>
+
+          {/* New price block — TCGFast / PriceCharting via /api/prices */}
+          {priceApiCardId && (
+            <div className="mb-4 rounded-[var(--radius-md)] border border-cv-border bg-cv-surface p-3">
+              {apiPrices ? (
+                <>
+                  <div className="flex flex-wrap gap-4">
+                    <div>
+                      <p className="text-xs text-cv-muted">Market Price (NM)</p>
+                      <p className="text-xl font-bold">
+                        {apiPrices.price_nm != null
+                          ? `$${apiPrices.price_nm.toFixed(2)}`
+                          : '—'}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-cv-muted">PSA 10 Est.</p>
+                      <p className="text-xl font-bold">
+                        {apiPrices.price_psa10 != null
+                          ? `$${apiPrices.price_psa10.toFixed(2)}`
+                          : '—'}
+                      </p>
+                    </div>
+                  </div>
+                  <p className="mt-1 text-xs text-cv-muted">
+                    {apiPrices.source === 'tcgfast'
+                      ? 'Data via TCGPlayer + eBay'
+                      : 'Data via PriceCharting'}
+                    {' · '}Updated: {hoursAgo(apiPrices.fetched_at)}
+                    {apiPrices.cached && ' · cached'}
+                  </p>
+                </>
+              ) : apiPricesError ? (
+                <p className="text-xs text-cv-muted">
+                  Price data unavailable
+                  {priceApiFailed ? ' — showing eBay comps as fallback' : ''}
+                </p>
+              ) : (
+                <p className="text-xs text-cv-muted">Loading price data…</p>
+              )}
+            </div>
+          )}
+
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
             {/* TCGPlayer */}
             <div className="rounded-[var(--radius-md)] bg-cv-surface p-3">

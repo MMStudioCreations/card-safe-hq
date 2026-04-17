@@ -15,6 +15,11 @@ export interface Env {
   APP_URL?: string; // legacy
   APP_BASE_URL?: string;
   ENFORCE_EMAIL_VERIFICATION?: string;
+  // Price APIs
+  TCGFAST_API_KEY?: string;
+  PRICECHARTING_API_KEY?: string;
+  TCGFAST_BASE_URL?: string;
+  PRICECHARTING_BASE_URL?: string;
   // Payments (Stripe)
   STRIPE_SECRET_KEY?: string;
   STRIPE_PUBLISHABLE_KEY?: string;
