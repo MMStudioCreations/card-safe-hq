@@ -1,3 +1,5 @@
+import type { Env } from '../types';
+
 export interface PriceChartingData {
   loose_price_cents: number | null;
   graded_price_cents: number | null;
@@ -6,7 +8,69 @@ export interface PriceChartingData {
   url: string | null;
 }
 
+type PriceChartingSearchRow = {
+  id: string | number;
+  'product-name'?: string;
+  'console-name'?: string;
+};
+
+type PriceChartingDetail = {
+  status?: string;
+  id?: string | number;
+  'product-name'?: string;
+  'console-name'?: string;
+  'loose-price'?: number;
+  'graded-price'?: number;
+  'manual-only-price'?: number; // PSA 10 for cards
+  'cib-price'?: number;
+  'new-price'?: number;
+  'box-only-price'?: number;    // PSA 9.5 for cards
+  'release-date'?: string;
+};
+
+function normalizeText(value: string | null | undefined): string {
+  return (value ?? '')
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function scoreTextMatch(candidate: string, query: string): number {
+  const c = normalizeText(candidate);
+  const q = normalizeText(query);
+  if (!c || !q) return 0;
+  if (c === q) return 120;
+  if (c.includes(q)) return 90;
+
+  const cTokens = new Set(c.split(' ').filter(Boolean));
+  const qTokens = q.split(' ').filter(Boolean);
+  if (qTokens.length === 0) return 0;
+
+  let overlap = 0;
+  for (const token of qTokens) {
+    if (cTokens.has(token)) overlap += 1;
+  }
+  return Math.round((overlap / qTokens.length) * 80);
+}
+
+/**
+ * Fetch pricing data for a single card/product from the official PriceCharting API.
+ *
+ * Authentication is performed via the `PRICECHARTING_API_KEY` environment secret.
+ * The function first searches `/api/products` for the best matching product, then
+ * fetches full pricing from `/api/product`.
+ *
+ * Price fields returned by the API are integers representing US cents (pennies).
+ * For trading cards the field mapping is:
+ *   loose-price       → ungraded market price
+ *   graded-price      → PSA 9 equivalent
+ *   manual-only-price → PSA 10 equivalent
+ *
+ * @see https://www.pricecharting.com/api-documentation#prices-api
+ */
 export async function fetchPriceChartingData(
+  env: Env,
   cardName: string,
   setName: string | null,
   cardNumber: string | null,
@@ -19,85 +83,104 @@ export async function fetchPriceChartingData(
     url: null,
   };
 
+  const apiKey = env.PRICECHARTING_API_KEY;
+  if (!apiKey) {
+    console.warn('[pricecharting] PRICECHARTING_API_KEY is not set — skipping lookup');
+    return empty;
+  }
+
+  const baseUrl = (env.PRICECHARTING_BASE_URL ?? 'https://www.pricecharting.com/api').replace(/\/$/, '');
+
   try {
-    // Search PriceCharting
-    const query = [cardName, setName, cardNumber]
-      .filter(Boolean)
-      .join(' ');
+    // ── Step 1: Search for the product ──────────────────────────────────────
+    const query = [cardName, setName, cardNumber].filter(Boolean).join(' ');
 
-    const searchUrl = `https://www.pricecharting.com/search-products?q=${encodeURIComponent(query)}&type=prices`;
+    const searchUrl = `${baseUrl}/products?t=${encodeURIComponent(apiKey)}&q=${encodeURIComponent(query)}`;
 
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 8_000);
+    const searchController = new AbortController();
+    const searchTimeout = setTimeout(() => searchController.abort(), 8_000);
 
-    let html: string;
+    let searchRes: Response;
     try {
-      const res = await fetch(searchUrl, {
-        headers: {
-          'User-Agent': 'Mozilla/5.0 (compatible; CardSafeHQBot/1.0)',
-          'Accept': 'text/html',
-        },
-        signal: controller.signal,
-      });
-      if (!res.ok) return empty;
-      html = await res.text();
+      searchRes = await fetch(searchUrl, { signal: searchController.signal });
     } finally {
-      clearTimeout(timeoutId);
+      clearTimeout(searchTimeout);
     }
 
-    // Find first result link
-    const linkMatch = html.match(/href="(\/game\/[^"]+)"/);
-    if (!linkMatch) return empty;
+    if (!searchRes.ok) {
+      console.error(`[pricecharting] search HTTP ${searchRes.status} for query: ${query}`);
+      return empty;
+    }
 
-    const productUrl = `https://www.pricecharting.com${linkMatch[1]}`;
+    const searchJson = await searchRes.json() as { status?: string; products?: PriceChartingSearchRow[] };
 
-    // Fetch product page
-    const controller2 = new AbortController();
-    const timeoutId2 = setTimeout(() => controller2.abort(), 8_000);
+    if (searchJson.status === 'error' || !Array.isArray(searchJson.products) || searchJson.products.length === 0) {
+      console.warn('[pricecharting] no products found for query:', query);
+      return empty;
+    }
 
-    let productHtml: string;
+    // Pick the best-matching product by name score
+    const bestProduct = searchJson.products
+      .map((p) => ({ p, score: scoreTextMatch(p['product-name'] ?? '', query) }))
+      .sort((a, b) => b.score - a.score)[0]?.p ?? searchJson.products[0];
+
+    const productId = bestProduct.id;
+
+    // ── Step 2: Fetch full product details ──────────────────────────────────
+    const detailUrl = `${baseUrl}/product?t=${encodeURIComponent(apiKey)}&id=${productId}`;
+
+    const detailController = new AbortController();
+    const detailTimeout = setTimeout(() => detailController.abort(), 8_000);
+
+    let detailRes: Response;
     try {
-      const res2 = await fetch(productUrl, {
-        headers: {
-          'User-Agent': 'Mozilla/5.0 (compatible; CardSafeHQBot/1.0)',
-          'Accept': 'text/html',
-        },
-        signal: controller2.signal,
-      });
-      if (!res2.ok) return empty;
-      productHtml = await res2.text();
+      detailRes = await fetch(detailUrl, { signal: detailController.signal });
     } finally {
-      clearTimeout(timeoutId2);
+      clearTimeout(detailTimeout);
     }
 
-    // Extract prices using regex patterns for PriceCharting's price spans
-    function extractPrice(html: string, label: string): number | null {
-      const patterns = [
-        new RegExp(`${label}[^$]*\\$([\\d,]+\\.?\\d*)`, 'i'),
-        new RegExp(`id="${label}"[^>]*>[^$]*\\$([\\d,]+\\.?\\d*)`, 'i'),
-      ];
-      for (const pattern of patterns) {
-        const match = html.match(pattern);
-        if (match) {
-          const num = parseFloat(match[1].replace(',', ''));
-          if (isFinite(num) && num > 0) return Math.round(num * 100);
-        }
-      }
-      return null;
+    if (!detailRes.ok) {
+      console.error(`[pricecharting] detail HTTP ${detailRes.status} for id: ${productId}`);
+      return empty;
     }
+
+    const detail = await detailRes.json() as PriceChartingDetail;
+
+    if (detail.status === 'error') {
+      console.warn('[pricecharting] API error for product id:', productId);
+      return empty;
+    }
+
+    // ── Step 3: Map API fields to internal price shape ──────────────────────
+    // All prices from the API are already in pennies (integer cents).
+    //
+    // Trading card field mapping (per PriceCharting docs):
+    //   loose-price       = ungraded
+    //   graded-price      = PSA 9 (graded-9 equivalent)
+    //   manual-only-price = PSA 10 (graded-10 equivalent)
+    const loose   = typeof detail['loose-price']       === 'number' ? detail['loose-price']       : null;
+    const graded  = typeof detail['graded-price']      === 'number' ? detail['graded-price']      : null;
+    const psa10   = typeof detail['manual-only-price'] === 'number' ? detail['manual-only-price'] : graded;
+
+    const productUrl = `https://www.pricecharting.com/game/${productId}`;
+
+    console.log('[pricecharting] fetched prices', {
+      product: detail['product-name'],
+      console: detail['console-name'],
+      loose,
+      graded,
+      psa10,
+    });
 
     return {
-      loose_price_cents: extractPrice(productHtml, 'used_price') ??
-                         extractPrice(productHtml, 'loose'),
-      graded_price_cents: extractPrice(productHtml, 'graded'),
-      psa_10_price_cents: extractPrice(productHtml, 'psa-10') ??
-                          extractPrice(productHtml, 'grade-10'),
-      psa_9_price_cents: extractPrice(productHtml, 'psa-9') ??
-                         extractPrice(productHtml, 'grade-9'),
+      loose_price_cents:  loose,
+      graded_price_cents: graded,
+      psa_9_price_cents:  graded,
+      psa_10_price_cents: psa10,
       url: productUrl,
     };
   } catch (err) {
-    console.error('fetchPriceChartingData failed:', err);
+    console.error('[pricecharting] fetchPriceChartingData failed:', err);
     return empty;
   }
 }

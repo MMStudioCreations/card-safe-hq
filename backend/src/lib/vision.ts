@@ -360,11 +360,13 @@ async function lookupPTCG(
 // ─── PriceCharting Fallback ───────────────────────────────────────────────────
 
 async function lookupPriceCharting(
+  env: Env,
   gpt: GPTCardResult,
   setOverride?: string | null,
 ): Promise<Partial<CardIdentification>> {
   const setName = setOverride ?? gpt.set_name;
   const data = await fetchPriceChartingData(
+    env,
     gpt.card_name ?? gpt.player_name ?? '',
     setName,
     gpt.card_number,
@@ -413,7 +415,7 @@ export async function identifyCard(
     // Step 3: Pricing — TCGPlayer from PTCG, or PriceCharting fallback
     let pricingData: Partial<CardIdentification> = {};
     if (!ptcgData.price_market_cents) {
-      pricingData = await lookupPriceCharting(gpt, setOverride);
+      pricingData = await lookupPriceCharting(env, gpt, setOverride);
     }
 
     // Step 4: Resolve set name — priority: user override > PTCG confirmed > GPT extracted
@@ -489,7 +491,7 @@ export async function correctCardSet(
   }
 
   // PTCG didn't find it — try PriceCharting with the new set
-  const pcData = await fetchPriceChartingData(cardName, newSetName, cardNumber);
+  const pcData = await fetchPriceChartingData(env, cardName, newSetName, cardNumber);
   return {
     ptcg_confirmed: false,
     set_name_override: newSetName,
