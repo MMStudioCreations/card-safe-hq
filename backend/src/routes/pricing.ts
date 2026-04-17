@@ -117,7 +117,7 @@ export async function getCardPricing(env: Env, cardId: number): Promise<Response
   // Use the resolved set_name if available for a tighter match
   try {
     const resolvedSetName = (results.ptcg_set_name as string | undefined) ?? card.set_name ?? null;
-    const pcData = await fetchPriceChartingData(name, resolvedSetName, card.card_number ?? null);
+    const pcData = await fetchPriceChartingData(env, name, resolvedSetName, card.card_number ?? null);
     results.pricecharting = pcData;
   } catch (err) {
     console.error('PriceCharting pricing failed:', err);
