@@ -203,19 +203,79 @@ export default function CardDetailPage() {
   const { data: item, isLoading } = useCollectionItem(id)
   const cardId = item?.card_id ?? undefined
 
-  // Build cardId for the new /api/prices endpoint
+  // Build cardId for /api/prices across all supported categories
   const priceApiCardId = (() => {
     if (!item) return undefined
-    const game = (item.game ?? '').toLowerCase()
-    const isTcg = game === 'pokemon' || game.includes('pokemon')
-    const identifier = isTcg
-      ? (item.external_ref ?? item.card_number ?? item.card_name ?? '')
-      : (item.card_name ?? '')
-    if (!identifier) return undefined
-    return isTcg ? `tcgfast:${identifier}` : `pricecharting:${identifier}`
+
+    const game = (item.game ?? item.card?.game ?? '').toLowerCase().trim()
+    const sport = (item.sport ?? item.card?.sport ?? '').toLowerCase().trim()
+    const productType = (item.product_type ?? '').toLowerCase().trim()
+
+    const cardName = (item.card_name ?? item.player_name ?? item.card?.card_name ?? item.product_name ?? '').trim()
+    const setName = (item.set_name ?? item.card?.set_name ?? '').trim()
+    const cardNumber = (item.card_number ?? item.card?.card_number ?? '').trim()
+    const year = item.year ?? item.card?.year ?? null
+    const brand = (item.manufacturer ?? item.card?.manufacturer ?? item.set_name ?? '').trim()
+
+    const isSealed = productType !== '' && productType !== 'single_card'
+    const isSports = !!sport || ['baseball', 'basketball', 'football', 'hockey'].some((s) => game.includes(s))
+
+    if (isSealed) {
+      const productName = (item.product_name ?? cardName).trim()
+      if (!productName) return undefined
+      return `pricecharting:${productName}`
+    }
+
+    if (isSports) {
+      const sportsQuery = [cardName, year, brand].filter(Boolean).join(' ').trim()
+      if (!sportsQuery) return undefined
+      return `pricecharting:${sportsQuery}`
+    }
+
+    const tcgGameMap: Array<{ test: (value: string) => boolean; game: string }> = [
+      { test: (v) => v.includes('magic') || v.includes('mtg'), game: 'mtg' },
+      { test: (v) => v.includes('yugioh') || v.includes('yu-gi-oh'), game: 'yugioh' },
+      { test: (v) => v.includes('lorcana'), game: 'lorcana' },
+      { test: (v) => v.includes('one piece') || v.includes('one-piece'), game: 'one-piece' },
+      { test: (v) => v.includes('dragon ball'), game: 'dragon-ball-super' },
+    ]
+
+    const mapped = tcgGameMap.find((entry) => entry.test(game))
+    const gameParam = mapped?.game ?? 'pokemon'
+
+    if (!cardName && !cardNumber) return undefined
+
+    if (gameParam === 'pokemon') {
+      const pokemonQuery = [cardName || cardNumber, setName].filter(Boolean).join(' ').trim()
+      return pokemonQuery ? `tcgfast:${pokemonQuery}` : undefined
+    }
+
+    if (gameParam === 'mtg') {
+      const mtgQuery = [cardName, setName].filter(Boolean).join(' ').trim()
+      return mtgQuery ? `tcgfast:${mtgQuery}&game=mtg` : undefined
+    }
+
+    const genericQuery = cardName || cardNumber
+    return genericQuery ? `tcgfast:${genericQuery}&game=${gameParam}` : undefined
   })()
 
-  const { data: apiPrices, error: apiPricesError } = usePriceByCardId(priceApiCardId)
+  if (priceApiCardId) {
+    console.debug('[prices-ui] CardDetailPage cardId', {
+      collectionItemId: item?.id,
+      cardId: item?.card_id,
+      priceApiCardId,
+      game: item?.game,
+      sport: item?.sport,
+      productType: item?.product_type,
+    })
+  }
+
+  const {
+    data: apiPrices,
+    error: apiPricesError,
+    isLoading: apiPricesLoading,
+    isFetching: apiPricesFetching,
+  } = usePriceByCardId(priceApiCardId)
 
   // eBay comps are only auto-fetched as fallback when the price API returns 404/502
   const priceApiFailed =
@@ -603,41 +663,45 @@ export default function CardDetailPage() {
           {/* New price block — TCGFast / PriceCharting via /api/prices */}
           {priceApiCardId && (
             <div className="mb-4 rounded-[var(--radius-md)] border border-cv-border bg-cv-surface p-3">
-              {apiPrices ? (
+              {apiPricesLoading || apiPricesFetching ? (
+                <div className="space-y-2 animate-pulse">
+                  <div className="h-4 w-40 rounded bg-cv-border" />
+                  <div className="h-7 w-28 rounded bg-cv-border" />
+                  <div className="h-3 w-48 rounded bg-cv-border" />
+                </div>
+              ) : apiPrices ? (
                 <>
                   <div className="flex flex-wrap gap-4">
                     <div>
-                      <p className="text-xs text-cv-muted">Market Price (NM)</p>
+                      <p className="text-xs text-cv-muted">Market Price (NM):</p>
                       <p className="text-xl font-bold">
-                        {apiPrices.price_nm != null
-                          ? `$${apiPrices.price_nm.toFixed(2)}`
-                          : '—'}
+                        {apiPrices.price_nm != null ? `$${apiPrices.price_nm.toFixed(2)}` : '—'}
                       </p>
                     </div>
-                    <div>
-                      <p className="text-xs text-cv-muted">PSA 10 Est.</p>
-                      <p className="text-xl font-bold">
-                        {apiPrices.price_psa10 != null
-                          ? `$${apiPrices.price_psa10.toFixed(2)}`
-                          : '—'}
-                      </p>
-                    </div>
+                    {apiPrices.price_psa10 != null && (
+                      <div>
+                        <p className="text-xs text-cv-muted">PSA 10:</p>
+                        <p className="text-xl font-bold">${apiPrices.price_psa10.toFixed(2)}</p>
+                      </div>
+                    )}
                   </div>
                   <p className="mt-1 text-xs text-cv-muted">
-                    {apiPrices.source === 'tcgfast'
-                      ? 'Data via TCGPlayer + eBay'
-                      : 'Data via PriceCharting'}
-                    {' · '}Updated: {hoursAgo(apiPrices.fetched_at)}
+                    {apiPrices.source === 'tcgfast' ? 'via TCGPlayer + eBay' : 'via PriceCharting'}
+                    {' · '}Updated {hoursAgo(apiPrices.fetched_at)}
                     {apiPrices.cached && ' · cached'}
                   </p>
                 </>
               ) : apiPricesError ? (
                 <p className="text-xs text-cv-muted">
-                  Price data unavailable
+                  {(apiPricesError as any).httpStatus === 404
+                    ? 'Price unavailable'
+                    : (apiPricesError as any).httpStatus === 502
+                      ? 'Price temporarily unavailable, try again soon'
+                      : 'Price unavailable'}
                   {priceApiFailed ? ' — showing eBay comps as fallback' : ''}
                 </p>
               ) : (
-                <p className="text-xs text-cv-muted">Loading price data…</p>
+                <p className="text-xs text-cv-muted">Price unavailable</p>
               )}
             </div>
           )}

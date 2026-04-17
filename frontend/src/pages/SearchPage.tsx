@@ -4,7 +4,7 @@ import { ExternalLink, Heart, Package, Plus, Search, ShoppingCart, X, Check, Lay
 import { CardGridSkeleton } from '../components/SkeletonLoader'
 import { useQueryClient } from '@tanstack/react-query'
 import { api } from '../lib/api'
-import { useAuth } from '../lib/hooks'
+import { useAuth, usePriceByCardId } from '../lib/hooks'
 import ProGate from '../components/ProGate'
 
 // ── Type labels ───────────────────────────────────────────────────────────────
@@ -122,6 +122,14 @@ type UnifiedResult = CardResult | SealedResult | SportsCardResult
 function formatPrice(cents: number | null | undefined): string {
   if (!cents) return '—'
   return `$${(cents / 100).toFixed(2)}`
+}
+
+
+function hoursAgo(isoString: string): string {
+  const ms = Date.now() - new Date(isoString).getTime()
+  const h = Math.floor(ms / (1000 * 60 * 60))
+  if (h < 1) return 'less than 1 hour ago'
+  return `${h} hour${h === 1 ? '' : 's'} ago`
 }
 
 // ── Condition price multipliers (TCGPlayer industry standard) ─────────────────
@@ -609,6 +617,18 @@ function CardDetailModal({
 function SealedDetailModal({ product, onClose }: { product: SealedResult; onClose: () => void }) {
   const typeStyle = getProductTypeColor(product.product_type)
   const imageUrl = getSealedImageUrl(product)
+  const sealedPriceCardId = `pricecharting:${product.name}`
+  const { data: apiPrice, error: apiPriceError, isLoading: apiPriceLoading, isFetching: apiPriceFetching } = usePriceByCardId(sealedPriceCardId)
+
+  useEffect(() => {
+    console.debug('[prices-ui] SealedDetailModal cardId', {
+      sealedProductId: product.id,
+      sealedPriceCardId,
+      productName: product.name,
+      productType: product.product_type,
+    })
+  }, [product.id, product.name, product.product_type, sealedPriceCardId])
+
   const [adding, setAdding] = useState(false)
   const [added, setAdded] = useState(false)
   const [addError, setAddError] = useState('')
@@ -682,11 +702,45 @@ function SealedDetailModal({ product, onClose }: { product: SealedResult; onClos
           <span className="inline-block text-xs px-2.5 py-0.5 rounded-full font-medium" style={{ background: typeStyle.bg, color: typeStyle.text }}>
             {TYPE_LABELS[product.product_type] ?? product.product_type}
           </span>
-          <div className="glass rounded-[var(--radius-md)] p-3 flex items-center justify-between">
-            <span className="text-sm text-cv-muted">Market Price</span>
-            <span className="text-lg font-bold" style={{ color: 'var(--primary)' }}>
-              {formatPrice(product.market_price_cents)}
-            </span>
+          <div className="glass rounded-[var(--radius-md)] p-3">
+            {apiPriceLoading || apiPriceFetching ? (
+              <div className="space-y-2 animate-pulse">
+                <div className="h-3 w-28 rounded bg-cv-border" />
+                <div className="h-7 w-24 rounded bg-cv-border" />
+                <div className="h-3 w-36 rounded bg-cv-border" />
+              </div>
+            ) : apiPrice ? (
+              <>
+                <div className="flex items-center justify-between">
+                  <span className="text-sm text-cv-muted">Market Price (NM):</span>
+                  <span className="text-lg font-bold" style={{ color: 'var(--primary)' }}>
+                    {apiPrice.price_nm != null ? `$${apiPrice.price_nm.toFixed(2)}` : '—'}
+                  </span>
+                </div>
+                {apiPrice.price_psa10 != null && (
+                  <div className="mt-1 flex items-center justify-between text-sm">
+                    <span className="text-cv-muted">PSA 10:</span>
+                    <span className="font-semibold">${apiPrice.price_psa10.toFixed(2)}</span>
+                  </div>
+                )}
+                <p className="mt-1 text-xs text-cv-muted">via PriceCharting · Updated {hoursAgo(apiPrice.fetched_at)}</p>
+              </>
+            ) : apiPriceError ? (
+              <p className="text-xs text-cv-muted">
+                {(apiPriceError as any).httpStatus === 404
+                  ? 'Price unavailable'
+                  : (apiPriceError as any).httpStatus === 502
+                    ? 'Price temporarily unavailable, try again soon'
+                    : 'Price unavailable'}
+              </p>
+            ) : (
+              <div className="flex items-center justify-between">
+                <span className="text-sm text-cv-muted">Market Price</span>
+                <span className="text-lg font-bold" style={{ color: 'var(--primary)' }}>
+                  {formatPrice(product.market_price_cents)}
+                </span>
+              </div>
+            )}
           </div>
           {product.release_date && (
             <div className="flex items-center justify-between text-sm">

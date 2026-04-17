@@ -15,6 +15,30 @@ interface FetchError extends Error {
   httpStatus?: number;
 }
 
+type TcgFastCard = {
+  name?: string;
+  set_name?: string;
+  prices?: {
+    raw?: {
+      near_mint?: {
+        tcgplayer?: { market?: number | null };
+        ebay?: { avg_7d?: number | null };
+      };
+    };
+    graded?: {
+      psa_10?: {
+        tcgplayer?: { market?: number | null };
+      };
+    };
+  };
+};
+
+type ParsedTcgFastIdentifier = {
+  query: string;
+  game: string;
+  set: string | null;
+};
+
 function jsonResp(data: unknown, status = 200): Response {
   return new Response(JSON.stringify(data), {
     status,
@@ -28,62 +52,148 @@ function apiError(message: string, httpStatus: number): FetchError {
   return err;
 }
 
-async function lookupTcgFast(
-  env: Env,
-  identifier: string,
-): Promise<{ card_name: string; set_name: string | null; price_nm: number | null; raw_json: string }> {
-  const base = env.TCGFAST_BASE_URL ?? 'https://api.tcgpricelookup.com/v1';
+function normalizeText(value: string | null | undefined): string {
+  return (value ?? '')
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
 
-  // Resolve a human-readable card name from local DB when the identifier is a PTCG ID
-  let cardName = identifier;
-  let setName: string | null = null;
+function tokenize(value: string | null | undefined): string[] {
+  const normalized = normalizeText(value);
+  if (!normalized) return [];
+  return normalized.split(' ').filter(Boolean);
+}
 
-  const catalogRow = await env.DB.prepare(
-    'SELECT card_name, set_name FROM pokemon_catalog WHERE ptcg_id = ? LIMIT 1',
-  ).bind(identifier).first<{ card_name: string; set_name: string | null }>();
+function scoreTextMatch(candidate: string, query: string): number {
+  const c = normalizeText(candidate);
+  const q = normalizeText(query);
+  if (!c || !q) return 0;
+  if (c === q) return 120;
+  if (c.includes(q)) return 90;
 
-  if (catalogRow) {
-    cardName = catalogRow.card_name;
-    setName = catalogRow.set_name;
-  } else {
-    const cardRow = await env.DB.prepare(
-      'SELECT card_name, set_name FROM cards WHERE external_ref = ? LIMIT 1',
-    ).bind(identifier).first<{ card_name: string; set_name: string | null }>();
-    if (cardRow) {
-      cardName = cardRow.card_name;
-      setName = cardRow.set_name;
+  const cTokens = new Set(tokenize(c));
+  const qTokens = tokenize(q);
+  if (qTokens.length === 0) return 0;
+
+  let overlap = 0;
+  for (const token of qTokens) {
+    if (cTokens.has(token)) overlap += 1;
+  }
+
+  return Math.round((overlap / qTokens.length) * 80);
+}
+
+function closestByScore<T>(
+  rows: T[],
+  scorer: (row: T) => number,
+): T | null {
+  let best: T | null = null;
+  let bestScore = -1;
+
+  for (const row of rows) {
+    const score = scorer(row);
+    if (score > bestScore) {
+      bestScore = score;
+      best = row;
     }
   }
 
-  const q = setName ? `${cardName} ${setName}` : cardName;
-  const url = `${base}/cards/search?q=${encodeURIComponent(q)}&game=pokemon`;
+  return best;
+}
+
+function parseTcgFastIdentifier(identifier: string): ParsedTcgFastIdentifier {
+  const parts = identifier.split('&');
+  const query = parts.shift()?.trim() ?? '';
+  const params = new URLSearchParams(parts.join('&'));
+
+  const game = (params.get('game') || 'pokemon').trim().toLowerCase();
+  const setRaw = params.get('set');
+  const set = setRaw ? setRaw.trim() : null;
+
+  return { query, game, set };
+}
+
+async function lookupTcgFast(
+  env: Env,
+  identifier: string,
+): Promise<{ card_name: string; set_name: string | null; price_nm: number | null; price_psa10: number | null; raw_json: string }> {
+  const base = env.TCGFAST_BASE_URL ?? 'https://api.tcgpricelookup.com/v1';
+  const parsed = parseTcgFastIdentifier(identifier);
+
+  if (!parsed.query) {
+    throw apiError('Missing card query for tcgfast lookup', 400);
+  }
+
+  const params = new URLSearchParams({ q: parsed.query, game: parsed.game });
+  if (parsed.set) params.set('set', parsed.set);
+
+  const searchUrl = `${base}/cards/search?${params.toString()}`;
+  console.log('[prices] tcgfast request', { identifier, searchUrl, parsed });
 
   let res: Response;
   try {
-    res = await fetch(url, { headers: { 'X-API-Key': env.TCGFAST_API_KEY ?? '' } });
+    res = await fetch(searchUrl, {
+      headers: { 'X-API-Key': env.TCGFAST_API_KEY ?? '' },
+    });
   } catch {
     throw apiError('TCGFast API unreachable', 502);
   }
 
   if (!res.ok) throw apiError(`TCGFast API error: ${res.status}`, 502);
 
-  const json: unknown = await res.json();
-  const cards = (json as { data?: unknown[] })?.data;
-  const card = Array.isArray(cards) ? cards[0] : undefined;
+  const json = await res.json() as { data?: TcgFastCard[] };
+  console.log('[prices] tcgfast raw response sample', JSON.stringify(json).slice(0, 1200));
 
-  if (!card) throw apiError('Card not found on TCG Price Lookup', 404);
+  const cards = Array.isArray(json.data) ? json.data : [];
+  if (cards.length === 0) throw apiError('Card not found on TCGFast', 404);
 
-  const nm = (card as any)?.prices?.raw?.near_mint;
-  const price_nm: number | null =
-    nm?.tcgplayer?.market ?? nm?.ebay?.avg_7d ?? null;
+  const matched = closestByScore(cards, (card) => {
+    const nameScore = scoreTextMatch(card.name ?? '', parsed.query);
+    const setScore = parsed.set ? scoreTextMatch(card.set_name ?? '', parsed.set) : 0;
+    return nameScore + setScore;
+  }) ?? cards[0];
+
+  const nm = matched?.prices?.raw?.near_mint;
+  const graded = matched?.prices?.graded?.psa_10;
+  const tcgMarket = nm?.tcgplayer?.market;
+  const ebayAvg7d = nm?.ebay?.avg_7d;
+  const gradedTcgMarket = graded?.tcgplayer?.market;
+
+  const price_nm =
+    typeof tcgMarket === 'number'
+      ? tcgMarket
+      : typeof ebayAvg7d === 'number'
+        ? ebayAvg7d
+        : null;
+
+  const price_psa10 = typeof gradedTcgMarket === 'number' ? gradedTcgMarket : null;
+
+  if (price_nm == null || price_psa10 == null) {
+    console.log('[prices] tcgfast missing price field(s)', {
+      card: matched?.name,
+      set: matched?.set_name,
+      hasNearMint: nm != null,
+      hasNearMintTcgPlayer: nm?.tcgplayer?.market != null,
+      hasNearMintEbay: nm?.ebay?.avg_7d != null,
+      hasPsa10: graded?.tcgplayer?.market != null,
+    });
+  }
 
   return {
-    card_name: (card as any).name ?? cardName,
-    set_name: (card as any).set_name ?? setName,
+    card_name: matched?.name ?? parsed.query,
+    set_name: matched?.set_name ?? parsed.set ?? null,
     price_nm,
-    raw_json: JSON.stringify(card),
+    price_psa10,
+    raw_json: JSON.stringify(matched ?? {}),
   };
 }
+
+type PriceChartingSearchRow = {
+  id: string | number;
+  'product-name'?: string;
+};
 
 async function lookupPriceCharting(
   env: Env,
@@ -93,57 +203,77 @@ async function lookupPriceCharting(
   const key = env.PRICECHARTING_API_KEY ?? '';
 
   let productId: string | number | null = null;
-  let card_name = identifier;
+  let matchedName = identifier;
 
   if (/^\d+$/.test(identifier)) {
     productId = identifier;
   } else {
+    const searchUrl = `${base}/products?t=${encodeURIComponent(key)}&q=${encodeURIComponent(identifier)}&status=price-guide`;
+    console.log('[prices] pricecharting search request', { identifier, searchUrl });
+
     let searchRes: Response;
     try {
-      searchRes = await fetch(
-        `${base}/products?t=${encodeURIComponent(key)}&q=${encodeURIComponent(identifier)}&status=price-guide`,
-      );
+      searchRes = await fetch(searchUrl);
     } catch {
       throw apiError('PriceCharting API unreachable', 502);
     }
 
     if (!searchRes.ok) throw apiError(`PriceCharting API error: ${searchRes.status}`, 502);
 
-    const searchJson: unknown = await searchRes.json();
-    const first = (searchJson as { products?: { id: string | number; 'product-name'?: string }[] })?.products?.[0];
-    if (!first) throw apiError('Card not found on PriceCharting', 404);
+    const searchJson = await searchRes.json() as { products?: PriceChartingSearchRow[] };
+    console.log('[prices] pricecharting raw search sample', JSON.stringify(searchJson).slice(0, 1200));
 
-    productId = first.id;
-    card_name = first['product-name'] ?? identifier;
+    const products = Array.isArray(searchJson.products) ? searchJson.products : [];
+    const matched = closestByScore(products, (row) => scoreTextMatch(row['product-name'] ?? '', identifier));
+
+    if (!matched?.id) throw apiError('Card not found on PriceCharting', 404);
+
+    productId = matched.id;
+    matchedName = matched['product-name'] ?? identifier;
   }
+
+  const detailUrl = `${base}/product?t=${encodeURIComponent(key)}&id=${productId}`;
+  console.log('[prices] pricecharting detail request', { identifier, detailUrl });
 
   let detailRes: Response;
   try {
-    detailRes = await fetch(
-      `${base}/product?t=${encodeURIComponent(key)}&id=${productId}`,
-    );
+    detailRes = await fetch(detailUrl);
   } catch {
     throw apiError('PriceCharting API unreachable', 502);
   }
 
   if (!detailRes.ok) throw apiError(`PriceCharting API error: ${detailRes.status}`, 502);
 
-  const detail: unknown = await detailRes.json();
-  const d = detail as Record<string, unknown>;
+  const detail = await detailRes.json() as Record<string, unknown>;
+  console.log('[prices] pricecharting raw detail sample', JSON.stringify(detail).slice(0, 1200));
+
+  const loose = detail['loose-price'];
+  const graded = detail['graded-price'];
+
+  const price_nm = typeof loose === 'number' ? loose / 100 : null;
+  const price_psa10 = typeof graded === 'number' ? graded / 100 : null;
+
+  if (price_nm == null || price_psa10 == null) {
+    console.log('[prices] pricecharting missing price field(s)', {
+      product: detail['product-name'],
+      hasLoose: typeof loose === 'number',
+      hasGraded: typeof graded === 'number',
+    });
+  }
 
   return {
-    card_name: (d['product-name'] as string | undefined) ?? card_name,
+    card_name: (detail['product-name'] as string | undefined) ?? matchedName,
     set_name: null,
-    price_nm: typeof d['loose-price'] === 'number' ? d['loose-price'] / 100 : null,
-    price_psa10: typeof d['graded-price'] === 'number' ? d['graded-price'] / 100 : null,
+    price_nm,
+    price_psa10,
     raw_json: JSON.stringify(detail),
   };
 }
 
 export async function getPriceByCardId(env: Env, request: Request): Promise<Response> {
   const url = new URL(request.url);
-  // pathname: /api/prices/tcgfast:sv3-125  or  /api/prices/pricecharting:72584
   const raw = decodeURIComponent(url.pathname.replace('/api/prices/', ''));
+  console.log('[prices] incoming cardId', raw);
 
   const colonIdx = raw.indexOf(':');
   if (colonIdx < 0) {
@@ -161,7 +291,6 @@ export async function getPriceByCardId(env: Env, request: Request): Promise<Resp
     return jsonResp({ ok: false, error: 'Unknown source — use "tcgfast" or "pricecharting"' }, 400);
   }
 
-  // Step 1: cache hit
   const cached = await env.DB.prepare(
     'SELECT * FROM price_cache WHERE id = ? AND expires_at > unixepoch()',
   ).bind(raw).first<PriceCacheRow>();
@@ -181,20 +310,20 @@ export async function getPriceByCardId(env: Env, request: Request): Promise<Resp
     });
   }
 
-  // Step 2: fetch from API
   try {
     let card_name: string;
     let set_name: string | null;
     let price_nm: number | null;
-    let price_psa10: number | null = null;
+    let price_psa10: number | null;
     let raw_json = '{}';
-    const card_type = source === 'tcgfast' ? 'tcg' : 'sports';
+    let card_type = source === 'tcgfast' ? 'tcg' : 'sports';
 
     if (source === 'tcgfast') {
       const result = await lookupTcgFast(env, identifier);
       card_name = result.card_name;
       set_name = result.set_name;
       price_nm = result.price_nm;
+      price_psa10 = result.price_psa10;
       raw_json = result.raw_json;
     } else {
       const result = await lookupPriceCharting(env, identifier);
@@ -203,20 +332,14 @@ export async function getPriceByCardId(env: Env, request: Request): Promise<Resp
       price_nm = result.price_nm;
       price_psa10 = result.price_psa10;
       raw_json = result.raw_json;
+      card_type = /booster|etb|theme deck|deck|box|pack|sealed|tin/i.test(identifier) ? 'sealed' : 'sports';
     }
 
-    // Step 3: write to cache
     await env.DB.prepare(`
-      INSERT INTO price_cache (id, card_name, set_name, source, card_type, price_nm, price_psa10, price_raw_json, fetched_at, expires_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, unixepoch(), unixepoch() + 43200)
-      ON CONFLICT(id) DO UPDATE SET
-        card_name = excluded.card_name,
-        set_name = excluded.set_name,
-        price_nm = excluded.price_nm,
-        price_psa10 = excluded.price_psa10,
-        price_raw_json = excluded.price_raw_json,
-        fetched_at = excluded.fetched_at,
-        expires_at = excluded.expires_at
+      INSERT OR REPLACE INTO price_cache
+        (id, card_name, set_name, source, card_type, price_nm, price_psa10, price_raw_json, fetched_at, expires_at)
+      VALUES
+        (?, ?, ?, ?, ?, ?, ?, ?, unixepoch(), unixepoch() + 43200)
     `).bind(raw, card_name, set_name, source, card_type, price_nm, price_psa10, raw_json).run();
 
     return jsonResp({
