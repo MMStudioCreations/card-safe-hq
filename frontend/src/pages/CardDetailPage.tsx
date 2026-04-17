@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useLayoutEffect, useMemo, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { ExternalLink } from 'lucide-react'
@@ -211,8 +211,15 @@ export default function CardDetailPage() {
     card_number: item?.card_number || '',
   })
 
-  useEffect(() => {
-    window.scrollTo({ top: 0, behavior: 'auto' })
+  useLayoutEffect(() => {
+    const resetScroll = () => {
+      window.scrollTo({ top: 0, left: 0, behavior: 'auto' })
+      if (document.documentElement) document.documentElement.scrollTop = 0
+      if (document.body) document.body.scrollTop = 0
+    }
+    resetScroll()
+    const raf = window.requestAnimationFrame(resetScroll)
+    return () => window.cancelAnimationFrame(raf)
   }, [id])
 
   const image = useMemo(
