@@ -16,10 +16,12 @@ bucket_name = "varimg"
 [vars]
 CORS_ORIGIN = "https://cardsafehq.com"
 MAIL_FROM = "Card Safe HQ <noreply@cardsafehq.com>"
+TCGFAST_BASE_URL = "https://api.tcgpricelookup.com/v1"
+PRICECHARTING_BASE_URL = "https://www.pricecharting.com/api"
 # Set RESEND_API_KEY as a secret via: wrangler secret put RESEND_API_KEY
 
 [triggers]
-crons = ["0 4 * * *"]
+crons = ["0 4 * * *", "0 */12 * * *"]
 
 [observability]
 enabled = true
