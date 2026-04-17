@@ -14,15 +14,15 @@
  *   STRIPE_WEBHOOK_SECRET  — whsec_...
  *   APP_URL                — https://cardsafehq.com
  *
- * Stripe Price IDs — set these as env vars or replace the constants below:
- *   STRIPE_PRICE_MONTHLY   — price_... for $X/month
- *   STRIPE_PRICE_YEARLY    — price_... for $X/year
+ * Stripe Price IDs:
+ *   STRIPE_PRICE_ID_MONTHLY — price_... for $X/month
+ *   STRIPE_PRICE_ID_YEARLY  — price_... for $X/year
  */
 
 import type { Env } from '../types';
 import { queryOne, run } from '../lib/db';
 import { requireAuth } from '../lib/auth';
-import { ok, badRequest, unauthorized } from '../lib/json';
+import { ok, badRequest, unauthorized, serverError } from '../lib/json';
 import { isStripeConfigured } from '../lib/config';
 
 // ── Stripe helpers ────────────────────────────────────────────────────────────
@@ -75,6 +75,23 @@ interface StripeSubscription {
   items: { data: Array<{ price: { id: string; recurring?: { interval: string } } }> };
 }
 
+function isLocalDevRequest(request: Request): boolean {
+  try {
+    const { hostname } = new URL(request.url);
+    return hostname === 'localhost' || hostname === '127.0.0.1';
+  } catch {
+    return false;
+  }
+}
+
+function billingServerError(message: string, request: Request): Response {
+  // Keep production responses generic, but surface actionable diagnostics locally.
+  if (isLocalDevRequest(request)) {
+    return serverError(`Billing error: ${message}`);
+  }
+  return serverError('Billing request failed. Check Stripe billing configuration.');
+}
+
 // ── Get or create Stripe customer for user ────────────────────────────────────
 
 async function getOrCreateCustomer(env: Env, userId: number, email: string): Promise<string> {
@@ -88,7 +105,7 @@ async function getOrCreateCustomer(env: Env, userId: number, email: string): Pro
 
   const customer = await stripePost<StripeCustomer>(env, '/customers', {
     email,
-    metadata: JSON.stringify({ user_id: String(userId) }),
+    'metadata[user_id]': String(userId),
   });
 
   // Upsert subscription row with customer ID
@@ -188,18 +205,24 @@ export async function handleCreateCheckout(env: Env, request: Request): Promise<
   const user = await requireAuth(env, request);
   if (user instanceof Response) return user;
 
-  const body = await request.json() as { plan?: string };
+  let body: { plan?: string };
+  try {
+    body = await request.json() as { plan?: string };
+  } catch {
+    return badRequest('Invalid JSON body');
+  }
+
   const plan = body?.plan;
   if (plan !== 'monthly' && plan !== 'yearly') {
     return badRequest('plan must be "monthly" or "yearly"');
   }
 
-  const appUrl = env.APP_URL ?? 'https://cardsafehq.com';
+  const appUrl = env.APP_BASE_URL ?? env.APP_URL ?? 'https://cardsafehq.com';
 
   // Get price IDs from env — set these in wrangler.toml or Cloudflare dashboard
   const priceId = plan === 'monthly'
-    ? (env as unknown as Record<string, string>)['STRIPE_PRICE_ID_MONTHLY']
-    : (env as unknown as Record<string, string>)['STRIPE_PRICE_ID_YEARLY'];
+    ? env.STRIPE_PRICE_ID_MONTHLY
+    : env.STRIPE_PRICE_ID_YEARLY;
 
   if (!priceId) {
     return badRequest('Stripe price is not configured.');
@@ -212,20 +235,30 @@ export async function handleCreateCheckout(env: Env, request: Request): Promise<
   );
   if (!userRow) return unauthorized('User not found');
 
-  const customerId = await getOrCreateCustomer(env, user.id, userRow.email);
+  try {
+    const customerId = await getOrCreateCustomer(env, user.id, userRow.email);
 
-  const session = await stripePost<StripeSession>(env, '/checkout/sessions', {
-    customer: customerId,
-    mode: 'subscription',
-    'line_items[0][price]': priceId,
-    'line_items[0][quantity]': '1',
-    success_url: `${appUrl}/billing?success=1`,
-    cancel_url: `${appUrl}/billing?canceled=1`,
-    'subscription_data[metadata][user_id]': String(user.id),
-    allow_promotion_codes: 'true',
-  });
+    const session = await stripePost<StripeSession>(env, '/checkout/sessions', {
+      customer: customerId,
+      mode: 'subscription',
+      'line_items[0][price]': priceId,
+      'line_items[0][quantity]': '1',
+      success_url: `${appUrl}/billing?success=1`,
+      cancel_url: `${appUrl}/billing?canceled=1`,
+      'subscription_data[metadata][user_id]': String(user.id),
+      allow_promotion_codes: 'true',
+    });
 
-  return ok({ url: session.url });
+    return ok({ url: session.url });
+  } catch (err) {
+    const message = (err as Error).message || 'Failed to create billing checkout session';
+    console.error('[billing.checkout] Failed to create checkout session', {
+      userId: user.id,
+      plan,
+      error: message,
+    });
+    return billingServerError(message, request);
+  }
 }
 
 // ── POST /api/billing/portal ──────────────────────────────────────────────────
@@ -246,14 +279,23 @@ export async function handleCreatePortal(env: Env, request: Request): Promise<Re
     return badRequest('No billing account found. Please subscribe first.');
   }
 
-  const appUrl = env.APP_URL ?? 'https://cardsafehq.com';
+  const appUrl = env.APP_BASE_URL ?? env.APP_URL ?? 'https://cardsafehq.com';
 
-  const session = await stripePost<StripeSession>(env, '/billing_portal/sessions', {
-    customer: sub.stripe_customer_id,
-    return_url: `${appUrl}/billing`,
-  });
+  try {
+    const session = await stripePost<StripeSession>(env, '/billing_portal/sessions', {
+      customer: sub.stripe_customer_id,
+      return_url: `${appUrl}/billing`,
+    });
 
-  return ok({ url: session.url });
+    return ok({ url: session.url });
+  } catch (err) {
+    const message = (err as Error).message || 'Failed to create billing portal session';
+    console.error('[billing.portal] Failed to create portal session', {
+      userId: user.id,
+      error: message,
+    });
+    return billingServerError(message, request);
+  }
 }
 
 // ── POST /api/billing/webhook ─────────────────────────────────────────────────
