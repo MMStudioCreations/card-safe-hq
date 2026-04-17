@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { ExternalLink } from 'lucide-react'
@@ -210,6 +210,10 @@ export default function CardDetailPage() {
     set_name: item?.set_name || '',
     card_number: item?.card_number || '',
   })
+
+  useEffect(() => {
+    window.scrollTo({ top: 0, behavior: 'auto' })
+  }, [id])
 
   const image = useMemo(
     () => (showFront ? item?.front_image_url : item?.back_image_url) || item?.front_image_url,
