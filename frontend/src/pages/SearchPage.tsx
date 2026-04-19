@@ -1217,6 +1217,9 @@ export default function SearchPage() {
         <p style={{ fontSize: 13, color: 'var(--text-secondary)', margin: '4px 0 0' }}>
           Find any TCG card, ETB, tin, promo pack, booster box, and more
         </p>
+        <p style={{ fontSize: 10, opacity: 0.6, margin: '8px 0 0', color: 'var(--text-secondary)' }}>
+          Impact-Site-Verification: f779f407-bca9-4eaf-b2f6-f79f28c15c43
+        </p>
       </div>
 
       {/* ── Collectr-style "Adding to Portfolio" banner ── */}
