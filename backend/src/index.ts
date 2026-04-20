@@ -723,7 +723,7 @@ export default {
         return withCors(ok(prices), request, env)
       }
 
-      // Universal search — cards from pokemon_catalog + sealed products
+      // Universal search — cards from pokemon_catalog + normalized card_records + sealed products
       // NOTE: This endpoint is PUBLIC — no auth required for search
       if (method === 'GET' && pathname === '/api/search') {
         const url = new URL(request.url)
@@ -751,6 +751,42 @@ export default {
              LIMIT ?`
           ).bind(like, like, like, q, `${q}%`, Math.ceil(limit * 0.7)).all()
           cards = cardRows.results ?? []
+
+          // Add non-Pokémon normalized records (Magic, Yu-Gi-Oh!, One Piece, Lorcana)
+          try {
+            const externalRows = await env.DB.prepare(
+              `SELECT
+                  ('ext:' || id) AS ptcg_id,
+                  name AS card_name,
+                  COALESCE(card_number, '') AS card_number,
+                  COALESCE(set_name, '') AS set_name,
+                  NULL AS series,
+                  rarity,
+                  type AS supertype,
+                  subtype AS subtypes,
+                  NULL AS hp,
+                  image_url AS image_small,
+                  image_url AS image_large,
+                  NULL AS tcgplayer_url,
+                  CASE
+                    WHEN market_price IS NULL THEN NULL
+                    ELSE CAST(ROUND(market_price * 100.0) AS INTEGER)
+                  END AS tcgplayer_market_cents
+               FROM card_records
+               WHERE is_sealed = 0
+                 AND (name LIKE ? OR set_name LIKE ? OR card_number LIKE ? OR searchable_text LIKE ?)
+               ORDER BY
+                 CASE WHEN clean_name = ? THEN 0
+                      WHEN clean_name LIKE ? THEN 1
+                      ELSE 2 END,
+                 name ASC
+               LIMIT ?`
+            ).bind(like, like, like, like, q.toLowerCase(), `${q.toLowerCase()}%`, Math.ceil(limit * 0.5)).all()
+
+            cards = [...cards, ...(externalRows.results ?? [])]
+          } catch (externalErr) {
+            console.warn('[search] card_records lookup failed; continuing with pokemon catalog only', externalErr)
+          }
         }
 
         if (category === 'all' || category === 'sealed') {
