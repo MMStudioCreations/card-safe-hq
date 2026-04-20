@@ -119,6 +119,27 @@ type SportsCardResult = {
 
 type UnifiedResult = CardResult | SealedResult | SportsCardResult
 
+const POKEMON_CODE_CARD_KEYWORDS = [
+  'code card',
+  'online code card',
+  'tcg live',
+  'pokemon live',
+  'ptcgo',
+  'redeem code',
+  'digital code',
+  'redemption card',
+  'redeem card',
+  'digital redemption',
+]
+
+function isPokemonCodeCard(item: Pick<SealedResult, 'name' | 'set_name' | 'product_type'>): boolean {
+  const haystack = `${item.name} ${item.set_name}`.toLowerCase()
+  const isPokemonProduct = haystack.includes('pokemon') || haystack.includes('pokémon')
+  if (!isPokemonProduct) return false
+  if (item.product_type && item.product_type !== 'other_sealed') return false
+  return POKEMON_CODE_CARD_KEYWORDS.some(keyword => haystack.includes(keyword))
+}
+
 function formatPrice(cents: number | null | undefined): string {
   if (!cents) return '—'
   return `$${(cents / 100).toFixed(2)}`
@@ -1054,7 +1075,11 @@ export default function SearchPage() {
     try {
       const result = await api.universalSearch(q.trim(), cat, 80)
       setCards((result.cards ?? []).map((c: Omit<CardResult, '_type'>) => ({ ...c, _type: 'card' as const })))
-      setSealed((result.sealed ?? []).map((s: Omit<SealedResult, '_type'>) => ({ ...s, _type: 'sealed' as const })))
+      setSealed(
+        (result.sealed ?? [])
+          .filter((s: Omit<SealedResult, '_type'>) => !isPokemonCodeCard(s))
+          .map((s: Omit<SealedResult, '_type'>) => ({ ...s, _type: 'sealed' as const }))
+      )
       setSearched(true)
     } catch {
       setCards([]); setSealed([]); setSearched(true)
