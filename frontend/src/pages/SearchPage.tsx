@@ -279,7 +279,7 @@ function SparklineChart({ nmPrice }: { nmPrice: number }) {
   })()
   const min = Math.min(...points)
   const max = Math.max(...points)
-  const W = 280, H = 72
+  const W = 280, H = 56
   const toX = (i: number) => (i / (points.length - 1)) * W
   const toY = (v: number) => H - ((v - min) / (max - min || 1)) * (H - 8) - 4
   const pathD = points.map((v, i) => `${i === 0 ? 'M' : 'L'}${toX(i).toFixed(1)},${toY(v).toFixed(1)}`).join(' ')
@@ -422,12 +422,12 @@ function CardDetailModal({
         </div>
 
         {/* Scrollable content */}
-        <div style={{ overflowY: 'auto', flex: 1, paddingBottom: 88 }}>
+        <div style={{ overflowY: 'auto', flex: 1, paddingBottom: 76 }}>
 
           {/* ── TOP SECTION: image + card info side by side ── */}
           <div style={{ display: 'flex', gap: 12, padding: '8px 16px 0', alignItems: 'flex-start' }}>
             {/* Card image — compact on the left */}
-            <div style={{ flexShrink: 0, width: 110, borderRadius: 10, overflow: 'hidden', background: 'rgba(0,0,0,0.3)' }}>
+            <div style={{ flexShrink: 0, width: 90, borderRadius: 10, overflow: 'hidden', background: 'rgba(0,0,0,0.3)' }}>
               {(card.image_large || card.image_small) ? (
                 <img
                   src={card.image_large ?? card.image_small!}
@@ -466,7 +466,7 @@ function CardDetailModal({
               {/* Price hero — immediately visible */}
               <div style={{ marginTop: 10, padding: '10px 12px', borderRadius: 12, background: 'rgba(212,175,55,0.08)', border: '1px solid rgba(212,175,55,0.2)' }}>
                 <p style={{ margin: 0, fontSize: 10, color: 'rgba(255,255,255,0.4)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>Market Price (NM)</p>
-                <p style={{ margin: '2px 0 0', fontSize: 26, fontWeight: 800, color: '#D4AF37', letterSpacing: '-0.5px', lineHeight: 1 }}>
+                <p style={{ margin: '2px 0 0', fontSize: 20, fontWeight: 800, color: '#D4AF37', letterSpacing: '-0.5px', lineHeight: 1 }}>
                   {nmPrice > 0 ? formatPrice(nmPrice) : <span style={{ fontSize: 14, color: 'rgba(255,255,255,0.3)' }}>No price data</span>}
                 </p>
                 {nmPrice > 0 && (
@@ -477,7 +477,7 @@ function CardDetailModal({
           </div>
 
           {/* RAW / GRADED / POP tabs */}
-          <div style={{ display: 'flex', margin: '14px 16px 0', background: 'rgba(255,255,255,0.05)', borderRadius: 12, padding: 3 }}>
+          <div style={{ display: 'flex', margin: '10px 16px 0', background: 'rgba(255,255,255,0.05)', borderRadius: 12, padding: 3 }}>
             {(['RAW', 'GRADED', 'POP'] as const).map(tab => (
               <button key={tab} onClick={() => setActiveTab(tab)}
                 style={{
@@ -490,14 +490,14 @@ function CardDetailModal({
           </div>
 
           {/* Tab content */}
-          <div style={{ padding: '14px 16px' }}>
+          <div style={{ padding: '10px 16px' }}>
             {activeTab === 'RAW' && (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
                 {/* Price hero */}
                 <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between' }}>
                   <div>
                     <p style={{ margin: 0, fontSize: 11, color: 'rgba(255,255,255,0.4)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>Market Price ({condition})</p>
-                    <p style={{ margin: '2px 0 0', fontSize: 28, fontWeight: 800, color: '#D4AF37', letterSpacing: '-0.5px' }}>{formatPrice(currentConditionPrice)}</p>
+                    <p style={{ margin: '2px 0 0', fontSize: 20, fontWeight: 800, color: '#D4AF37', letterSpacing: '-0.5px' }}>{formatPrice(currentConditionPrice)}</p>
                     {nmPrice > 0 && condition !== 'Near Mint' && (
                       <p style={{ margin: '2px 0 0', fontSize: 11, color: 'rgba(255,255,255,0.35)' }}>NM: {formatPrice(nmPrice)}</p>
                     )}
