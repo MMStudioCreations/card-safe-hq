@@ -1572,6 +1572,16 @@ export default function SearchPage() {
         </div>
       )}
 
+      {/* ── Selected card detail (render before result divider/sections) ── */}
+      {selectedCard && (
+        <CardDetailModal
+          card={selectedCard}
+          onClose={() => setSelectedCard(null)}
+          addToPortfolioMode={addToPortfolioMode}
+          onAddedToPortfolio={id => setAddedIds(prev => new Set([...prev, id]))}
+        />
+      )}
+
       {/* ── Loading skeleton (Collectr-style instant feel) ── */}
       {loading && <CardGridSkeleton count={12} />}
 
@@ -1620,14 +1630,6 @@ export default function SearchPage() {
       )}
 
       {/* ── Modals ── */}
-      {selectedCard && (
-        <CardDetailModal
-          card={selectedCard}
-          onClose={() => setSelectedCard(null)}
-          addToPortfolioMode={addToPortfolioMode}
-          onAddedToPortfolio={id => setAddedIds(prev => new Set([...prev, id]))}
-        />
-      )}
       {selectedSealed && (
         <SealedDetailModal product={selectedSealed} onClose={() => setSelectedSealed(null)} />
       )}
