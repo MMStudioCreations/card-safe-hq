@@ -129,6 +129,10 @@ type SportsCardResult = {
 
 type UnifiedResult = CardResult | SealedResult | SportsCardResult
 
+function getItemPriceCents(item: UnifiedResult): number | null {
+  return item._type === 'card' ? item.tcgplayer_market_cents : item.market_price_cents
+}
+
 const POKEMON_CODE_CARD_KEYWORDS = [
   'code card',
   'online code card',
@@ -1100,6 +1104,7 @@ export default function SearchPage() {
   const [activeFilterGroup, setActiveFilterGroup] = useState<'tcg' | 'sports'>('tcg')
   const [showSecondaryFilters, setShowSecondaryFilters] = useState(false)
   const [selectedQuickFilter, setSelectedQuickFilter] = useState('')
+  const [sortBy, setSortBy] = useState<'price_desc' | 'relevance'>('price_desc')
 
   const runSearch = useCallback(async (q: string, cat: Category) => {
     setLoading(true)
@@ -1212,7 +1217,16 @@ export default function SearchPage() {
     return result
   })()
 
-  const totalResults = isSportsMode ? sportsCards.length : (cards.length + filteredSealed.length)
+  const priceFilteredResults = unifiedResults.filter(item => {
+    const p = getItemPriceCents(item)
+    return p !== null && p > 0
+  })
+
+  const displayedResults: UnifiedResult[] = sortBy === 'price_desc'
+    ? [...priceFilteredResults].sort((a, b) => (getItemPriceCents(b) ?? 0) - (getItemPriceCents(a) ?? 0))
+    : priceFilteredResults
+
+  const totalResults = displayedResults.length
 
   function applyQuickFilter(filterValue: string) {
     if (!filterValue) {
@@ -1490,7 +1504,8 @@ export default function SearchPage() {
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>Sort</span>
-            <select value="relevance" disabled style={{ borderRadius: 8, border: '1px solid var(--glass-border)', background: 'var(--glass-bg)', color: 'var(--text-primary)', padding: '5px 8px', fontSize: 12 }}>
+            <select value={sortBy} onChange={e => setSortBy(e.target.value as 'price_desc' | 'relevance')} style={{ borderRadius: 8, border: '1px solid var(--glass-border)', background: 'var(--glass-bg)', color: 'var(--text-primary)', padding: '5px 8px', fontSize: 12 }}>
+              <option value="price_desc">Price: High to Low</option>
               <option value="relevance">Best match</option>
             </select>
             {secondaryFilterCount > 0 && (
@@ -1603,7 +1618,7 @@ export default function SearchPage() {
       )}
 
       {/* ── Results grid ── */}
-      {!loading && unifiedResults.length > 0 && (
+      {!loading && displayedResults.length > 0 && (
         <div>
           <p style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 12 }}>
             {totalResults} result{totalResults !== 1 ? 's' : ''}
@@ -1613,7 +1628,7 @@ export default function SearchPage() {
             )}
           </p>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(130px, 1fr))', gap: 12 }}>
-            {unifiedResults.map(item => (
+            {displayedResults.map(item => (
               <UnifiedGridItem
                 key={item._type === 'card' ? `card-${item.ptcg_id}` : item._type === 'sports' ? `sports-${item.id}` : `sealed-${item.id}`}
                 item={item}
