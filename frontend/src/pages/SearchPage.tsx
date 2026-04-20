@@ -96,6 +96,16 @@ type SealedResult = {
   release_date: string | null
   tcgplayer_product_id: number | null
   image_url?: string | null
+  title?: string | null
+  productName?: string | null
+  displayName?: string | null
+  normalizedDisplayName?: string | null
+  alt?: string | null
+  imageAlt?: string | null
+  type?: string | null
+  subtype?: string | null
+  category?: string | null
+  subcategory?: string | null
   _type: 'sealed'
 }
 
@@ -132,12 +142,33 @@ const POKEMON_CODE_CARD_KEYWORDS = [
   'digital redemption',
 ]
 
-function isPokemonCodeCard(item: Pick<SealedResult, 'name' | 'set_name' | 'product_type'>): boolean {
-  const haystack = `${item.name} ${item.set_name}`.toLowerCase()
-  const isPokemonProduct = haystack.includes('pokemon') || haystack.includes('pokémon')
-  if (!isPokemonProduct) return false
-  if (item.product_type && item.product_type !== 'other_sealed') return false
-  return POKEMON_CODE_CARD_KEYWORDS.some(keyword => haystack.includes(keyword))
+function toSearchableText(value: unknown): string {
+  return typeof value === 'string' ? value.trim().toLowerCase() : ''
+}
+
+function isPokemonCodeCard(item: Record<string, unknown>): boolean {
+  const searchableText = [
+    item.name,
+    item.title,
+    item.productName,
+    item.displayName,
+    item.normalizedDisplayName,
+    item.alt,
+    item.imageAlt,
+    item.set_name,
+    item.type,
+    item.subtype,
+    item.category,
+    item.subcategory,
+    item.product_type,
+    item.tcgplayer_url,
+  ]
+    .map(toSearchableText)
+    .filter(Boolean)
+    .join(' ')
+
+  if (!searchableText.includes('pokemon') && !searchableText.includes('pokémon')) return false
+  return POKEMON_CODE_CARD_KEYWORDS.some(keyword => searchableText.includes(keyword))
 }
 
 function formatPrice(cents: number | null | undefined): string {
@@ -1074,10 +1105,14 @@ export default function SearchPage() {
     setLoading(true)
     try {
       const result = await api.universalSearch(q.trim(), cat, 80)
-      setCards((result.cards ?? []).map((c: Omit<CardResult, '_type'>) => ({ ...c, _type: 'card' as const })))
+      setCards(
+        (result.cards ?? [])
+          .filter((c: Omit<CardResult, '_type'>) => !isPokemonCodeCard(c as Record<string, unknown>))
+          .map((c: Omit<CardResult, '_type'>) => ({ ...c, _type: 'card' as const }))
+      )
       setSealed(
         (result.sealed ?? [])
-          .filter((s: Omit<SealedResult, '_type'>) => !isPokemonCodeCard(s))
+          .filter((s: Omit<SealedResult, '_type'>) => !isPokemonCodeCard(s as Record<string, unknown>))
           .map((s: Omit<SealedResult, '_type'>) => ({ ...s, _type: 'sealed' as const }))
       )
       setSearched(true)
