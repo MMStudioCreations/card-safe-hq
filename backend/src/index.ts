@@ -65,6 +65,42 @@ import { handleShopWebhook } from './routes/shop-webhook';
 import { getPriceByCardId } from './workers/prices';
 import { runPriceSync } from './workers/price-sync';
 
+const POKEMON_CODE_CARD_KEYWORDS = [
+  'code card',
+  'online code card',
+  'tcg live',
+  'pokemon live',
+  'ptcgo',
+  'redeem code',
+  'digital code',
+];
+
+function asText(value: unknown): string {
+  return typeof value === 'string' ? value.trim().toLowerCase() : '';
+}
+
+function isPokemonCodeCard(item: Record<string, unknown>): boolean {
+  const fields = [
+    item.name,
+    item.title,
+    item.productName,
+    item.displayName,
+    item.normalizedDisplayName,
+    item.alt,
+    item.imageAlt,
+    item.set_name,
+    item.type,
+    item.subtype,
+    item.category,
+    item.subcategory,
+    item.product_type,
+    item.tcgplayer_url,
+  ];
+  const searchableText = fields.map(asText).filter(Boolean).join(' ');
+  if (!searchableText.includes('pokemon') && !searchableText.includes('pokémon')) return false;
+  return POKEMON_CODE_CARD_KEYWORDS.some(keyword => searchableText.includes(keyword));
+}
+
 function parseId(pathname: string): number | null {
   const id = Number(pathname.split('/').pop());
   return Number.isInteger(id) && id > 0 ? id : null;
@@ -731,12 +767,13 @@ export default {
                name ASC
              LIMIT ?`
           ).bind(like, like, q, `${q}%`, Math.ceil(limit * 0.5)).all()
-          sealed = sealedRows.results ?? []
+          sealed = (sealedRows.results ?? []).filter((item) => !isPokemonCodeCard(item as Record<string, unknown>))
 
           // If DB is empty, fall back to live TCGCSV search
           if (sealed.length === 0) {
             try {
-              sealed = await searchSealedLive(q, Math.ceil(limit * 0.5))
+              const liveSealed = await searchSealedLive(q, Math.ceil(limit * 0.5))
+              sealed = liveSealed.filter((item) => !isPokemonCodeCard(item as Record<string, unknown>))
             } catch (liveErr) {
               console.warn('[search] live sealed fallback failed', liveErr)
             }
