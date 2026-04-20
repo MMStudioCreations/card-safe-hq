@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
+import { createPortal } from 'react-dom'
 import { useSearchParams } from 'react-router-dom'
 import { ExternalLink, Heart, Package, Plus, Search, ShoppingCart, X, Check, LayoutDashboard, SlidersHorizontal } from 'lucide-react'
 import { CardGridSkeleton } from '../components/SkeletonLoader'
@@ -1093,6 +1094,21 @@ export default function SearchPage() {
   const [searched, setSearched] = useState(false)
   const [selectedCard, setSelectedCard] = useState<CardResult | null>(null)
   const [selectedSealed, setSelectedSealed] = useState<SealedResult | null>(null)
+
+  useEffect(() => {
+    if (selectedCard) {
+      const scrollY = window.scrollY
+      document.body.style.position = 'fixed'
+      document.body.style.top = `-${scrollY}px`
+      document.body.style.width = '100%'
+    } else {
+      const scrollY = document.body.style.top
+      document.body.style.position = ''
+      document.body.style.top = ''
+      document.body.style.width = ''
+      window.scrollTo(0, parseInt(scrollY || '0') * -1)
+    }
+  }, [selectedCard])
   const [selectedSports, setSelectedSports] = useState<SportsCardResult | null>(null)
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const inputRef = useRef<HTMLInputElement>(null)
@@ -1588,13 +1604,14 @@ export default function SearchPage() {
       )}
 
       {/* ── Selected card detail (render before result divider/sections) ── */}
-      {selectedCard && (
+      {selectedCard && createPortal(
         <CardDetailModal
           card={selectedCard}
           onClose={() => setSelectedCard(null)}
           addToPortfolioMode={addToPortfolioMode}
           onAddedToPortfolio={id => setAddedIds(prev => new Set([...prev, id]))}
-        />
+        />,
+        document.body
       )}
 
       {/* ── Loading skeleton (Collectr-style instant feel) ── */}
