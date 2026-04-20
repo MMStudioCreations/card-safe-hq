@@ -19,6 +19,7 @@
 
 import { Env } from '../types';
 import { ok, error } from '../lib/json';
+import { buildSportsSearchQuery, parseSportsQuery, type ParsedSportsQuery } from '../lib/search/parseSportsQuery';
 
 // ── Category map ──────────────────────────────────────────────────────────────
 const SPORT_CATEGORY: Record<string, string> = {
@@ -177,6 +178,52 @@ function detectSport(title: string, categories: Array<{ categoryId?: string; cat
   return 'Sports';
 }
 
+
+function scoreSportsResult(item: Record<string, unknown>, parsed: ParsedSportsQuery): number {
+  const name = String(item.name || '').toLowerCase();
+  const set = String(item.set || '').toLowerCase();
+  const year = String(item.year || '').toLowerCase();
+  const haystack = `${name} ${set} ${year}`.trim();
+
+  let score = 0;
+
+  if (parsed.player) {
+    const player = parsed.player.toLowerCase();
+    const playerTokens = player.split(' ').filter(Boolean);
+    if (haystack.includes(player)) {
+      score += 50;
+    } else {
+      let matchedTokens = 0;
+      for (const token of playerTokens) {
+        if (haystack.includes(token)) matchedTokens += 1;
+      }
+      score += matchedTokens * 10;
+      if (matchedTokens === 0) score -= 25;
+    }
+  }
+
+  if (parsed.brand) {
+    if (haystack.includes(parsed.brand.toLowerCase())) score += 20;
+    else score -= 10;
+  }
+
+  if (parsed.setName) {
+    if (haystack.includes(parsed.setName.toLowerCase())) score += 15;
+  }
+
+  if (parsed.setYear) {
+    if (year === parsed.setYear.toLowerCase() || haystack.includes(parsed.setYear.toLowerCase())) score += 15;
+    else score -= 5;
+  }
+
+  if (parsed.cardNumber) {
+    const number = parsed.cardNumber.toLowerCase();
+    if (name.includes(`#${number}`) || name.includes(` ${number} `) || set.includes(number)) score += 10;
+  }
+
+  return score;
+}
+
 // ── Main search handler ────────────────────────────────────────────────────────
 export async function handleSportsSearch(env: Env, request: Request): Promise<Response> {
   const url = new URL(request.url);
@@ -187,11 +234,16 @@ export async function handleSportsSearch(env: Env, request: Request): Promise<Re
   const offset = (page - 1) * limit;
 
   // If no query, pick a random default for the sport
-  let query = q.trim();
+  const rawQuery = q.trim();
+  let query = rawQuery;
   if (!query) {
     const defaults = SPORT_DEFAULTS[sport] || SPORT_DEFAULTS.sports;
     query = defaults[Math.floor(Math.random() * defaults.length)];
   }
+
+  const parsedQuery = parseSportsQuery(query);
+  const structuredQuery = buildSportsSearchQuery(parsedQuery);
+  const searchQuery = structuredQuery.trim() || query;
 
   const categoryId = SPORT_CATEGORY[sport] || '212';
 
@@ -199,7 +251,7 @@ export async function handleSportsSearch(env: Env, request: Request): Promise<Re
     const token = await getEbayToken(env);
 
     // Exclude digital/NFT cards from results — append -digital to every query
-    const physicalQuery = query.toLowerCase().includes('-digital') ? query : `${query} -digital`;
+    const physicalQuery = searchQuery.toLowerCase().includes('-digital') ? searchQuery : `${searchQuery} -digital`;
 
     const params = new URLSearchParams({
       q: physicalQuery,
@@ -228,7 +280,11 @@ export async function handleSportsSearch(env: Env, request: Request): Promise<Re
     }
 
     const data = await resp.json() as { total?: number; itemSummaries?: Record<string, unknown>[] };
-    const items = (data.itemSummaries || []).map(normalizeItem);
+    const items = (data.itemSummaries || [])
+      .map(normalizeItem)
+      .map((item) => ({ item, _score: scoreSportsResult(item, parsedQuery) }))
+      .sort((a, b) => b._score - a._score)
+      .map(({ item }) => item);
 
     // Wrap in { ok: true, data: ... } so the frontend axios interceptor can unwrap it
     return ok({
@@ -236,7 +292,9 @@ export async function handleSportsSearch(env: Env, request: Request): Promise<Re
       totalCount: data.total || 0,
       page,
       pageSize: limit,
-      query,
+      query: searchQuery,
+      rawQuery,
+      parsedQuery,
       sport,
       source: 'ebay',
     });
@@ -253,16 +311,21 @@ export async function handleSportsSoldSearch(env: Env, request: Request): Promis
   const sport = (url.searchParams.get('sport') || 'sports').toLowerCase();
   const categoryId = SPORT_CATEGORY[sport] || '212';
 
-  if (!q.trim()) {
+  const rawQuery = q.trim();
+  if (!rawQuery) {
     return ok({ data: [], totalCount: 0 });
   }
+
+  const parsedQuery = parseSportsQuery(rawQuery);
+  const structuredQuery = buildSportsSearchQuery(parsedQuery);
+  const searchQuery = structuredQuery.trim() || rawQuery;
 
   try {
     const token = await getEbayToken(env);
 
     // eBay Browse API doesn't support sold listings directly — use live listings
     // sorted by price as a proxy for market value
-    const physicalQ = q.trim().toLowerCase().includes('-digital') ? q.trim() : `${q.trim()} -digital`;
+    const physicalQ = searchQuery.toLowerCase().includes('-digital') ? searchQuery : `${searchQuery} -digital`;
 
     const params = new URLSearchParams({
       q: physicalQ,
@@ -287,7 +350,11 @@ export async function handleSportsSoldSearch(env: Env, request: Request): Promis
     }
 
     const data = await resp.json() as { total?: number; itemSummaries?: Record<string, unknown>[] };
-    const items = (data.itemSummaries || []).map(normalizeItem);
+    const items = (data.itemSummaries || [])
+      .map(normalizeItem)
+      .map((item) => ({ item, _score: scoreSportsResult(item, parsedQuery) }))
+      .sort((a, b) => b._score - a._score)
+      .map(({ item }) => item);
 
     return ok({ data: items, totalCount: data.total || 0, source: 'ebay_live' });
   } catch (err) {
