@@ -716,12 +716,11 @@ function SealedDetailModal({ product, onClose }: { product: SealedResult; onClos
         onClick={e => e.stopPropagation()}
       >
         {imageUrl && (
-          <div className="relative bg-zinc-900 flex items-center justify-center" style={{ minHeight: 160 }}>
+          <div className="relative bg-zinc-900 flex items-center justify-center" style={{ minHeight: 120 }}>
             <img
               src={imageUrl}
               alt={product.name}
-              className="object-contain"
-              style={{ maxHeight: 260, maxWidth: '100%' }}
+              className="object-contain max-h-[180px] sm:max-h-[220px] max-w-full"
               onError={e => { (e.currentTarget as HTMLImageElement).style.display = 'none' }}
             />
             <button onClick={onClose} className="absolute top-3 right-3 rounded-full p-1.5" style={{ background: 'rgba(0,0,0,0.5)' }}>
