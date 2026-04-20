@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import { ExternalLink, Heart, Package, Plus, Search, ShoppingCart, X, Check, LayoutDashboard } from 'lucide-react'
+import { ExternalLink, Heart, Package, Plus, Search, ShoppingCart, X, Check, LayoutDashboard, SlidersHorizontal } from 'lucide-react'
 import { CardGridSkeleton } from '../components/SkeletonLoader'
 import { useQueryClient } from '@tanstack/react-query'
 import { api } from '../lib/api'
@@ -1046,6 +1046,8 @@ export default function SearchPage() {
   const SPORTS_DEFAULT_QUERIES = ['lebron james basketball card', 'patrick mahomes football card', 'mike trout baseball card', 'mbappe soccer card', 'max verstappen formula 1 card']
   const DEFAULT_QUERIES = [...TCG_DEFAULT_QUERIES, ...SPORTS_DEFAULT_QUERIES]
   const [activeFilterGroup, setActiveFilterGroup] = useState<'tcg' | 'sports'>('tcg')
+  const [showSecondaryFilters, setShowSecondaryFilters] = useState(false)
+  const [selectedQuickFilter, setSelectedQuickFilter] = useState('')
 
   const runSearch = useCallback(async (q: string, cat: Category) => {
     setLoading(true)
@@ -1133,6 +1135,8 @@ export default function SearchPage() {
 
   const filteredSealed = productTypeFilter ? sealed.filter(p => p.product_type === productTypeFilter) : sealed
   const isSportsMode = activeFilterGroup === 'sports'
+  const availableQuickFilters = TCG_QUICK_FILTERS.filter(f => f.group === activeFilterGroup)
+  const secondaryFilterCount = (productTypeFilter ? 1 : 0) + (selectedQuickFilter ? 1 : 0)
 
   const unifiedResults: UnifiedResult[] = (() => {
     if (isSportsMode) return sportsCards
@@ -1149,6 +1153,23 @@ export default function SearchPage() {
   })()
 
   const totalResults = isSportsMode ? sportsCards.length : (cards.length + filteredSealed.length)
+
+  function applyQuickFilter(filterValue: string) {
+    if (!filterValue) {
+      setSelectedQuickFilter('')
+      return
+    }
+    const next = availableQuickFilters.find(f => f.label === filterValue)
+    if (!next) return
+    setSelectedQuickFilter(next.label)
+    setQuery(next.query)
+    if (next.group === 'sports') {
+      void runSportsSearch(next.query, next.label.toLowerCase())
+    } else {
+      setCategory('cards')
+      void runSearch(next.query, 'cards')
+    }
+  }
 
   // Quick-add: add directly to portfolio without opening modal
   async function handleQuickAdd(item: UnifiedResult) {
@@ -1264,130 +1285,230 @@ export default function SearchPage() {
         </div>
       )}
 
-      {/* ── Search bar ── */}
-      <div style={{
-        position: 'relative', marginBottom: 12,
-        background: 'var(--glass-bg)', border: '1px solid var(--glass-border)',
-        borderRadius: 14, display: 'flex', alignItems: 'center', padding: '0 14px', gap: 10,
-      }}>
-        <Search size={18} color="var(--text-secondary)" style={{ flexShrink: 0 }} />
-        <input
-          ref={inputRef}
-          type="text"
-          value={query}
-          onChange={e => setQuery(e.target.value)}
-          placeholder="Search cards, sets, ETBs, tins, promo packs…"
-          autoFocus
-          style={{ flex: 1, background: 'transparent', border: 'none', outline: 'none', fontSize: 16, color: 'var(--text-primary)', padding: '14px 0' }}
-        />
-        {query && (
-          <button onClick={() => { setQuery(''); inputRef.current?.focus() }} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 4, color: 'var(--text-secondary)' }}>
-            <X size={16} />
-          </button>
-        )}
-      </div>
+      {/* ── Sticky search + primary filters ── */}
+      <div style={{ position: 'sticky', top: 10, zIndex: 20, marginBottom: 14 }}>
+        <div style={{ background: 'rgba(10,10,12,0.94)', backdropFilter: 'blur(12px)', border: '1px solid var(--glass-border)', borderRadius: 16, padding: 10 }}>
+          <div style={{
+            position: 'relative',
+            background: 'var(--glass-bg)',
+            border: '1px solid var(--glass-border)',
+            borderRadius: 14,
+            display: 'flex',
+            alignItems: 'center',
+            padding: '0 14px',
+            gap: 10,
+            marginBottom: 10,
+          }}>
+            <Search size={18} color="var(--text-secondary)" style={{ flexShrink: 0 }} />
+            <input
+              ref={inputRef}
+              type="text"
+              value={query}
+              onChange={e => setQuery(e.target.value)}
+              placeholder="Search cards, sets, ETBs, tins, promo packs…"
+              autoFocus
+              style={{ flex: 1, background: 'transparent', border: 'none', outline: 'none', fontSize: 16, color: 'var(--text-primary)', padding: '14px 0' }}
+            />
+            {query && (
+              <button onClick={() => { setQuery(''); inputRef.current?.focus() }} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 4, color: 'var(--text-secondary)' }}>
+                <X size={16} />
+              </button>
+            )}
+          </div>
 
-      {/* ── TCG + Sports quick filters (Collectr-style) ── */}
-      <div style={{ marginBottom: 14 }}>
-        {/* Group toggle */}
-        <div style={{ display: 'flex', gap: 6, marginBottom: 10 }}>
-          {(['tcg', 'sports'] as const).map(g => (
-            <button
-              key={g}
-              onClick={() => {
-                setActiveFilterGroup(g)
-                setQuery('')
-                if (g === 'sports') {
-                  const pick = SPORTS_DEFAULT_QUERIES[Math.floor(Math.random() * SPORTS_DEFAULT_QUERIES.length)]
-                  void runSportsSearch(pick)
-                } else {
-                  const pick = TCG_DEFAULT_QUERIES[Math.floor(Math.random() * TCG_DEFAULT_QUERIES.length)]
-                  void runSearch(pick, 'cards')
-                }
-              }}
-              style={{
-                padding: '5px 14px', borderRadius: 20, fontSize: 12, fontWeight: 600, cursor: 'pointer',
-                border: '1px solid',
-                borderColor: activeFilterGroup === g ? 'rgba(212,175,55,0.5)' : 'var(--glass-border)',
-                background: activeFilterGroup === g ? 'rgba(212,175,55,0.12)' : 'var(--glass-bg)',
-                color: activeFilterGroup === g ? '#D4AF37' : 'var(--text-secondary)',
-                transition: 'all 0.15s',
-              }}
-            >
-              {g === 'tcg' ? '🃏 TCG' : '🏆 Sports'}
-            </button>
-          ))}
+          <div style={{ display: 'grid', gap: 8 }}>
+            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+              {(['tcg', 'sports'] as const).map(g => (
+                <button
+                  key={g}
+                  onClick={() => {
+                    setActiveFilterGroup(g)
+                    setSelectedQuickFilter('')
+                    setProductTypeFilter('')
+                    setQuery('')
+                    if (g === 'sports') {
+                      const pick = SPORTS_DEFAULT_QUERIES[Math.floor(Math.random() * SPORTS_DEFAULT_QUERIES.length)]
+                      void runSportsSearch(pick)
+                    } else {
+                      const pick = TCG_DEFAULT_QUERIES[Math.floor(Math.random() * TCG_DEFAULT_QUERIES.length)]
+                      void runSearch(pick, 'cards')
+                    }
+                  }}
+                  style={{
+                    padding: '6px 14px',
+                    borderRadius: 20,
+                    fontSize: 12,
+                    fontWeight: 600,
+                    cursor: 'pointer',
+                    border: '1px solid',
+                    borderColor: activeFilterGroup === g ? 'rgba(212,175,55,0.5)' : 'var(--glass-border)',
+                    background: activeFilterGroup === g ? 'rgba(212,175,55,0.12)' : 'var(--glass-bg)',
+                    color: activeFilterGroup === g ? '#D4AF37' : 'var(--text-secondary)',
+                  }}
+                >
+                  {g === 'tcg' ? '🃏 TCG' : '🏆 Sports'}
+                </button>
+              ))}
+            </div>
+
+            <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+              <label style={{ display: 'flex', alignItems: 'center', gap: 6, flex: '1 1 220px', minWidth: 200 }}>
+                <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: 0.5 }}>Game / Brand</span>
+                <select
+                  value={selectedQuickFilter}
+                  onChange={e => applyQuickFilter(e.target.value)}
+                  style={{
+                    flex: 1,
+                    minWidth: 120,
+                    borderRadius: 10,
+                    border: '1px solid var(--glass-border)',
+                    background: 'var(--glass-bg)',
+                    color: 'var(--text-primary)',
+                    padding: '7px 10px',
+                    fontSize: 13,
+                  }}
+                >
+                  <option value="">All {isSportsMode ? 'Sports' : 'TCG'} Brands</option>
+                  {availableQuickFilters.map(f => (
+                    <option key={f.label} value={f.label}>{f.emoji} {f.label}</option>
+                  ))}
+                </select>
+              </label>
+
+              <button
+                type="button"
+                onClick={() => setShowSecondaryFilters(true)}
+                style={{
+                  borderRadius: 10,
+                  border: '1px solid var(--glass-border)',
+                  background: secondaryFilterCount > 0 ? 'rgba(212,175,55,0.15)' : 'var(--glass-bg)',
+                  color: secondaryFilterCount > 0 ? '#D4AF37' : 'var(--text-secondary)',
+                  padding: '8px 12px',
+                  fontSize: 13,
+                  fontWeight: 600,
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 6,
+                  cursor: 'pointer',
+                }}
+              >
+                <SlidersHorizontal size={14} />
+                Filters{secondaryFilterCount > 0 ? ` (${secondaryFilterCount})` : ''}
+              </button>
+            </div>
+
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+              {(['all', 'cards', 'sealed'] as Category[]).map(cat => (
+                <button
+                  key={cat}
+                  onClick={() => { setCategory(cat); setProductTypeFilter('') }}
+                  style={{
+                    padding: '7px 14px',
+                    borderRadius: 20,
+                    border: '1px solid var(--glass-border)',
+                    background: category === cat ? 'rgba(212,175,55,0.15)' : 'var(--glass-bg)',
+                    color: category === cat ? '#D4AF37' : 'var(--text-secondary)',
+                    fontSize: 13,
+                    fontWeight: category === cat ? 600 : 500,
+                    cursor: 'pointer',
+                  }}
+                >
+                  {cat === 'all' ? 'All Results' : cat === 'cards' ? 'Cards' : 'Sealed'}
+                </button>
+              ))}
+            </div>
+          </div>
         </div>
-        {/* Filter pills */}
-        <div style={{ display: 'flex', gap: 8, overflowX: 'auto', paddingBottom: 4 }}>
-          {TCG_QUICK_FILTERS.filter(f => f.group === activeFilterGroup).map(f => (
-            <button
-              key={f.label}
-              onClick={() => {
-                setQuery(f.query)
-                if (f.group === 'sports') {
-                  void runSportsSearch(f.query, f.label.toLowerCase())
-                } else {
-                  setCategory('cards')
-                  void runSearch(f.query, 'cards')
-                }
-              }}
-              style={{
-                display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0,
-                padding: '7px 14px', borderRadius: 20,
-                border: '1px solid var(--glass-border)',
-                background: 'var(--glass-bg)',
-                color: 'var(--text-primary)',
-                fontSize: 13, fontWeight: 500, cursor: 'pointer',
-                transition: 'background 0.15s',
-              }}
-              onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = 'rgba(212,175,55,0.08)' }}
-              onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = 'var(--glass-bg)' }}
-            >
-              <span style={{ fontSize: 16 }}>{f.emoji}</span>
-              {f.label}
-            </button>
-          ))}
+      </div>
+
+      {!loading && totalResults > 0 && (
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, flexWrap: 'wrap', marginBottom: 12, padding: '8px 10px', borderRadius: 12, border: '1px solid var(--glass-border)', background: 'var(--glass-bg)' }}>
+          <div style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
+            <span style={{ color: 'var(--text-primary)', fontWeight: 700 }}>{totalResults}</span> result{totalResults !== 1 ? 's' : ''}
+            {secondaryFilterCount > 0 && <span style={{ marginLeft: 8 }}>· {secondaryFilterCount} filter{secondaryFilterCount !== 1 ? 's' : ''} active</span>}
+            {addToPortfolioMode && addedIds.size > 0 && <span style={{ marginLeft: 8, color: '#4ECBA0', fontWeight: 600 }}>· {addedIds.size} added</span>}
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>Sort</span>
+            <select value="relevance" disabled style={{ borderRadius: 8, border: '1px solid var(--glass-border)', background: 'var(--glass-bg)', color: 'var(--text-primary)', padding: '5px 8px', fontSize: 12 }}>
+              <option value="relevance">Best match</option>
+            </select>
+            {secondaryFilterCount > 0 && (
+              <button
+                type="button"
+                onClick={() => { setProductTypeFilter(''); setSelectedQuickFilter('') }}
+                style={{ border: 'none', background: 'none', color: '#D4AF37', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}
+              >
+                Clear all
+              </button>
+            )}
+          </div>
         </div>
-      </div>
+      )}
 
-      {/* ── Category filter ── */}
-      <div style={{ display: 'flex', gap: 8, marginBottom: 10, flexWrap: 'wrap' }}>
-        {(['all', 'cards', 'sealed'] as Category[]).map(cat => (
-          <button
-            key={cat}
-            onClick={() => { setCategory(cat); setProductTypeFilter('') }}
-            style={{
-              padding: '6px 14px', borderRadius: 20,
-              border: '1px solid var(--glass-border)',
-              background: category === cat ? 'rgba(212,175,55,0.15)' : 'var(--glass-bg)',
-              color: category === cat ? '#D4AF37' : 'var(--text-secondary)',
-              fontSize: 13, fontWeight: category === cat ? 600 : 400, cursor: 'pointer', transition: 'all 0.15s',
-            }}
+      {showSecondaryFilters && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          onClick={() => setShowSecondaryFilters(false)}
+          style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.65)', zIndex: 50, display: 'flex', alignItems: 'flex-end', justifyContent: 'center' }}
+        >
+          <div
+            onClick={e => e.stopPropagation()}
+            style={{ width: 'min(720px, 100%)', maxHeight: '85vh', overflowY: 'auto', background: '#0d0d10', border: '1px solid var(--glass-border)', borderTopLeftRadius: 16, borderTopRightRadius: 16, padding: 14 }}
           >
-            {cat === 'all' ? 'All Types' : cat === 'cards' ? 'Cards Only' : 'Sealed Products'}
-          </button>
-        ))}
-      </div>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+              <h3 style={{ margin: 0, fontSize: 16, color: 'var(--text-primary)' }}>Filters</h3>
+              <button onClick={() => setShowSecondaryFilters(false)} style={{ border: 'none', background: 'none', color: 'var(--text-secondary)', cursor: 'pointer' }}><X size={16} /></button>
+            </div>
 
-      {/* ── Product type sub-filter ── */}
-      {(category === 'sealed' || (category === 'all' && sealed.length > 0)) && (
-        <div style={{ display: 'flex', gap: 6, marginBottom: 14, overflowX: 'auto', paddingBottom: 4 }}>
-          <button
-            onClick={() => setProductTypeFilter('')}
-            style={{ padding: '4px 12px', borderRadius: 20, border: '1px solid var(--glass-border)', background: productTypeFilter === '' ? 'rgba(212,175,55,0.15)' : 'var(--glass-bg)', color: productTypeFilter === '' ? '#D4AF37' : 'var(--text-secondary)', fontSize: 12, fontWeight: productTypeFilter === '' ? 600 : 400, cursor: 'pointer', whiteSpace: 'nowrap' }}
-          >
-            All Products
-          </button>
-          {PRODUCT_FILTER_GROUPS.map(({ label, value }) => (
-            <button
-              key={value}
-              onClick={() => setProductTypeFilter(productTypeFilter === value ? '' : value)}
-              style={{ padding: '4px 12px', borderRadius: 20, border: '1px solid var(--glass-border)', background: productTypeFilter === value ? 'rgba(212,175,55,0.15)' : 'var(--glass-bg)', color: productTypeFilter === value ? '#D4AF37' : 'var(--text-secondary)', fontSize: 12, fontWeight: productTypeFilter === value ? 600 : 400, cursor: 'pointer', whiteSpace: 'nowrap' }}
-            >
-              {label}
-            </button>
-          ))}
+            {(category === 'sealed' || (category === 'all' && sealed.length > 0)) && (
+              <div style={{ marginBottom: 14 }}>
+                <p style={{ fontSize: 12, margin: '0 0 8px', color: 'var(--text-secondary)' }}>Product subtype</p>
+                <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                  <button
+                    onClick={() => setProductTypeFilter('')}
+                    style={{ padding: '6px 12px', borderRadius: 20, border: '1px solid var(--glass-border)', background: productTypeFilter === '' ? 'rgba(212,175,55,0.15)' : 'var(--glass-bg)', color: productTypeFilter === '' ? '#D4AF37' : 'var(--text-secondary)', fontSize: 12, fontWeight: productTypeFilter === '' ? 600 : 400, cursor: 'pointer' }}
+                  >
+                    All Products
+                  </button>
+                  {PRODUCT_FILTER_GROUPS.map(({ label, value }) => (
+                    <button
+                      key={value}
+                      onClick={() => setProductTypeFilter(productTypeFilter === value ? '' : value)}
+                      style={{ padding: '6px 12px', borderRadius: 20, border: '1px solid var(--glass-border)', background: productTypeFilter === value ? 'rgba(212,175,55,0.15)' : 'var(--glass-bg)', color: productTypeFilter === value ? '#D4AF37' : 'var(--text-secondary)', fontSize: 12, fontWeight: productTypeFilter === value ? 600 : 400, cursor: 'pointer' }}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            <div style={{ marginBottom: 8 }}>
+              <p style={{ fontSize: 12, margin: '0 0 8px', color: 'var(--text-secondary)' }}>Popular quick filters</p>
+              <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                {availableQuickFilters.map(f => (
+                  <button
+                    key={f.label}
+                    onClick={() => applyQuickFilter(f.label)}
+                    style={{
+                      padding: '6px 12px',
+                      borderRadius: 20,
+                      border: '1px solid var(--glass-border)',
+                      background: selectedQuickFilter === f.label ? 'rgba(212,175,55,0.15)' : 'var(--glass-bg)',
+                      color: selectedQuickFilter === f.label ? '#D4AF37' : 'var(--text-secondary)',
+                      fontSize: 12,
+                      fontWeight: selectedQuickFilter === f.label ? 600 : 500,
+                      cursor: 'pointer',
+                    }}
+                  >
+                    {f.emoji} {f.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
         </div>
       )}
 
