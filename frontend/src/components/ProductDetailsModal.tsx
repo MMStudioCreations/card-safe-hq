@@ -1,8 +1,10 @@
 import { useState, useEffect } from 'react'
+import { createPortal } from 'react-dom'
 import { X, Minus, Plus, Trash2, Tag, ChevronRight, ExternalLink } from 'lucide-react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { api } from '../lib/api'
 import type { CollectionItem } from '../lib/api'
+import { useScrollLock } from '../hooks/useScrollLock'
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 function fmt(cents: number | null | undefined): string {
@@ -69,6 +71,8 @@ function buildEbayUrl(name: string, setName: string, cond?: string, sold = false
 export default function ProductDetailsModal({ item, onClose }: Props) {
   const queryClient = useQueryClient()
 
+  useScrollLock(true)
+
   // Local form state
   const [qty, setQty] = useState(item.quantity ?? 1)
   const [pricePaid, setPricePaid] = useState(
@@ -133,7 +137,7 @@ export default function ProductDetailsModal({ item, onClose }: Props) {
   const setName = getSetName(item)
   const game = getGameLabel(item)
 
-  return (
+  return createPortal(
     <div
       className="fixed inset-0 z-50 flex items-end sm:items-center justify-center"
       style={{ background: 'rgba(0,0,0,0.75)', backdropFilter: 'blur(4px)' }}
@@ -521,6 +525,7 @@ export default function ProductDetailsModal({ item, onClose }: Props) {
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   )
 }
