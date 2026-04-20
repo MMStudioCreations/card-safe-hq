@@ -1080,7 +1080,7 @@ export default function SearchPage() {
   const [proGateMessage, setProGateMessage] = useState<string | null>(null)
 
   const [query, setQuery] = useState('')
-  const [category, setCategory] = useState<Category>('all')
+  const [category, setCategory] = useState<Category>('cards')
   const [productTypeFilter, setProductTypeFilter] = useState<string>('')
   const [cards, setCards] = useState<CardResult[]>([])
   const [sealed, setSealed] = useState<SealedResult[]>([])
