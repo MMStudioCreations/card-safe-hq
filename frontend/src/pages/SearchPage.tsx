@@ -397,7 +397,7 @@ function CardDetailModal({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-end sm:items-center justify-center"
+      className="fixed inset-0 z-50 flex items-center justify-center"
       style={{ background: 'rgba(0,0,0,0.82)', backdropFilter: 'blur(8px)' }}
       onClick={onClose}
     >
@@ -405,14 +405,15 @@ function CardDetailModal({
         style={{
           background: '#111114',
           border: '1px solid rgba(255,255,255,0.08)',
-          borderRadius: '20px 20px 0 0',
+          borderRadius: '20px',
           width: '100%',
           maxWidth: 460,
-          maxHeight: '94vh',
+          maxHeight: '85vh',
           display: 'flex',
           flexDirection: 'column',
           overflow: 'hidden',
           position: 'relative',
+          margin: '16px',
         }}
         onClick={e => e.stopPropagation()}
       >
@@ -1690,8 +1691,8 @@ function SportsCardDetailModal({ card, onClose, onAddedToPortfolio }: {
   }
 
   return (
-    <div style={{ position: 'fixed', inset: 0, zIndex: 1000, display: 'flex', alignItems: 'flex-end', justifyContent: 'center', background: 'rgba(0,0,0,0.7)' }} onClick={onClose}>
-      <div style={{ width: '100%', maxWidth: 480, background: 'var(--surface)', borderRadius: '20px 20px 0 0', maxHeight: '90vh', overflowY: 'auto', paddingBottom: 90 }} onClick={e => e.stopPropagation()}>
+    <div style={{ position: 'fixed', inset: 0, zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.7)' }} onClick={onClose}>
+      <div style={{ width: '100%', maxWidth: 480, background: 'var(--surface)', borderRadius: '20px', maxHeight: '85vh', overflowY: 'auto', paddingBottom: 90, margin: '16px' }} onClick={e => e.stopPropagation()}>
         {/* Drag handle */}
         <div style={{ display: 'flex', justifyContent: 'center', padding: '12px 0 4px' }}>
           <div style={{ width: 36, height: 4, borderRadius: 2, background: 'rgba(255,255,255,0.2)' }} />
