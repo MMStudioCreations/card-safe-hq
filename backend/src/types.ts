@@ -1,3 +1,7 @@
+export interface RateLimiter {
+  limit(options: { key: string }): Promise<{ success: boolean }>;
+}
+
 export interface Env {
   DB: D1Database;
   BUCKET: R2Bucket;
@@ -27,6 +31,9 @@ export interface Env {
   SHOP_OWNER_EMAIL?: string;
   STRIPE_PRICE_ID_MONTHLY?: string;
   STRIPE_PRICE_ID_YEARLY?: string;
+  LOGIN_RATE_LIMITER: RateLimiter;
+  REGISTER_RATE_LIMITER: RateLimiter;
+  COMPS_RATE_LIMITER: RateLimiter;
 }
 export interface User {
   id: number;

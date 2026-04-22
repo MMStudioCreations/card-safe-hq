@@ -35,3 +35,7 @@ export function notFound(message = 'Not found'): Response {
 export function serverError(message = 'Internal server error'): Response {
   return error(message, 500);
 }
+
+export function tooManyRequests(message = 'Too many requests'): Response {
+  return error(message, 429);
+}

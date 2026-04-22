@@ -3,6 +3,8 @@ import { queryAll, queryOne, run } from '../lib/db';
 import { badRequest, notFound, ok } from '../lib/json';
 import { asString, parseJsonBody } from '../lib/validation';
 
+const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+
 export async function listReleases(env: Env, request: Request): Promise<Response> {
   const url = new URL(request.url);
   const game = url.searchParams.get('game');
@@ -22,10 +24,12 @@ export async function listReleases(env: Env, request: Request): Promise<Response
     params.push(type);
   }
   if (from) {
+    if (!DATE_RE.test(from)) return badRequest('Invalid date format. Use YYYY-MM-DD');
     where.push('release_date >= ?');
     params.push(from);
   }
   if (to) {
+    if (!DATE_RE.test(to)) return badRequest('Invalid date format. Use YYYY-MM-DD');
     where.push('release_date <= ?');
     params.push(to);
   }

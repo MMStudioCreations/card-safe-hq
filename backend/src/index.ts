@@ -1,6 +1,6 @@
 import type { Env } from './types';
 import { requireAuth } from './lib/auth';
-import { badRequest, notFound, ok, serverError } from './lib/json';
+import { badRequest, notFound, ok, serverError, tooManyRequests } from './lib/json';
 import { handleLogin, handleLogout, handleMe, handleRegister } from './routes/auth';
 import { createCard, deleteCard, getCard, listCards, updateCard } from './routes/cards';
 import {
@@ -115,25 +115,39 @@ const ALLOWED_ORIGINS = new Set([
   'https://card-vault-ai.pages.dev',
 ]);
 
-function getAllowedOrigin(request: Request, env: Env): string {
+const SECURITY_HEADERS: Record<string, string> = {
+  'X-Content-Type-Options': 'nosniff',
+  'X-Frame-Options': 'DENY',
+  'Content-Security-Policy': "default-src 'self'",
+};
+
+function getAllowedOrigin(request: Request, env: Env): string | null {
   if (env.CORS_ORIGIN?.trim()) return env.CORS_ORIGIN.trim();
   const origin = request.headers.get('origin') ?? '';
-  // Must echo the exact origin (not '*') when credentials are included.
-  // Wildcard '*' causes browsers to reject cookies in standalone PWA mode.
   if (ALLOWED_ORIGINS.has(origin)) return origin;
-  // Allow localhost for development
   if (origin.startsWith('http://localhost') || origin.startsWith('http://127.0.0.1')) return origin;
-  // For any other origin, echo it back (Cloudflare Workers; auth still requires valid session cookie)
-  return origin || 'https://cardsafehq.com';
+  if (origin.endsWith('.github.io')) return origin;
+  return null;
 }
 
 function withCors(response: Response, request: Request, env: Env): Response {
+  const allowedOrigin = getAllowedOrigin(request, env);
+  if (!allowedOrigin) {
+    const h = new Headers({ 'content-type': 'application/json; charset=utf-8' });
+    for (const [k, v] of Object.entries(SECURITY_HEADERS)) h.set(k, v);
+    return new Response(JSON.stringify({ ok: false, error: 'Origin not allowed' }), {
+      status: 403,
+      headers: h,
+    });
+  }
   const headers = new Headers(response.headers);
-  headers.set('Access-Control-Allow-Origin', getAllowedOrigin(request, env));
+  headers.set('Access-Control-Allow-Origin', allowedOrigin);
+  headers.set('Access-Control-Allow-Credentials', 'true');
   headers.set('Access-Control-Allow-Methods', ALLOWED_METHODS);
   headers.set('Access-Control-Allow-Headers', ALLOWED_HEADERS);
   headers.set('Access-Control-Allow-Credentials', 'true');
   headers.set('Vary', 'Origin');
+  for (const [k, v] of Object.entries(SECURITY_HEADERS)) headers.set(k, v);
   return new Response(response.body, {
     status: response.status,
     statusText: response.statusText,
@@ -176,6 +190,10 @@ export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     const { pathname } = new URL(request.url);
     const method = request.method.toUpperCase();
+
+    if (!env.CORS_ORIGIN?.trim()) {
+      console.error('CORS_ORIGIN is not set — all cross-origin requests will be rejected');
+    }
 
     try {
       if (method === 'OPTIONS') {
@@ -263,14 +281,26 @@ export default {
       }
 
       if (method === 'GET' && pathname === '/api/cards') return withCors(await listCards(env, request), request, env);
-      if (method === 'POST' && pathname === '/api/cards') return withCors(await createCard(env, request), request, env);
+      if (method === 'POST' && pathname === '/api/cards') {
+        const user = await requireAuth(env, request);
+        if (user instanceof Response) return withCors(user, request, env);
+        return withCors(await createCard(env, request), request, env);
+      }
 
       if (pathname.startsWith('/api/cards/')) {
         const id = parseId(pathname);
         if (!id) return withCors(badRequest('Invalid card id'), request, env);
         if (method === 'GET') return withCors(await getCard(env, id), request, env);
-        if (method === 'PATCH') return withCors(await updateCard(env, request, id), request, env);
-        if (method === 'DELETE') return withCors(await deleteCard(env, id), request, env);
+        if (method === 'PATCH') {
+          const user = await requireAuth(env, request);
+          if (user instanceof Response) return withCors(user, request, env);
+          return withCors(await updateCard(env, request, id), request, env);
+        }
+        if (method === 'DELETE') {
+          const user = await requireAuth(env, request);
+          if (user instanceof Response) return withCors(user, request, env);
+          return withCors(await deleteCard(env, id), request, env);
+        }
       }
 
       if (method === 'DELETE' && pathname === '/api/collection/items/batch') {
@@ -407,7 +437,11 @@ export default {
 
       if (pathname === '/api/releases') {
         if (method === 'GET') return withCors(await listReleases(env, request), request, env);
-        if (method === 'POST') return withCors(await createRelease(env, request), request, env);
+        if (method === 'POST') {
+          const user = await requireAuth(env, request);
+          if (user instanceof Response) return withCors(user, request, env);
+          return withCors(await createRelease(env, request), request, env);
+        }
       }
 
       if (pathname.startsWith('/api/releases/')) {
@@ -417,6 +451,10 @@ export default {
       }
 
       if (method === 'GET' && pathname === '/api/comps/search') {
+        const user = await requireAuth(env, request);
+        if (user instanceof Response) return withCors(user, request, env);
+        const { success: allowed } = await env.COMPS_RATE_LIMITER.limit({ key: String(user.id) });
+        if (!allowed) return withCors(tooManyRequests('Too many comps requests — try again later'), request, env);
         return withCors(await searchComps(env, request), request, env);
       }
 
@@ -429,13 +467,25 @@ export default {
       if (pathname.startsWith('/api/comps/refresh/')) {
         const id = parseId(pathname);
         if (!id) return withCors(badRequest('Invalid card id'), request, env);
-        if (method === 'POST') return withCors(await refreshComps(env, id), request, env);
+        if (method === 'POST') {
+          const user = await requireAuth(env, request);
+          if (user instanceof Response) return withCors(user, request, env);
+          const { success: allowed } = await env.COMPS_RATE_LIMITER.limit({ key: String(user.id) });
+          if (!allowed) return withCors(tooManyRequests('Too many comps requests — try again later'), request, env);
+          return withCors(await refreshComps(env, id), request, env);
+        }
       }
 
       if (pathname.startsWith('/api/comps/')) {
         const id = parseId(pathname);
         if (!id) return withCors(badRequest('Invalid card id'), request, env);
-        if (method === 'GET') return withCors(await getComps(env, id), request, env);
+        if (method === 'GET') {
+          const user = await requireAuth(env, request);
+          if (user instanceof Response) return withCors(user, request, env);
+          const { success: allowed } = await env.COMPS_RATE_LIMITER.limit({ key: String(user.id) });
+          if (!allowed) return withCors(tooManyRequests('Too many comps requests — try again later'), request, env);
+          return withCors(await getComps(env, id), request, env);
+        }
       }
 
       if (method === 'POST' && pathname === '/api/grading/estimate') {
@@ -827,9 +877,8 @@ export default {
   },
 
   async scheduled(_event: ScheduledEvent, env: Env): Promise<void> {
-    await env.DB.prepare(
-      "DELETE FROM rate_limits WHERE expires_at < datetime('now')"
-    ).run();
+    await env.DB.prepare("DELETE FROM sessions WHERE expires_at < datetime('now')").run();
+    await env.DB.prepare("DELETE FROM rate_limits WHERE expires_at < datetime('now')").run();
     await runPriceSync(env);
   },
 };

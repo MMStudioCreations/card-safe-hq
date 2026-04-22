@@ -1,9 +1,13 @@
 import type { Env } from '../types';
 import { getCurrentUser, loginUser, logoutUser, registerUser } from '../lib/auth';
-import { badRequest, ok, unauthorized } from '../lib/json';
+import { badRequest, ok, tooManyRequests, unauthorized } from '../lib/json';
 import { asEmail, asString, parseJsonBody } from '../lib/validation';
 
 export async function handleRegister(env: Env, request: Request): Promise<Response> {
+  const ip = request.headers.get('CF-Connecting-IP') ?? 'unknown';
+  const { success: allowed } = await env.REGISTER_RATE_LIMITER.limit({ key: ip });
+  if (!allowed) return tooManyRequests('Too many registration attempts — try again later');
+
   const body = await parseJsonBody<{ email: unknown; password: unknown; username?: unknown }>(request);
   if (body instanceof Response) return body;
 
@@ -17,7 +21,7 @@ export async function handleRegister(env: Env, request: Request): Promise<Respon
     const password = passwordRaw.trim();
     const username = asString(body.username, 'username', 50);
 
-    const user = await registerUser(env, { email, password, username });
+    const user = await registerUser(env, { email, password: password.slice(0, 72), username });
     return ok(user, 201);
   } catch (err) {
     return badRequest(err instanceof Error ? err.message : 'Unable to register');
@@ -25,6 +29,10 @@ export async function handleRegister(env: Env, request: Request): Promise<Respon
 }
 
 export async function handleLogin(env: Env, request: Request): Promise<Response> {
+  const ip = request.headers.get('CF-Connecting-IP') ?? 'unknown';
+  const { success: allowed } = await env.LOGIN_RATE_LIMITER.limit({ key: ip });
+  if (!allowed) return tooManyRequests('Too many login attempts — try again later');
+
   const body = await parseJsonBody<{ email: unknown; password: unknown }>(request);
   if (body instanceof Response) return body;
 

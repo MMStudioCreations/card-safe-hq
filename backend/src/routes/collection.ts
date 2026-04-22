@@ -265,6 +265,14 @@ export async function updateCollectionItem(env: Env, request: Request, user: Use
       100_000_000,
     );
 
+    const userPrefix = `user-${user.id}/`;
+    if (frontImageUrl !== null && !frontImageUrl.startsWith(userPrefix)) {
+      return badRequest('front_image_url is not a valid key for this user');
+    }
+    if (backImageUrl !== null && !backImageUrl.startsWith(userPrefix)) {
+      return badRequest('back_image_url is not a valid key for this user');
+    }
+
     await run(
       env.DB,
       `UPDATE collection_items

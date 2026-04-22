@@ -122,6 +122,10 @@ export async function identifyCollectionItem(env: Env, request: Request, user: U
   // ── Single card AI identification path ────────────────────────────────────
   if (!item.front_image_url) return badRequest('Collection item has no front image — upload one first');
 
+  if (!item.front_image_url.startsWith(`user-${user.id}/`)) {
+    return badRequest('Front image key is not valid for this user');
+  }
+
   // front_image_url is an R2 key; read bytes and encode as base64 data URL
   const dataUrl = await r2KeyToDataUrl(env, item.front_image_url);
   if (!dataUrl) return badRequest('Front image not found in storage — re-upload the image');
