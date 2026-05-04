@@ -98,8 +98,12 @@ export default function AccountPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-bold">Account Settings</h1>
-        <p className="text-cv-muted text-sm mt-1">Manage your profile, security, and subscription.</p>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 6 }}>
+          <div style={{ width: 20, height: 2, background: 'var(--gold)' }} />
+          <span style={{ fontSize: 10, letterSpacing: '0.18em', color: 'var(--gold)', fontFamily: "'DM Sans', sans-serif", fontWeight: 600, textTransform: 'uppercase' }}>Settings</span>
+        </div>
+        <h1 style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: 'clamp(26px, 3.5vw, 36px)', fontWeight: 600, margin: '0 0 4px', color: 'var(--text)', lineHeight: 1.1 }}>Account Settings</h1>
+        <p className="text-cv-muted text-sm" style={{ fontFamily: "'DM Sans', sans-serif" }}>Manage your profile, security, and subscription.</p>
       </div>
 
       <div className="flex flex-col gap-6 sm:flex-row">

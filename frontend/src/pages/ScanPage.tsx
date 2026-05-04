@@ -198,8 +198,12 @@ export default function ScanPage() {
   return (
     <div className="mx-auto max-w-2xl space-y-6">
       <div>
-        <h2 className="text-2xl font-bold">Scan Card</h2>
-        <p className="mt-1 text-sm text-cv-muted">
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 6 }}>
+          <div style={{ width: 20, height: 2, background: 'var(--gold)' }} />
+          <span style={{ fontSize: 10, letterSpacing: '0.18em', color: 'var(--gold)', fontFamily: "'DM Sans', sans-serif", fontWeight: 600, textTransform: 'uppercase' }}>Scanner</span>
+        </div>
+        <h2 style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: 'clamp(26px, 3.5vw, 36px)', fontWeight: 600, margin: '0 0 4px', color: 'var(--text)', lineHeight: 1.1 }}>Scan Card</h2>
+        <p className="mt-1 text-sm text-cv-muted" style={{ fontFamily: "'DM Sans', sans-serif" }}>
           Upload a card image to automatically identify and add it to your collection.
         </p>
       </div>

@@ -86,8 +86,12 @@ export default function BillingPage() {
   return (
     <div className="space-y-6 pb-8 max-w-3xl mx-auto">
       <div>
-        <h1 className="text-2xl font-bold">Billing & Subscription</h1>
-        <p className="text-sm text-cv-muted mt-1">
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
+          <div style={{ width: 20, height: 2, background: 'var(--gold)' }} />
+          <span style={{ fontSize: 10, letterSpacing: '0.18em', color: 'var(--gold)', fontFamily: "'DM Sans', sans-serif", fontWeight: 600, textTransform: 'uppercase' }}>Membership</span>
+        </div>
+        <h1 style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: 'clamp(28px, 3.5vw, 40px)', fontWeight: 600, margin: '0 0 6px', color: 'var(--text)', lineHeight: 1.1 }}>Billing &amp; Subscription</h1>
+        <p className="text-sm text-cv-muted" style={{ fontFamily: "'DM Sans', sans-serif" }}>
           Choose the plan that fits your collection. Upgrade anytime.
         </p>
       </div>

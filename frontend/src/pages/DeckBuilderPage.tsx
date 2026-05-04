@@ -626,12 +626,13 @@ export default function DeckBuilderPage() {
   return (
     <div className="page-enter space-y-4">
       {/* Header */}
-      <div className="flex items-center gap-3">
-        <Layers className="h-6 w-6 text-[var(--primary)]" />
-        <div className="flex-1">
-          <h2 className="text-2xl font-bold">Deck Builder</h2>
-          <p className="text-sm text-cv-muted">Build decks from your collection</p>
+      <div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 6 }}>
+          <div style={{ width: 20, height: 2, background: 'var(--gold)' }} />
+          <span style={{ fontSize: 10, letterSpacing: '0.18em', color: 'var(--gold)', fontFamily: "'DM Sans', sans-serif", fontWeight: 600, textTransform: 'uppercase' }}>Builder</span>
         </div>
+        <h2 style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: 'clamp(26px, 3.5vw, 36px)', fontWeight: 600, margin: '0 0 4px', color: 'var(--text)', lineHeight: 1.1 }}>Deck Builder</h2>
+        <p className="text-sm text-cv-muted" style={{ fontFamily: "'DM Sans', sans-serif" }}>Build and analyze decks from your collection</p>
       </div>
 
       {/* Game selector + format */}

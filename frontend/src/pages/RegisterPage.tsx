@@ -86,8 +86,8 @@ export default function RegisterPage() {
           </div>
         </div>
         <div className="text-center">
-          <h1 className="text-2xl font-bold">Create account</h1>
-          <p className="text-sm text-cv-muted">Join Card Safe HQ — your collector vault awaits.</p>
+          <h1 style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: 28, fontWeight: 600, margin: '0 0 4px', color: 'var(--text)' }}>Create account</h1>
+          <p className="text-sm text-cv-muted" style={{ fontFamily: "'DM Sans', sans-serif" }}>Join Card Safe HQ — your collector vault awaits.</p>
         </div>
         <input className="input" type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="Email" required />
         <input className="input" value={username} onChange={(e) => setUsername(e.target.value)} placeholder="Username" />

@@ -105,6 +105,9 @@ export default function Navbar() {
           <NavLink to="/protection" className="nav-link hoverable" style={navLinkStyle}>
             Protection
           </NavLink>
+          <NavLink to="/search" className="nav-link hoverable" style={navLinkStyle}>
+            Browse Cards
+          </NavLink>
           <a
             href="/#about"
             className="nav-link hoverable"

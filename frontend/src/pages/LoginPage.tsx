@@ -90,8 +90,8 @@ export default function LoginPage() {
         </div>
 
         <div className="text-center">
-          <h1 className="text-2xl font-bold">Welcome back</h1>
-          <p className="text-sm text-cv-muted">Sign in to access your private vault.</p>
+          <h1 style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: 28, fontWeight: 600, margin: '0 0 4px', color: 'var(--text)' }}>Welcome back</h1>
+          <p className="text-sm text-cv-muted" style={{ fontFamily: "'DM Sans', sans-serif" }}>Sign in to access your private vault.</p>
         </div>
 
         <input
