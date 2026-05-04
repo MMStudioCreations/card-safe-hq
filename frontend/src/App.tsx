@@ -2,6 +2,8 @@ import { Navigate, Route, Routes } from 'react-router-dom'
 import Layout from './components/Layout'
 import ProtectedRoute from './components/ProtectedRoute'
 import SemiProtectedRoute from './components/SemiProtectedRoute'
+import CustomCursor from './components/CustomCursor'
+import ParticleCanvas from './components/ParticleCanvas'
 import AdminPage from './pages/AdminPage'
 import CardDetailPage from './pages/CardDetailPage'
 import CollectionPage from './pages/CollectionPage'
@@ -22,8 +24,8 @@ import SearchPage from './pages/SearchPage'
 import AccountPage from './pages/AccountPage'
 import ShopPage from './pages/ShopPage'
 import BillingPage from './pages/BillingPage'
+import HomePage from './pages/HomePage'
 
-// Requires login
 function Protected({ children }: { children: React.ReactNode }) {
   return (
     <ProtectedRoute>
@@ -32,7 +34,6 @@ function Protected({ children }: { children: React.ReactNode }) {
   )
 }
 
-// Works for both guests and logged-in users (no redirect to login)
 function Public({ children }: { children: React.ReactNode }) {
   return (
     <SemiProtectedRoute>
@@ -43,47 +44,53 @@ function Public({ children }: { children: React.ReactNode }) {
 
 export default function App() {
   return (
-    <Routes>
-      {/* Auth pages — no layout */}
-      <Route path="/login"           element={<LoginPage />} />
-      <Route path="/register"        element={<RegisterPage />} />
-      <Route path="/forgot-password" element={<ForgotPasswordPage />} />
-      <Route path="/reset-password"  element={<ResetPasswordPage />} />
-      <Route path="/verify-email"    element={<VerifyEmailPage />} />
+    <>
+      <CustomCursor />
+      <ParticleCanvas />
 
-      {/* Public pages — accessible without login */}
-      <Route path="/search"      element={<Public><SearchPage /></Public>} />
-      <Route path="/sealed"      element={<Public><SearchPage /></Public>} />
-      <Route path="/shop"        element={<Public><ShopPage /></Public>} />
-      <Route path="/deck"        element={<Public><DeckBuilderPage /></Public>} />
-      <Route path="/deck-builder" element={<Public><DeckBuilderPage /></Public>} />
-      <Route path="/membership"  element={<Public><BillingPage /></Public>} />
+      <Routes>
+        {/* Auth pages — no layout */}
+        <Route path="/login"           element={<LoginPage />} />
+        <Route path="/register"        element={<RegisterPage />} />
+        <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+        <Route path="/reset-password"  element={<ResetPasswordPage />} />
+        <Route path="/verify-email"    element={<VerifyEmailPage />} />
 
-      {/* Protected pages — require login */}
-      {/* Root → Search (public, no login wall) */}
-      <Route path="/"          element={<Navigate to="/search" replace />} />
-      {/* Portfolio — public route, shows sign-in prompt for guests inside the page */}
-      <Route path="/portfolio" element={<Public><PortfolioPage /></Public>} />
-      {/* Legacy collection route preserved */}
-      <Route path="/collection" element={<Protected><CollectionPage /></Protected>} />
-      <Route path="/scan"      element={<Protected><ScanPage /></Protected>} />
-      <Route path="/upload"    element={<Protected><UploadPage /></Protected>} />
-      <Route path="/review"    element={<Protected><ReviewQueuePage /></Protected>} />
-      <Route path="/card/:id"  element={<Protected><CardDetailPage /></Protected>} />
-      <Route path="/admin"     element={<Protected><AdminPage /></Protected>} />
-      <Route path="/account"   element={<Protected><AccountPage /></Protected>} />
+        {/* Home — standalone landing page (own Navbar + footer) */}
+        <Route path="/" element={<HomePage />} />
 
-      {/* Trades */}
-      <Route path="/trades"     element={<Public><TradesPage /></Public>} />
-      <Route path="/trades/new" element={<Protected><NewTradePage /></Protected>} />
-      <Route path="/trades/:id" element={<Protected><TradeDetailPage /></Protected>} />
+        {/* Primary public routes */}
+        <Route path="/builder"     element={<Public><DeckBuilderPage /></Public>} />
+        <Route path="/protection"  element={<Public><ShopPage /></Public>} />
+        <Route path="/membership"  element={<Public><BillingPage /></Public>} />
+        <Route path="/billing"     element={<Public><BillingPage /></Public>} />
 
-      {/* Billing — subscription management (public so guests can subscribe) */}
-      <Route path="/billing" element={<Public><BillingPage /></Public>} />
+        {/* Alias routes kept for backwards compatibility */}
+        <Route path="/shop"         element={<Navigate to="/protection" replace />} />
+        <Route path="/deck"         element={<Navigate to="/builder" replace />} />
+        <Route path="/deck-builder" element={<Navigate to="/builder" replace />} />
+        <Route path="/search"       element={<Public><SearchPage /></Public>} />
+        <Route path="/sealed"       element={<Public><SearchPage /></Public>} />
 
-      <Route path="*" element={<Navigate to="/search" replace />} />
-      {/* /home alias */}
-      <Route path="/home" element={<Navigate to="/search" replace />} />
-    </Routes>
+        {/* Protected app routes */}
+        <Route path="/portfolio"  element={<Public><PortfolioPage /></Public>} />
+        <Route path="/collection" element={<Protected><CollectionPage /></Protected>} />
+        <Route path="/scan"       element={<Protected><ScanPage /></Protected>} />
+        <Route path="/upload"     element={<Protected><UploadPage /></Protected>} />
+        <Route path="/review"     element={<Protected><ReviewQueuePage /></Protected>} />
+        <Route path="/card/:id"   element={<Protected><CardDetailPage /></Protected>} />
+        <Route path="/admin"      element={<Protected><AdminPage /></Protected>} />
+        <Route path="/account"    element={<Protected><AccountPage /></Protected>} />
+
+        {/* Trades */}
+        <Route path="/trades"     element={<Public><TradesPage /></Public>} />
+        <Route path="/trades/new" element={<Protected><NewTradePage /></Protected>} />
+        <Route path="/trades/:id" element={<Protected><TradeDetailPage /></Protected>} />
+
+        {/* Catch-all → home */}
+        <Route path="/home" element={<Navigate to="/" replace />} />
+        <Route path="*"     element={<Navigate to="/" replace />} />
+      </Routes>
+    </>
   )
 }
