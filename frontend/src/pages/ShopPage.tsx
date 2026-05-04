@@ -116,21 +116,20 @@ const COLOR_CATEGORIES = ['All', 'Classic', 'Metallic', 'Glitter', 'Blue', 'Red'
 
 // ── Pricing ───────────────────────────────────────────────────────────────────
 const PRICE_TIERS = [
-  { min: 1,  max: 1,        each: 5.00, label: '1 Guard',    total: (n: number) => n * 5.00 },
-  { min: 2,  max: 2,        each: 4.50, label: '2 Guards',   total: () => 9.00 },
-  { min: 3,  max: 3,        each: 4.00, label: '3 Guards',   total: () => 12.00, best: true },
-  { min: 4,  max: 5,        each: 3.80, label: '4–5 Guards', total: (n: number) => n * 3.80 },
-  { min: 6,  max: 10,       each: 3.50, label: '6–10',       total: (n: number) => n * 3.50 },
-  { min: 11, max: Infinity, each: 3.00, label: '11+',        total: (n: number) => n * 3.00 },
+  { minQty: 1,  label: '1 Guard',    pricePerUnit: 6.00 },
+  { minQty: 2,  label: '2 Guards',   pricePerUnit: 5.00, best: true },
+  { minQty: 3,  label: '3 Guards',   pricePerUnit: 4.80 },
+  { minQty: 4,  label: '4–5 Guards', pricePerUnit: 4.56 },
+  { minQty: 6,  label: '6–10',       pricePerUnit: 4.20 },
+  { minQty: 11, label: '11+',        pricePerUnit: 3.60 },
 ]
 
-function calcTotal(qty: number): number {
-  const tier = PRICE_TIERS.find(t => qty >= t.min && qty <= t.max) ?? PRICE_TIERS[PRICE_TIERS.length - 1]
-  return tier.total(qty)
-}
 function calcEach(qty: number): number {
-  const tier = PRICE_TIERS.find(t => qty >= t.min && qty <= t.max) ?? PRICE_TIERS[PRICE_TIERS.length - 1]
-  return tier.each
+  const tier = [...PRICE_TIERS].reverse().find(t => qty >= t.minQty) ?? PRICE_TIERS[0]
+  return tier.pricePerUnit
+}
+function calcTotal(qty: number): number {
+  return calcEach(qty) * qty
 }
 
 // ── Product catalog for non-slab-guard categories ─────────────────────────────
@@ -152,9 +151,9 @@ const PRODUCT_CATALOG: Record<string, CatalogProduct[]> = {
       description: 'Crystal-clear soft poly sleeves for standard TCG cards (Pokémon, MTG, Yu-Gi-Oh!, Lorcana). Acid-free, archival quality.',
       badge: 'Most Popular',
       variants: [
-        { label: '100-pack',  price: 1.99 },
-        { label: '500-pack',  price: 7.99 },
-        { label: '1000-pack', price: 13.99, note: 'Best Value' },
+        { label: '100-pack',  price: 2.39 },
+        { label: '500-pack',  price: 9.59 },
+        { label: '1000-pack', price: 16.79, note: 'Best Value' },
       ],
     },
     {
@@ -162,8 +161,8 @@ const PRODUCT_CATALOG: Record<string, CatalogProduct[]> = {
       name: 'Thick Penny Sleeves (100µm)',
       description: 'Extra-thick 100-micron sleeves for added protection without adding bulk. Perfect for double-sleeving.',
       variants: [
-        { label: '100-pack', price: 2.99 },
-        { label: '500-pack', price: 11.99 },
+        { label: '100-pack', price: 3.59 },
+        { label: '500-pack', price: 14.39 },
       ],
     },
     {
@@ -172,9 +171,9 @@ const PRODUCT_CATALOG: Record<string, CatalogProduct[]> = {
       description: 'Acid-free, PVC-free archival sleeves. Safe for long-term storage — no plasticizer migration.',
       badge: 'Archival Safe',
       variants: [
-        { label: '100-pack',  price: 3.49 },
-        { label: '500-pack',  price: 14.99 },
-        { label: '1000-pack', price: 24.99, note: 'Best Value' },
+        { label: '100-pack',  price: 4.19 },
+        { label: '500-pack',  price: 17.99 },
+        { label: '1000-pack', price: 29.99, note: 'Best Value' },
       ],
     },
   ],
@@ -185,9 +184,9 @@ const PRODUCT_CATALOG: Record<string, CatalogProduct[]> = {
       description: 'Rigid 35-point PVC top loaders for standard TCG cards. The industry standard for raw card protection.',
       badge: 'Best Seller',
       variants: [
-        { label: '25-pack',  price: 4.99 },
-        { label: '100-pack', price: 14.99 },
-        { label: '200-pack', price: 24.99, note: 'Best Value' },
+        { label: '25-pack',  price: 5.99 },
+        { label: '100-pack', price: 17.99 },
+        { label: '200-pack', price: 29.99, note: 'Best Value' },
       ],
     },
     {
@@ -195,8 +194,8 @@ const PRODUCT_CATALOG: Record<string, CatalogProduct[]> = {
       name: 'Thick Card Top Loaders (75pt)',
       description: 'For thicker cards — jersey cards, patches, vintage cards with slight warping. 75-point rigid PVC.',
       variants: [
-        { label: '25-pack',  price: 5.99 },
-        { label: '100-pack', price: 17.99 },
+        { label: '25-pack',  price: 7.19 },
+        { label: '100-pack', price: 21.59 },
       ],
     },
     {
@@ -205,8 +204,8 @@ const PRODUCT_CATALOG: Record<string, CatalogProduct[]> = {
       description: 'Crystal-clear, acid-free, PVC-free rigid loaders. Archival-safe for long-term raw card storage.',
       badge: 'Archival Safe',
       variants: [
-        { label: '25-pack',  price: 6.49 },
-        { label: '100-pack', price: 19.99 },
+        { label: '25-pack',  price: 7.79 },
+        { label: '100-pack', price: 23.99 },
       ],
     },
   ],
@@ -217,9 +216,9 @@ const PRODUCT_CATALOG: Record<string, CatalogProduct[]> = {
       description: 'Premium side-loading 9-pocket binder with 40 pages. D-ring spine, padded cover, fits standard sleeves.',
       badge: 'Fan Favorite',
       variants: [
-        { label: 'Black',  price: 19.99 },
-        { label: 'White',  price: 19.99 },
-        { label: 'Gold',   price: 21.99, note: 'Card Safe HQ Edition' },
+        { label: 'Black',  price: 23.99 },
+        { label: 'White',  price: 23.99 },
+        { label: 'Gold',   price: 26.39, note: 'Card Safe HQ Edition' },
       ],
     },
     {
@@ -227,8 +226,8 @@ const PRODUCT_CATALOG: Record<string, CatalogProduct[]> = {
       name: '4-Pocket Binder (160 cards)',
       description: 'Compact 4-pocket binder for display sets, showcase binders, or travel. Zippered closure option.',
       variants: [
-        { label: 'Standard', price: 14.99 },
-        { label: 'Zippered', price: 17.99 },
+        { label: 'Standard', price: 17.99 },
+        { label: 'Zippered', price: 21.59 },
       ],
     },
     {
@@ -236,8 +235,8 @@ const PRODUCT_CATALOG: Record<string, CatalogProduct[]> = {
       name: '12-Pocket Binder (480 cards)',
       description: 'High-capacity 12-pocket binder for large collections. Reinforced spine, anti-glare pages.',
       variants: [
-        { label: 'Black', price: 24.99 },
-        { label: 'Navy',  price: 24.99 },
+        { label: 'Black', price: 29.99 },
+        { label: 'Navy',  price: 29.99 },
       ],
     },
   ],
@@ -248,9 +247,9 @@ const PRODUCT_CATALOG: Record<string, CatalogProduct[]> = {
       description: 'Silicone front guard + rigid acrylic backing panel. Dual-layer protection for your most valuable PSA slabs.',
       badge: 'Premium',
       variants: [
-        { label: '1-pack',  price: 8.99 },
-        { label: '3-pack',  price: 22.99, note: 'Save $4' },
-        { label: '5-pack',  price: 34.99, note: 'Best Value' },
+        { label: '1-pack',  price: 10.79 },
+        { label: '3-pack',  price: 27.59, note: 'Save $5' },
+        { label: '5-pack',  price: 41.99, note: 'Best Value' },
       ],
     },
     {
@@ -258,9 +257,9 @@ const PRODUCT_CATALOG: Record<string, CatalogProduct[]> = {
       name: 'BGS/Beckett Slab Guard with Acrylic Back',
       description: 'Silicone front guard + acrylic backing for BGS/Beckett slabs. Slightly wider fit for the thicker BGS casing.',
       variants: [
-        { label: '1-pack', price: 8.99 },
-        { label: '3-pack', price: 22.99, note: 'Save $4' },
-        { label: '5-pack', price: 34.99, note: 'Best Value' },
+        { label: '1-pack', price: 10.79 },
+        { label: '3-pack', price: 27.59, note: 'Save $5' },
+        { label: '5-pack', price: 41.99, note: 'Best Value' },
       ],
     },
     {
@@ -268,8 +267,8 @@ const PRODUCT_CATALOG: Record<string, CatalogProduct[]> = {
       name: 'CGC Slab Guard with Acrylic Back',
       description: 'Silicone front guard + acrylic backing for CGC/CSG graded slabs.',
       variants: [
-        { label: '1-pack', price: 8.99 },
-        { label: '3-pack', price: 22.99 },
+        { label: '1-pack', price: 10.79 },
+        { label: '3-pack', price: 27.59 },
       ],
     },
     {
@@ -277,8 +276,8 @@ const PRODUCT_CATALOG: Record<string, CatalogProduct[]> = {
       name: 'TAG/HGA Slab Guard with Acrylic Back',
       description: 'Silicone front guard + acrylic backing for TAG and HGA graded slabs.',
       variants: [
-        { label: '1-pack', price: 8.99 },
-        { label: '3-pack', price: 22.99 },
+        { label: '1-pack', price: 10.79 },
+        { label: '3-pack', price: 27.59 },
       ],
     },
     {
@@ -286,8 +285,8 @@ const PRODUCT_CATALOG: Record<string, CatalogProduct[]> = {
       name: 'SGC Slab Guard with Acrylic Back',
       description: 'Silicone front guard + acrylic backing for SGC graded slabs.',
       variants: [
-        { label: '1-pack', price: 8.99 },
-        { label: '3-pack', price: 22.99 },
+        { label: '1-pack', price: 10.79 },
+        { label: '3-pack', price: 27.59 },
       ],
     },
   ],
@@ -298,9 +297,9 @@ const PRODUCT_CATALOG: Record<string, CatalogProduct[]> = {
       description: 'Fully enclosed 4-panel acrylic case for PSA slabs. Magnetic closure, UV-resistant panels, display-ready.',
       badge: 'Display Ready',
       variants: [
-        { label: '1-pack', price: 12.99 },
-        { label: '3-pack', price: 34.99, note: 'Save $4' },
-        { label: '6-pack', price: 62.99, note: 'Best Value' },
+        { label: '1-pack', price: 15.59 },
+        { label: '3-pack', price: 41.99, note: 'Save $5' },
+        { label: '6-pack', price: 75.59, note: 'Best Value' },
       ],
     },
     {
@@ -308,8 +307,8 @@ const PRODUCT_CATALOG: Record<string, CatalogProduct[]> = {
       name: 'Full Enclosed Acrylic Case — BGS/Beckett',
       description: 'Fully enclosed 4-panel acrylic case for BGS/Beckett slabs. Magnetic closure, UV-resistant.',
       variants: [
-        { label: '1-pack', price: 12.99 },
-        { label: '3-pack', price: 34.99 },
+        { label: '1-pack', price: 15.59 },
+        { label: '3-pack', price: 41.99 },
       ],
     },
     {
@@ -317,8 +316,8 @@ const PRODUCT_CATALOG: Record<string, CatalogProduct[]> = {
       name: 'Full Enclosed Acrylic Case — CGC',
       description: 'Fully enclosed acrylic case for CGC/CSG graded slabs. Magnetic closure.',
       variants: [
-        { label: '1-pack', price: 12.99 },
-        { label: '3-pack', price: 34.99 },
+        { label: '1-pack', price: 15.59 },
+        { label: '3-pack', price: 41.99 },
       ],
     },
     {
@@ -326,8 +325,8 @@ const PRODUCT_CATALOG: Record<string, CatalogProduct[]> = {
       name: 'Full Enclosed Acrylic Case — TAG/HGA',
       description: 'Fully enclosed acrylic case for TAG and HGA graded slabs.',
       variants: [
-        { label: '1-pack', price: 12.99 },
-        { label: '3-pack', price: 34.99 },
+        { label: '1-pack', price: 15.59 },
+        { label: '3-pack', price: 41.99 },
       ],
     },
     {
@@ -335,8 +334,8 @@ const PRODUCT_CATALOG: Record<string, CatalogProduct[]> = {
       name: 'Full Enclosed Acrylic Case — SGC',
       description: 'Fully enclosed acrylic case for SGC graded slabs.',
       variants: [
-        { label: '1-pack', price: 12.99 },
-        { label: '3-pack', price: 34.99 },
+        { label: '1-pack', price: 15.59 },
+        { label: '3-pack', price: 41.99 },
       ],
     },
   ],
@@ -347,9 +346,9 @@ const PRODUCT_CATALOG: Record<string, CatalogProduct[]> = {
       description: 'Crystal-clear acrylic display case for Elite Trainer Boxes. Fits standard Pokémon ETBs. UV-resistant panels, magnetic lid.',
       badge: 'Most Popular',
       variants: [
-        { label: '1-pack', price: 24.99 },
-        { label: '2-pack', price: 44.99, note: 'Save $5' },
-        { label: '4-pack', price: 79.99, note: 'Best Value' },
+        { label: '1-pack', price: 29.99 },
+        { label: '2-pack', price: 53.99, note: 'Save $6' },
+        { label: '4-pack', price: 95.99, note: 'Best Value' },
       ],
     },
     {
@@ -357,8 +356,8 @@ const PRODUCT_CATALOG: Record<string, CatalogProduct[]> = {
       name: 'Stackable ETB Acrylic Case',
       description: 'Stackable design for displaying multiple ETBs. Interlocking tabs keep your display organized and stable.',
       variants: [
-        { label: '1-pack', price: 27.99 },
-        { label: '4-pack', price: 99.99, note: 'Best Value' },
+        { label: '1-pack', price: 33.59 },
+        { label: '4-pack', price: 119.99, note: 'Best Value' },
       ],
     },
     {
@@ -366,9 +365,9 @@ const PRODUCT_CATALOG: Record<string, CatalogProduct[]> = {
       name: 'PVC ETB Protective Sleeve',
       description: 'Soft PVC sleeve that slides over your ETB for dust and scratch protection during storage or shipping.',
       variants: [
-        { label: '1-pack',  price: 4.99 },
-        { label: '5-pack',  price: 19.99 },
-        { label: '10-pack', price: 34.99, note: 'Best Value' },
+        { label: '1-pack',  price: 5.99 },
+        { label: '5-pack',  price: 23.99 },
+        { label: '10-pack', price: 41.99, note: 'Best Value' },
       ],
     },
   ],
@@ -379,10 +378,10 @@ const PRODUCT_CATALOG: Record<string, CatalogProduct[]> = {
       description: 'Five individually sleeved booster packs in a Card Safe HQ branded bundle. Each pack sealed in a crystal-clear protective sleeve.',
       badge: 'Gift Ready',
       variants: [
-        { label: 'Pokémon',    price: 29.99 },
-        { label: 'MTG',        price: 27.99 },
-        { label: "Yu-Gi-Oh!",  price: 24.99 },
-        { label: 'Lorcana',    price: 32.99 },
+        { label: 'Pokémon',    price: 35.99 },
+        { label: 'MTG',        price: 33.59 },
+        { label: "Yu-Gi-Oh!",  price: 29.99 },
+        { label: 'Lorcana',    price: 39.59 },
       ],
     },
     {
@@ -390,10 +389,10 @@ const PRODUCT_CATALOG: Record<string, CatalogProduct[]> = {
       name: 'Sleeved Booster Bundle — 10 Packs',
       description: 'Ten individually sleeved booster packs. Perfect for breaks, gifts, or building your collection.',
       variants: [
-        { label: 'Pokémon',   price: 54.99 },
-        { label: 'MTG',       price: 49.99 },
-        { label: "Yu-Gi-Oh!", price: 44.99 },
-        { label: 'Lorcana',   price: 59.99 },
+        { label: 'Pokémon',   price: 65.99 },
+        { label: 'MTG',       price: 59.99 },
+        { label: "Yu-Gi-Oh!", price: 53.99 },
+        { label: 'Lorcana',   price: 71.99 },
       ],
     },
     {
@@ -401,9 +400,9 @@ const PRODUCT_CATALOG: Record<string, CatalogProduct[]> = {
       name: 'PVC-Sleeved Booster Bundle — 5 Packs',
       description: 'Five booster packs in rigid PVC protective sleeves. Ideal for storage or resale — keeps packs pristine.',
       variants: [
-        { label: 'Pokémon',   price: 31.99 },
-        { label: 'MTG',       price: 29.99 },
-        { label: "Yu-Gi-Oh!", price: 26.99 },
+        { label: 'Pokémon',   price: 38.39 },
+        { label: 'MTG',       price: 35.99 },
+        { label: "Yu-Gi-Oh!", price: 32.39 },
       ],
     },
   ],
@@ -414,8 +413,8 @@ const PRODUCT_CATALOG: Record<string, CatalogProduct[]> = {
       description: 'Crystal-clear acrylic display case for sealed booster boxes. Magnetic lid, UV-resistant panels. Fits standard Pokémon, MTG, and Lorcana boxes.',
       badge: 'Display Ready',
       variants: [
-        { label: '1-pack', price: 34.99 },
-        { label: '2-pack', price: 62.99, note: 'Save $7' },
+        { label: '1-pack', price: 41.99 },
+        { label: '2-pack', price: 75.59, note: 'Save $8' },
       ],
     },
     {
@@ -423,9 +422,9 @@ const PRODUCT_CATALOG: Record<string, CatalogProduct[]> = {
       name: 'Booster Box PVC Protective Sleeve',
       description: 'Soft PVC sleeve that wraps your sealed booster box for dust and scratch protection. Fits most standard box sizes.',
       variants: [
-        { label: '1-pack',  price: 5.99 },
-        { label: '5-pack',  price: 24.99 },
-        { label: '10-pack', price: 44.99, note: 'Best Value' },
+        { label: '1-pack',  price: 7.19 },
+        { label: '5-pack',  price: 29.99 },
+        { label: '10-pack', price: 53.99, note: 'Best Value' },
       ],
     },
     {
@@ -434,8 +433,8 @@ const PRODUCT_CATALOG: Record<string, CatalogProduct[]> = {
       description: 'Premium fabric-backed sleeve with zipper closure for your sealed booster box. Padded interior, handle loop.',
       badge: 'Premium',
       variants: [
-        { label: 'Standard Size', price: 14.99 },
-        { label: 'Large Size',    price: 17.99 },
+        { label: 'Standard Size', price: 17.99 },
+        { label: 'Large Size',    price: 21.59 },
       ],
     },
   ],
@@ -445,9 +444,9 @@ const PRODUCT_CATALOG: Record<string, CatalogProduct[]> = {
       name: 'Individual Sleeved Pack Protectors',
       description: 'Soft crystal-clear sleeves sized specifically for individual booster packs. Keeps packs scratch-free and display-ready.',
       variants: [
-        { label: '10-pack',  price: 2.99 },
-        { label: '50-pack',  price: 11.99 },
-        { label: '100-pack', price: 19.99, note: 'Best Value' },
+        { label: '10-pack',  price: 3.59 },
+        { label: '50-pack',  price: 14.39 },
+        { label: '100-pack', price: 23.99, note: 'Best Value' },
       ],
     },
     {
@@ -456,9 +455,9 @@ const PRODUCT_CATALOG: Record<string, CatalogProduct[]> = {
       description: 'Rigid PVC top loaders sized for booster packs. Perfect for storing or displaying individual packs.',
       badge: 'New',
       variants: [
-        { label: '10-pack', price: 5.99 },
-        { label: '25-pack', price: 12.99 },
-        { label: '50-pack', price: 21.99, note: 'Best Value' },
+        { label: '10-pack', price: 7.19 },
+        { label: '25-pack', price: 15.59 },
+        { label: '50-pack', price: 26.39, note: 'Best Value' },
       ],
     },
   ],
@@ -468,9 +467,9 @@ const PRODUCT_CATALOG: Record<string, CatalogProduct[]> = {
       name: 'PVC Card Sleeve Pack',
       description: 'Standard PVC card sleeves for general use. Note: for long-term archival storage, consider our PVC-free options.',
       variants: [
-        { label: '100-pack',  price: 1.49 },
-        { label: '500-pack',  price: 5.99 },
-        { label: '1000-pack', price: 9.99, note: 'Best Value' },
+        { label: '100-pack',  price: 1.79 },
+        { label: '500-pack',  price: 7.19 },
+        { label: '1000-pack', price: 11.99, note: 'Best Value' },
       ],
     },
     {
@@ -478,9 +477,9 @@ const PRODUCT_CATALOG: Record<string, CatalogProduct[]> = {
       name: 'PVC Top Loader Pack',
       description: 'Standard PVC rigid top loaders. Affordable protection for raw cards, bulk lots, or trade binder cards.',
       variants: [
-        { label: '25-pack',  price: 3.99 },
-        { label: '100-pack', price: 12.99 },
-        { label: '200-pack', price: 21.99, note: 'Best Value' },
+        { label: '25-pack',  price: 4.79 },
+        { label: '100-pack', price: 15.59 },
+        { label: '200-pack', price: 26.39, note: 'Best Value' },
       ],
     },
     {
@@ -488,9 +487,9 @@ const PRODUCT_CATALOG: Record<string, CatalogProduct[]> = {
       name: 'PVC ETB Sleeve',
       description: 'PVC protective sleeve for Elite Trainer Boxes. Soft, clear, and snug-fitting for dust and scratch protection.',
       variants: [
-        { label: '1-pack',  price: 3.99 },
-        { label: '5-pack',  price: 16.99 },
-        { label: '10-pack', price: 29.99, note: 'Best Value' },
+        { label: '1-pack',  price: 4.79 },
+        { label: '5-pack',  price: 20.39 },
+        { label: '10-pack', price: 35.99, note: 'Best Value' },
       ],
     },
     {
@@ -498,9 +497,9 @@ const PRODUCT_CATALOG: Record<string, CatalogProduct[]> = {
       name: 'PVC Booster Box Sleeve',
       description: 'PVC sleeve for sealed booster boxes. Keeps boxes pristine during storage or transport.',
       variants: [
-        { label: '1-pack',  price: 4.99 },
-        { label: '5-pack',  price: 21.99 },
-        { label: '10-pack', price: 38.99, note: 'Best Value' },
+        { label: '1-pack',  price: 5.99 },
+        { label: '5-pack',  price: 26.39 },
+        { label: '10-pack', price: 46.79, note: 'Best Value' },
       ],
     },
     {
@@ -508,9 +507,9 @@ const PRODUCT_CATALOG: Record<string, CatalogProduct[]> = {
       name: 'PVC Individual Pack Sleeves',
       description: 'PVC sleeves sized for individual booster packs. Affordable bulk option for pack sellers and breakers.',
       variants: [
-        { label: '50-pack',  price: 7.99 },
-        { label: '100-pack', price: 13.99 },
-        { label: '200-pack', price: 22.99, note: 'Best Value' },
+        { label: '50-pack',  price: 9.59 },
+        { label: '100-pack', price: 16.79 },
+        { label: '200-pack', price: 27.59, note: 'Best Value' },
       ],
     },
   ],
@@ -1148,10 +1147,10 @@ export default function ShopPage() {
             <h3 className="text-base font-bold mb-3">Bundle Pricing</h3>
             <div className="grid grid-cols-3 gap-2 sm:grid-cols-6">
               {PRICE_TIERS.map((tier, i) => (
-                <div key={i} className="relative p-3 rounded-[var(--radius-md)] text-center" style={{ background: tier.best ? 'rgba(212,175,55,0.1)' : 'rgba(255,255,255,0.03)', border: tier.best ? '1px solid rgba(212,175,55,0.35)' : '1px solid rgba(255,255,255,0.07)' }}>
-                  {tier.best && <span className="absolute -top-2.5 left-1/2 -translate-x-1/2 text-[8px] font-black px-2 py-0.5 rounded-full text-black" style={{ background: '#D4AF37' }}>BEST VALUE</span>}
+                <div key={i} className="relative p-3 rounded-[var(--radius-md)] text-center" style={{ background: tier.best ? 'var(--gold-dim)' : 'rgba(255,255,255,0.03)', border: tier.best ? '1px solid rgba(200,169,81,0.35)' : '1px solid rgba(255,255,255,0.07)' }}>
+                  {tier.best && <span className="absolute -top-2.5 left-1/2 -translate-x-1/2 text-[8px] font-black px-2 py-0.5 rounded-full" style={{ background: 'var(--gold-dim)', color: 'var(--gold)', border: '1px solid rgba(200,169,81,0.3)' }}>BEST VALUE</span>}
                   <p className="text-xs text-cv-muted mb-1">{tier.label}</p>
-                  <p className="text-base font-black" style={{ color: tier.best ? '#D4AF37' : 'var(--text)' }}>${tier.each.toFixed(2)}<span className="text-xs font-normal text-cv-muted">/ea</span></p>
+                  <p className="text-base font-black" style={{ color: tier.best ? 'var(--gold)' : 'var(--text)' }}>${tier.pricePerUnit.toFixed(2)}<span className="text-xs font-normal text-cv-muted">/ea</span></p>
                 </div>
               ))}
             </div>

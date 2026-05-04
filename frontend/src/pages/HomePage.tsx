@@ -373,12 +373,12 @@ function ProtectionGearSection() {
   ]
 
   const PRODUCTS = [
-    { emoji: '🛡️', name: 'Silicone Slab Guard', type: 'PSA / BGS / CGC', price: 5.00, badge: 'HOT' },
-    { emoji: '🔒', name: 'Top Loader — 35pt', type: 'Rigid Protection', price: 4.99, badge: null },
-    { emoji: '📚', name: 'Premium 9-Pocket Binder', type: '360-Card Capacity', price: 24.99, badge: 'NEW' },
-    { emoji: '🧤', name: 'Penny Sleeves (100pk)', type: 'Standard Size', price: 2.99, badge: null },
-    { emoji: '🏆', name: 'Grading Submission Kit', type: 'PSA / CGC Ready', price: 14.99, badge: 'NEW' },
-    { emoji: '📦', name: 'Enclosed Slab Case', type: 'Magnetic Closure', price: 12.99, badge: null },
+    { emoji: '🛡️', name: 'Silicone Slab Guard', type: 'PSA / BGS / CGC', price: 6.00, badge: 'HOT' },
+    { emoji: '🔒', name: 'Top Loader — 35pt', type: 'Rigid Protection', price: 5.99, badge: null },
+    { emoji: '📚', name: 'Premium 9-Pocket Binder', type: '360-Card Capacity', price: 29.99, badge: 'NEW' },
+    { emoji: '🧤', name: 'Penny Sleeves (100pk)', type: 'Standard Size', price: 3.59, badge: null },
+    { emoji: '🏆', name: 'Grading Submission Kit', type: 'PSA / CGC Ready', price: 17.99, badge: 'NEW' },
+    { emoji: '📦', name: 'Enclosed Slab Case', type: 'Magnetic Closure', price: 15.59, badge: null },
   ]
 
   return (
