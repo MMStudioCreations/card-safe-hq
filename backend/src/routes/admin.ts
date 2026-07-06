@@ -1,6 +1,6 @@
 import type { Env, User } from '../types';
 import { queryAll, queryOne } from '../lib/db';
-import { badRequest, forbidden, ok, serverError } from '../lib/json';
+import { badRequest, forbidden, notFound, ok, serverError } from '../lib/json';
 import { parseJsonBody } from '../lib/validation';
 
 function requireAdmin(user: User): Response | null {
@@ -105,6 +105,79 @@ export async function handleAdminUsers(env: Env, user: User, request: Request): 
     const message = err instanceof Error ? err.message : 'Users query failed';
     return serverError(message);
   }
+}
+
+export async function handleAdminUserCollection(
+  env: Env,
+  user: User,
+  userId: number,
+  request: Request,
+): Promise<Response> {
+  const denied = requireAdmin(user);
+  if (denied) return denied;
+
+  const targetUser = await queryOne<{ id: number }>(env.DB, 'SELECT id FROM users WHERE id = ?', [userId]);
+  if (!targetUser) return notFound('User not found');
+
+  const url = new URL(request.url);
+  const page = Math.max(1, parseInt(url.searchParams.get('page') ?? '1', 10) || 1);
+  const limit = 50;
+  const offset = (page - 1) * limit;
+
+  try {
+    const [countRow, rows] = await Promise.all([
+      queryOne<{ total: number }>(env.DB, 'SELECT COUNT(*) as total FROM collection_items WHERE user_id = ?', [userId]),
+      queryAll<{
+        id: number;
+        card_id: number | null;
+        card_name: string | null;
+        set_name: string | null;
+        condition_note: string | null;
+        estimated_grade: string | null;
+        estimated_value_cents: number | null;
+        front_image_url: string | null;
+        back_image_url: string | null;
+        created_at: string;
+      }>(
+        env.DB,
+        `SELECT ci.id, ci.card_id, c.card_name, c.set_name,
+                ci.condition_note, ci.estimated_grade, ci.estimated_value_cents,
+                ci.front_image_url, ci.back_image_url, ci.created_at
+         FROM collection_items ci
+         LEFT JOIN cards c ON ci.card_id = c.id
+         WHERE ci.user_id = ?
+         ORDER BY ci.created_at DESC
+         LIMIT ? OFFSET ?`,
+        [userId, limit, offset],
+      ),
+    ]);
+
+    return ok({ data: rows, total_count: countRow?.total ?? 0, page, limit });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Collection query failed';
+    return serverError(message);
+  }
+}
+
+export async function handleAdminImage(env: Env, user: User, request: Request): Promise<Response> {
+  const denied = requireAdmin(user);
+  if (denied) return denied;
+
+  const url = new URL(request.url);
+  const key = url.searchParams.get('key');
+  if (!key || key.includes('..') || !/^user-\d+\//.test(key)) {
+    return badRequest('Invalid key');
+  }
+
+  const object = await env.BUCKET.get(key);
+  if (!object) return notFound('Image not found');
+
+  return new Response(object.body, {
+    headers: {
+      'Content-Type': object.httpMetadata?.contentType || 'image/jpeg',
+      'Cache-Control': 'private, max-age=3600',
+    },
+  });
 }
 
 export async function handleAdminCards(env: Env, user: User): Promise<Response> {

@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { Navigate } from 'react-router-dom'
 import { useAuth } from '../lib/hooks'
-import { Loader2, Users, BarChart2, Database, RefreshCw, Shield, Package } from 'lucide-react'
+import { Loader2, Users, BarChart2, Database, RefreshCw, Shield, Package, X } from 'lucide-react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   BarChart,
@@ -623,8 +623,114 @@ function Pagination({
   )
 }
 
+// ── Collection drill-down panel ─────────────────────────────────────────────
+type CollectionItemRow = {
+  id: number
+  card_id: number | null
+  card_name: string | null
+  set_name: string | null
+  condition_note: string | null
+  estimated_grade: string | null
+  estimated_value_cents: number | null
+  front_image_url: string | null
+  back_image_url: string | null
+  created_at: string
+}
+
+type PagedCollection = {
+  data: CollectionItemRow[]
+  total_count: number
+  page: number
+  limit: number
+}
+
+function AdminThumbnail({ imageKey }: { imageKey: string | null }) {
+  if (!imageKey) {
+    return (
+      <div className="h-12 w-12 shrink-0 rounded bg-cv-bg border border-cv-border flex items-center justify-center text-[10px] text-cv-muted">
+        —
+      </div>
+    )
+  }
+  return (
+    <img
+      src={`${API_BASE}/api/admin/image?key=${encodeURIComponent(imageKey)}`}
+      alt=""
+      className="h-12 w-12 shrink-0 rounded object-cover border border-cv-border"
+    />
+  )
+}
+
+function CollectionPanel({
+  userId, userEmail, onClose,
+}: { userId: number; userEmail: string; onClose: () => void }) {
+  const [page, setPage] = useState(1)
+  const LIMIT = 50
+  const { data: resp, isLoading, error } = useQuery({
+    queryKey: ['admin', 'user-collection', userId, page],
+    queryFn: () => adminFetch<PagedCollection>(`/api/admin/users/${userId}/collection?page=${page}`),
+  })
+
+  const items = resp?.data ?? []
+  const totalCount = resp?.total_count ?? 0
+  const totalPages = Math.ceil(totalCount / LIMIT)
+
+  return (
+    <div className="fixed inset-0 z-50 flex justify-end">
+      <div className="absolute inset-0 bg-black/50" onClick={onClose} />
+      <div className="relative w-full max-w-2xl h-full bg-cv-bg border-l border-cv-border overflow-y-auto p-5 space-y-4">
+        <div className="flex items-center justify-between">
+          <div>
+            <h2 className="text-sm font-semibold text-cv-text">Collection</h2>
+            <p className="text-xs text-cv-muted">{userEmail} · {totalCount} item{totalCount === 1 ? '' : 's'}</p>
+          </div>
+          <button onClick={onClose} type="button" className="p-1.5 rounded hover:bg-cv-hover text-cv-muted">
+            <X className="h-5 w-5" />
+          </button>
+        </div>
+
+        {isLoading ? (
+          <Loader2 className="h-6 w-6 animate-spin text-cv-secondary mx-auto mt-8" />
+        ) : error ? (
+          <p className="text-red-400 text-sm">Failed to load collection.</p>
+        ) : items.length === 0 ? (
+          <p className="text-cv-muted text-sm">No items in this collection.</p>
+        ) : (
+          <div className="space-y-2">
+            {items.map((item) => (
+              <div key={item.id} className="flex items-center gap-3 rounded-[var(--radius-sm)] bg-cv-surface p-3">
+                <AdminThumbnail imageKey={item.front_image_url} />
+                <div className="flex-1 min-w-0">
+                  {item.card_id ? (
+                    <p className="text-sm text-cv-text font-medium truncate">{item.card_name}</p>
+                  ) : (
+                    <p className="text-sm font-medium truncate" style={{ color: '#f59e0b' }}>Unidentified</p>
+                  )}
+                  <p className="text-xs text-cv-muted truncate">{item.set_name ?? '—'}</p>
+                </div>
+                <div className="text-right text-xs text-cv-muted shrink-0">
+                  <p>{item.estimated_grade ?? '—'}</p>
+                  <p>{item.estimated_value_cents != null ? `$${(item.estimated_value_cents / 100).toFixed(2)}` : '—'}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        <Pagination
+          page={page}
+          totalPages={totalPages}
+          onPrev={() => setPage(p => p - 1)}
+          onNext={() => setPage(p => p + 1)}
+        />
+      </div>
+    </div>
+  )
+}
+
 function CRMTab() {
   const [search, setSearch] = useState('')
+  const [selectedUser, setSelectedUser] = useState<{ id: number; email: string } | null>(null)
   const [page, setPage] = useState(1)
   const LIMIT = 100
   const { data: resp, isLoading, error } = useQuery({
@@ -715,7 +821,11 @@ function CRMTab() {
                 ? '#D4AF37'
                 : isCancelled ? '#f87171' : 'var(--cv-muted)'
               return (
-                <tr key={u.id} className="border-b border-cv-border last:border-0 hover:bg-cv-hover">
+                <tr
+                  key={u.id}
+                  onClick={() => setSelectedUser({ id: u.id, email: u.email })}
+                  className="border-b border-cv-border last:border-0 hover:bg-cv-hover cursor-pointer"
+                >
                   <td className="px-4 py-3">
                     <p className="text-cv-text font-medium">{u.email}</p>
                     <p className="text-xs text-cv-muted">{u.username ?? '—'}</p>
@@ -750,6 +860,13 @@ function CRMTab() {
         onPrev={() => { setSearch(''); setPage(p => p - 1) }}
         onNext={() => { setSearch(''); setPage(p => p + 1) }}
       />
+      {selectedUser && (
+        <CollectionPanel
+          userId={selectedUser.id}
+          userEmail={selectedUser.email}
+          onClose={() => setSelectedUser(null)}
+        />
+      )}
     </div>
   )
 }

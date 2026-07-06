@@ -30,6 +30,8 @@ import { createDeck, deleteDeck, getDeck, listDecksV2, updateDeck, upsertDeckCar
 import {
   handleAdminStats,
   handleAdminUsers,
+  handleAdminUserCollection,
+  handleAdminImage,
   handleAdminCards,
   handleAdminActivity,
   handleAdminQuery,
@@ -617,6 +619,15 @@ export default {
         }
         if (method === 'GET' && pathname === '/api/admin/users') {
           return withCors(await handleAdminUsers(env, user, request), request, env);
+        }
+        if (method === 'GET' && pathname.startsWith('/api/admin/users/') && pathname.endsWith('/collection')) {
+          const userIdSegment = pathname.split('/')[4];
+          const userId = Number(userIdSegment);
+          if (!Number.isInteger(userId) || userId <= 0) return withCors(badRequest('Invalid user id'), request, env);
+          return withCors(await handleAdminUserCollection(env, user, userId, request), request, env);
+        }
+        if (method === 'GET' && pathname === '/api/admin/image') {
+          return withCors(await handleAdminImage(env, user, request), request, env);
         }
         if (method === 'GET' && pathname === '/api/admin/cards') {
           return withCors(await handleAdminCards(env, user), request, env);
