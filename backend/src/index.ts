@@ -39,6 +39,8 @@ import {
   handleAdminGetCollectionItem,
   handleAdminUpdateCollectionItem,
   handleAdminUpdateCard,
+  handleAdminBatchDeleteCollection,
+  handleAdminBatchReassignCollection,
   handleAdminQuery,
 } from './routes/admin';
 import {
@@ -665,6 +667,12 @@ export default {
           const cardId = parseId(pathname);
           if (!cardId) return withCors(badRequest('Invalid card id'), request, env);
           return withCors(await handleAdminUpdateCard(env, user, cardId, request), request, env);
+        }
+        if (method === 'POST' && pathname === '/api/admin/collection/batch-delete') {
+          return withCors(await handleAdminBatchDeleteCollection(env, user, request), request, env);
+        }
+        if (method === 'POST' && pathname === '/api/admin/collection/batch-reassign') {
+          return withCors(await handleAdminBatchReassignCollection(env, user, request), request, env);
         }
         // Pokémon catalog seeder
         if (method === 'POST' && pathname === '/api/admin/seed/pokemon') {

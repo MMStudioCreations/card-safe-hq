@@ -458,6 +458,110 @@ export async function handleAdminUpdateCard(
   }
 }
 
+function validateItemIds(itemIds: unknown): number[] {
+  if (!Array.isArray(itemIds) || itemIds.length === 0) {
+    throw new Error('itemIds must be a non-empty array');
+  }
+  if (itemIds.length > 500) {
+    throw new Error('Maximum 500 items per batch operation');
+  }
+  if (!itemIds.every((id) => typeof id === 'number' && Number.isInteger(id) && id > 0)) {
+    throw new Error('itemIds must contain only positive integers');
+  }
+  return itemIds as number[];
+}
+
+export async function handleAdminBatchDeleteCollection(env: Env, user: User, request: Request): Promise<Response> {
+  const denied = requireAdmin(user);
+  if (denied) return denied;
+
+  const body = await parseJsonBody<{ itemIds: unknown }>(request);
+  if (body instanceof Response) return body;
+
+  let itemIds: number[];
+  try {
+    itemIds = validateItemIds(body.itemIds);
+  } catch (err) {
+    return badRequest(err instanceof Error ? err.message : 'Invalid itemIds');
+  }
+
+  try {
+    const placeholders = itemIds.map(() => '?').join(',');
+    const rows = await queryAll<{ id: number; front_image_url: string | null; back_image_url: string | null }>(
+      env.DB,
+      `SELECT id, front_image_url, back_image_url FROM collection_items WHERE id IN (${placeholders})`,
+      itemIds,
+    );
+    const foundIds = new Set(rows.map((r) => r.id));
+    const skipped = itemIds.filter((id) => !foundIds.has(id));
+
+    if (rows.length > 0) {
+      await env.DB.batch(rows.map((r) => env.DB.prepare('DELETE FROM collection_items WHERE id = ?').bind(r.id)));
+
+      for (const r of rows) {
+        for (const key of [r.front_image_url, r.back_image_url]) {
+          if (!key) continue;
+          try {
+            await env.BUCKET.delete(key);
+          } catch (err) {
+            console.error('Failed to delete R2 object', key, err);
+          }
+        }
+      }
+    }
+
+    return ok({ deleted: rows.length, skipped });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Batch delete failed';
+    return serverError(message);
+  }
+}
+
+export async function handleAdminBatchReassignCollection(env: Env, user: User, request: Request): Promise<Response> {
+  const denied = requireAdmin(user);
+  if (denied) return denied;
+
+  const body = await parseJsonBody<{ itemIds: unknown; cardId: unknown }>(request);
+  if (body instanceof Response) return body;
+
+  let itemIds: number[];
+  let cardId: number;
+  try {
+    itemIds = validateItemIds(body.itemIds);
+    cardId = asInt(body.cardId, 'cardId', 1, 2_147_483_647, true) as number;
+  } catch (err) {
+    return badRequest(err instanceof Error ? err.message : 'Invalid request body');
+  }
+
+  const card = await queryOne(env.DB, 'SELECT id FROM cards WHERE id = ?', [cardId]);
+  if (!card) return badRequest('Card not found');
+
+  try {
+    const placeholders = itemIds.map(() => '?').join(',');
+    const rows = await queryAll<{ id: number }>(
+      env.DB,
+      `SELECT id FROM collection_items WHERE id IN (${placeholders})`,
+      itemIds,
+    );
+    const foundIds = new Set(rows.map((r) => r.id));
+    const skipped = itemIds.filter((id) => !foundIds.has(id));
+
+    if (rows.length > 0) {
+      await env.DB.batch(rows.map((r) =>
+        env.DB.prepare('UPDATE collection_items SET card_id = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?').bind(cardId, r.id),
+      ));
+      await env.DB.batch(rows.map((r) =>
+        env.DB.prepare('UPDATE pending_identifications SET confirmed = 1 WHERE collection_item_id = ?').bind(r.id),
+      ));
+    }
+
+    return ok({ reassigned: rows.length, skipped });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Batch reassign failed';
+    return serverError(message);
+  }
+}
+
 export async function handleAdminQuery(env: Env, user: User, request: Request): Promise<Response> {
   const denied = requireAdmin(user);
   if (denied) return denied;

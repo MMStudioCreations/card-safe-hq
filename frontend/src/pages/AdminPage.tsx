@@ -661,12 +661,53 @@ function AdminThumbnail({ imageKey }: { imageKey: string | null }) {
   )
 }
 
+function BatchReassignModal({
+  count, onCancel, onConfirm, isPending, error,
+}: { count: number; onCancel: () => void; onConfirm: (cardId: number) => void; isPending: boolean; error: string }) {
+  return (
+    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 p-4">
+      <div className="bg-cv-bg border border-cv-border rounded-[var(--radius-md)] p-5 max-w-sm w-full space-y-3">
+        <p className="text-sm text-cv-text">Reassign {count} item{count === 1 ? '' : 's'} to a different card.</p>
+        <form
+          onSubmit={(e) => {
+            e.preventDefault()
+            const form = new FormData(e.currentTarget)
+            const cardId = parseInt(String(form.get('card_id') ?? ''), 10)
+            if (Number.isInteger(cardId) && cardId > 0) onConfirm(cardId)
+          }}
+          className="space-y-3"
+        >
+          <input name="card_id" type="number" min={1} placeholder="Target card ID" className="input w-full" required />
+          {error && <p className="text-xs text-red-400">{error}</p>}
+          <div className="flex justify-end gap-2">
+            <button onClick={onCancel} type="button" className="px-3 py-1.5 rounded text-xs text-cv-muted hover:text-cv-text">
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={isPending}
+              className="px-3 py-1.5 rounded text-xs font-medium bg-[var(--primary)] text-white disabled:opacity-50"
+            >
+              Reassign
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  )
+}
+
 function CollectionPanel({
   userId, userEmail, onClose,
 }: { userId: number; userEmail: string; onClose: () => void }) {
   const [page, setPage] = useState(1)
   const [editingItemId, setEditingItemId] = useState<number | null>(null)
+  const [selected, setSelected] = useState<Set<number>>(new Set())
+  const [showReassign, setShowReassign] = useState(false)
+  const [batchError, setBatchError] = useState('')
+  const [batchNotice, setBatchNotice] = useState('')
   const LIMIT = 50
+  const queryClient = useQueryClient()
   const { data: resp, isLoading, error } = useQuery({
     queryKey: ['admin', 'user-collection', userId, page],
     queryFn: () => adminFetch<PagedCollection>(`/api/admin/users/${userId}/collection?page=${page}`),
@@ -675,6 +716,49 @@ function CollectionPanel({
   const items = resp?.data ?? []
   const totalCount = resp?.total_count ?? 0
   const totalPages = Math.ceil(totalCount / LIMIT)
+
+  const deleteMutation = useMutation({
+    mutationFn: (itemIds: number[]) => adminFetch<{ deleted: number; skipped: number[] }>('/api/admin/collection/batch-delete', {
+      method: 'POST',
+      body: JSON.stringify({ itemIds }),
+    }),
+    onSuccess: (res) => {
+      setBatchError('')
+      setBatchNotice(`${res.deleted} item${res.deleted === 1 ? '' : 's'} deleted`)
+      setSelected(new Set())
+      void queryClient.invalidateQueries({ queryKey: ['admin', 'user-collection', userId] })
+    },
+    onError: (e: Error) => setBatchError(e.message),
+  })
+
+  const reassignMutation = useMutation({
+    mutationFn: ({ itemIds, cardId }: { itemIds: number[]; cardId: number }) =>
+      adminFetch<{ reassigned: number; skipped: number[] }>('/api/admin/collection/batch-reassign', {
+        method: 'POST',
+        body: JSON.stringify({ itemIds, cardId }),
+      }),
+    onSuccess: (res) => {
+      setBatchError('')
+      setShowReassign(false)
+      setBatchNotice(`${res.reassigned} item${res.reassigned === 1 ? '' : 's'} reassigned`)
+      setSelected(new Set())
+      void queryClient.invalidateQueries({ queryKey: ['admin', 'user-collection', userId] })
+    },
+    onError: (e: Error) => setBatchError(e.message),
+  })
+
+  function toggleSelected(id: number) {
+    setSelected((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id); else next.add(id)
+      return next
+    })
+  }
+
+  function handleDeleteSelected() {
+    if (!window.confirm(`Delete ${selected.size} item${selected.size === 1 ? '' : 's'}? This cannot be undone.`)) return
+    deleteMutation.mutate(Array.from(selected))
+  }
 
   return (
     <div className="fixed inset-0 z-50 flex justify-end">
@@ -690,6 +774,36 @@ function CollectionPanel({
           </button>
         </div>
 
+        {batchNotice && (
+          <div className="rounded-[var(--radius-sm)] bg-green-900/20 border border-green-700 text-green-300 text-sm p-3">{batchNotice}</div>
+        )}
+        {batchError && (
+          <div className="rounded-[var(--radius-sm)] bg-red-900/30 border border-red-700 text-red-300 text-sm p-3">{batchError}</div>
+        )}
+
+        {selected.size > 0 && (
+          <div className="sticky top-0 z-10 flex items-center justify-between rounded-[var(--radius-sm)] bg-cv-surface border border-cv-border p-3">
+            <span className="text-sm text-cv-text">{selected.size} selected</span>
+            <div className="flex gap-2">
+              <button
+                onClick={() => setShowReassign(true)}
+                type="button"
+                className="px-3 py-1.5 rounded text-xs font-medium text-cv-text bg-cv-bg border border-cv-border hover:bg-cv-hover"
+              >
+                Reassign Selected
+              </button>
+              <button
+                onClick={handleDeleteSelected}
+                disabled={deleteMutation.isPending}
+                type="button"
+                className="px-3 py-1.5 rounded text-xs font-medium text-red-300 border border-red-700/50 hover:bg-red-900/30 disabled:opacity-40"
+              >
+                Delete Selected
+              </button>
+            </div>
+          </div>
+        )}
+
         {isLoading ? (
           <Loader2 className="h-6 w-6 animate-spin text-cv-secondary mx-auto mt-8" />
         ) : error ? (
@@ -701,21 +815,32 @@ function CollectionPanel({
             {items.map((item) => (
               <div
                 key={item.id}
-                onClick={() => setEditingItemId(item.id)}
-                className="flex items-center gap-3 rounded-[var(--radius-sm)] bg-cv-surface p-3 cursor-pointer hover:bg-cv-hover"
+                className="flex items-center gap-3 rounded-[var(--radius-sm)] bg-cv-surface p-3 hover:bg-cv-hover"
               >
-                <AdminThumbnail imageKey={item.front_image_url} />
-                <div className="flex-1 min-w-0">
-                  {item.card_id ? (
-                    <p className="text-sm text-cv-text font-medium truncate">{item.card_name}</p>
-                  ) : (
-                    <p className="text-sm font-medium truncate" style={{ color: '#f59e0b' }}>Unidentified</p>
-                  )}
-                  <p className="text-xs text-cv-muted truncate">{item.set_name ?? '—'}</p>
-                </div>
-                <div className="text-right text-xs text-cv-muted shrink-0">
-                  <p>{item.estimated_grade ?? '—'}</p>
-                  <p>{item.estimated_value_cents != null ? `$${(item.estimated_value_cents / 100).toFixed(2)}` : '—'}</p>
+                <input
+                  type="checkbox"
+                  checked={selected.has(item.id)}
+                  onChange={() => toggleSelected(item.id)}
+                  onClick={(e) => e.stopPropagation()}
+                  className="accent-[var(--primary)] shrink-0"
+                />
+                <div
+                  onClick={() => setEditingItemId(item.id)}
+                  className="flex flex-1 items-center gap-3 min-w-0 cursor-pointer"
+                >
+                  <AdminThumbnail imageKey={item.front_image_url} />
+                  <div className="flex-1 min-w-0">
+                    {item.card_id ? (
+                      <p className="text-sm text-cv-text font-medium truncate">{item.card_name}</p>
+                    ) : (
+                      <p className="text-sm font-medium truncate" style={{ color: '#f59e0b' }}>Unidentified</p>
+                    )}
+                    <p className="text-xs text-cv-muted truncate">{item.set_name ?? '—'}</p>
+                  </div>
+                  <div className="text-right text-xs text-cv-muted shrink-0">
+                    <p>{item.estimated_grade ?? '—'}</p>
+                    <p>{item.estimated_value_cents != null ? `$${(item.estimated_value_cents / 100).toFixed(2)}` : '—'}</p>
+                  </div>
                 </div>
               </div>
             ))}
@@ -731,6 +856,15 @@ function CollectionPanel({
       </div>
       {editingItemId != null && (
         <ItemEditSheet itemId={editingItemId} onClose={() => setEditingItemId(null)} />
+      )}
+      {showReassign && (
+        <BatchReassignModal
+          count={selected.size}
+          isPending={reassignMutation.isPending}
+          error={batchError}
+          onCancel={() => setShowReassign(false)}
+          onConfirm={(cardId) => reassignMutation.mutate({ itemIds: Array.from(selected), cardId })}
+        />
       )}
     </div>
   )
