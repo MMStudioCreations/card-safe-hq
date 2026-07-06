@@ -34,6 +34,8 @@ import {
   handleAdminImage,
   handleAdminCards,
   handleAdminActivity,
+  handleAdminScans,
+  handleDeleteAdminScan,
   handleAdminQuery,
 } from './routes/admin';
 import {
@@ -634,6 +636,14 @@ export default {
         }
         if (method === 'GET' && pathname === '/api/admin/activity') {
           return withCors(await handleAdminActivity(env, user), request, env);
+        }
+        if (method === 'GET' && pathname === '/api/admin/scans') {
+          return withCors(await handleAdminScans(env, user, request), request, env);
+        }
+        if (method === 'DELETE' && pathname.startsWith('/api/admin/scans/')) {
+          const pendingId = parseId(pathname);
+          if (!pendingId) return withCors(badRequest('Invalid pending id'), request, env);
+          return withCors(await handleDeleteAdminScan(env, user, pendingId), request, env);
         }
         if (method === 'POST' && pathname === '/api/admin/query') {
           return withCors(await handleAdminQuery(env, user, request), request, env);

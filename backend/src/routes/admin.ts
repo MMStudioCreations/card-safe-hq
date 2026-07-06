@@ -1,5 +1,5 @@
 import type { Env, User } from '../types';
-import { queryAll, queryOne } from '../lib/db';
+import { queryAll, queryOne, run } from '../lib/db';
 import { badRequest, forbidden, notFound, ok, serverError } from '../lib/json';
 import { parseJsonBody } from '../lib/validation';
 
@@ -240,6 +240,83 @@ export async function handleAdminActivity(env: Env, user: User): Promise<Respons
     const message = err instanceof Error ? err.message : 'Activity query failed';
     return serverError(message);
   }
+}
+
+export async function handleAdminScans(env: Env, user: User, request: Request): Promise<Response> {
+  const denied = requireAdmin(user);
+  if (denied) return denied;
+
+  const url = new URL(request.url);
+  const status = url.searchParams.get('status') ?? 'pending';
+  if (!['pending', 'confirmed', 'all'].includes(status)) {
+    return badRequest('status must be pending, confirmed, or all');
+  }
+  const page = Math.max(1, parseInt(url.searchParams.get('page') ?? '1', 10) || 1);
+  const limit = 50;
+  const offset = (page - 1) * limit;
+
+  const where = status === 'pending' ? 'WHERE pi.confirmed = 0'
+    : status === 'confirmed' ? 'WHERE pi.confirmed = 1'
+    : '';
+
+  try {
+    const [countRow, rows] = await Promise.all([
+      queryOne<{ total: number }>(
+        env.DB,
+        `SELECT COUNT(*) as total FROM pending_identifications pi ${where}`,
+        [],
+      ),
+      queryAll<{
+        id: number;
+        collection_item_id: number;
+        confirmed: number;
+        created_at: string;
+        confidence_score: number | null;
+        suggested_card_name: string | null;
+        suggested_set_name: string | null;
+        user_email: string;
+        card_id: number | null;
+        confirmed_card_name: string | null;
+      }>(
+        env.DB,
+        `SELECT pi.id, pi.collection_item_id, pi.confirmed, pi.created_at,
+                json_extract(pi.suggestions, '$.confidence') as confidence_score,
+                json_extract(pi.suggestions, '$.card_name') as suggested_card_name,
+                json_extract(pi.suggestions, '$.set_name') as suggested_set_name,
+                u.email as user_email,
+                ci.card_id,
+                c.card_name as confirmed_card_name
+         FROM pending_identifications pi
+         JOIN collection_items ci ON ci.id = pi.collection_item_id
+         JOIN users u ON u.id = ci.user_id
+         LEFT JOIN cards c ON c.id = ci.card_id
+         ${where}
+         ORDER BY confidence_score ASC
+         LIMIT ? OFFSET ?`,
+        [limit, offset],
+      ),
+    ]);
+
+    return ok({ data: rows, total_count: countRow?.total ?? 0, page, limit });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Scans query failed';
+    return serverError(message);
+  }
+}
+
+export async function handleDeleteAdminScan(env: Env, user: User, pendingId: number): Promise<Response> {
+  const denied = requireAdmin(user);
+  if (denied) return denied;
+
+  const existing = await queryOne<{ id: number; collection_item_id: number }>(
+    env.DB,
+    'SELECT id, collection_item_id FROM pending_identifications WHERE id = ?',
+    [pendingId],
+  );
+  if (!existing) return notFound('Pending identification not found');
+
+  await run(env.DB, 'DELETE FROM pending_identifications WHERE id = ?', [pendingId]);
+  return ok({ deleted: true, collection_item_id: existing.collection_item_id });
 }
 
 export async function handleAdminQuery(env: Env, user: User, request: Request): Promise<Response> {

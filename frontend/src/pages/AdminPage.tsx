@@ -65,7 +65,7 @@ type ActivityRow = {
   scan_count: number
 }
 
-type Tab = 'overview' | 'users' | 'crm' | 'cards' | 'activity' | 'sql' | 'catalog' | 'sealed'
+type Tab = 'overview' | 'users' | 'crm' | 'cards' | 'activity' | 'sql' | 'catalog' | 'sealed' | 'scans'
 
 function StatCard({ label, value }: { label: string; value: string | number }) {
   return (
@@ -871,6 +871,156 @@ function CRMTab() {
   )
 }
 
+// ── Scans Tab ────────────────────────────────────────────────────────────────
+type ScanStatus = 'pending' | 'confirmed' | 'all'
+
+type ScanRow = {
+  id: number
+  collection_item_id: number
+  confirmed: number
+  created_at: string
+  confidence_score: number | null
+  suggested_card_name: string | null
+  suggested_set_name: string | null
+  user_email: string
+  card_id: number | null
+  confirmed_card_name: string | null
+}
+
+type PagedScans = {
+  data: ScanRow[]
+  total_count: number
+  page: number
+  limit: number
+}
+
+function ScansTab() {
+  const [status, setStatus] = useState<ScanStatus>('pending')
+  const [page, setPage] = useState(1)
+  const [discardError, setDiscardError] = useState('')
+  const queryClient = useQueryClient()
+  const LIMIT = 50
+
+  const { data: resp, isLoading, error } = useQuery({
+    queryKey: ['admin', 'scans', status, page],
+    queryFn: () => adminFetch<PagedScans>(`/api/admin/scans?status=${status}&page=${page}`),
+  })
+
+  const discardMutation = useMutation({
+    mutationFn: (pendingId: number) => adminFetch(`/api/admin/scans/${pendingId}`, { method: 'DELETE' }),
+    onSuccess: () => {
+      setDiscardError('')
+      void queryClient.invalidateQueries({ queryKey: ['admin', 'scans'] })
+    },
+    onError: (e: Error) => setDiscardError(e.message),
+  })
+
+  const rows = resp?.data ?? []
+  const totalCount = resp?.total_count ?? 0
+  const totalPages = Math.ceil(totalCount / LIMIT)
+
+  function confidenceColor(score: number | null) {
+    if (score == null) return 'var(--cv-muted)'
+    if (score < 20) return '#f87171'
+    if (score < 50) return '#f59e0b'
+    return '#34D399'
+  }
+
+  function handleDiscard(row: ScanRow) {
+    const alreadyLinked = row.card_id != null
+    const message = alreadyLinked
+      ? 'This item already has a confirmed card. Discarding only removes this log entry — continue?'
+      : 'Discard this pending identification?'
+    if (!window.confirm(message)) return
+    discardMutation.mutate(row.id)
+  }
+
+  return (
+    <div className="space-y-4">
+      <div className="flex gap-1 rounded-[var(--radius-md)] bg-cv-surface p-1 w-fit">
+        {(['pending', 'confirmed', 'all'] as ScanStatus[]).map((s) => (
+          <button
+            key={s}
+            type="button"
+            onClick={() => { setStatus(s); setPage(1) }}
+            className={`px-3 py-1 rounded-[var(--radius-sm)] text-xs font-medium capitalize transition ${
+              status === s ? 'bg-[var(--primary)] text-white' : 'text-cv-muted hover:text-cv-text'
+            }`}
+          >
+            {s}
+          </button>
+        ))}
+      </div>
+
+      {discardError && (
+        <div className="rounded-[var(--radius-sm)] bg-red-900/30 border border-red-700 text-red-300 text-sm p-3">{discardError}</div>
+      )}
+
+      {isLoading ? (
+        <Loader2 className="h-6 w-6 animate-spin text-cv-secondary mx-auto mt-8" />
+      ) : error ? (
+        <p className="text-red-400 mt-4">Failed to load scans.</p>
+      ) : rows.length === 0 ? (
+        <p className="text-cv-muted text-sm">No pending identifications.</p>
+      ) : (
+        <div className="overflow-x-auto rounded-[var(--radius-md)] bg-cv-surface">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b border-cv-border text-cv-muted">
+                <th className="text-left px-4 py-3 font-medium">Item</th>
+                <th className="text-left px-4 py-3 font-medium">User</th>
+                <th className="text-left px-4 py-3 font-medium">Suggested Card</th>
+                <th className="text-right px-4 py-3 font-medium">Confidence</th>
+                <th className="text-left px-4 py-3 font-medium">Status</th>
+                <th className="text-left px-4 py-3 font-medium">Created</th>
+                <th className="text-right px-4 py-3 font-medium">Action</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((row) => (
+                <tr key={row.id} className="border-b border-cv-border last:border-0 hover:bg-cv-hover">
+                  <td className="px-4 py-3 text-cv-muted">#{row.collection_item_id}</td>
+                  <td className="px-4 py-3 text-cv-text">{row.user_email}</td>
+                  <td className="px-4 py-3 text-cv-text">
+                    {row.confirmed ? (row.confirmed_card_name ?? '—') : (row.suggested_card_name ?? '—')}
+                    <p className="text-xs text-cv-muted">{row.suggested_set_name ?? ''}</p>
+                  </td>
+                  <td className="px-4 py-3 text-right font-medium" style={{ color: confidenceColor(row.confidence_score) }}>
+                    {row.confidence_score ?? '—'}
+                  </td>
+                  <td className="px-4 py-3">
+                    <span className={`text-xs ${row.confirmed ? 'text-green-400' : 'text-cv-muted'}`}>
+                      {row.confirmed ? 'Confirmed' : 'Pending'}
+                    </span>
+                  </td>
+                  <td className="px-4 py-3 text-cv-muted text-xs">{new Date(row.created_at).toLocaleDateString()}</td>
+                  <td className="px-4 py-3 text-right">
+                    <button
+                      onClick={() => handleDiscard(row)}
+                      disabled={discardMutation.isPending}
+                      type="button"
+                      className="px-2 py-1 rounded text-xs font-medium text-red-300 border border-red-700/50 hover:bg-red-900/30 disabled:opacity-40"
+                    >
+                      Discard
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      <Pagination
+        page={page}
+        totalPages={totalPages}
+        onPrev={() => setPage(p => p - 1)}
+        onNext={() => setPage(p => p + 1)}
+      />
+    </div>
+  )
+}
+
 // ── Sealed Sync Tab ────────────────────────────────────────────────────────────
 type SyncResult = {
   inserted: number
@@ -947,6 +1097,7 @@ const TABS: { id: Tab; label: string }[] = [
   { id: 'users', label: 'Users' },
   { id: 'cards', label: 'Cards' },
   { id: 'activity', label: 'Activity' },
+  { id: 'scans', label: 'Scans' },
   { id: 'sealed', label: 'Sealed Sync' },
   { id: 'sql', label: 'SQL Runner' },
   { id: 'catalog', label: 'Pokémon Catalog' },
@@ -996,6 +1147,7 @@ export default function AdminPage() {
       {tab === 'users' && <UsersTab />}
       {tab === 'cards' && <CardsTab />}
       {tab === 'activity' && <ActivityTab />}
+      {tab === 'scans' && <ScansTab />}
       {tab === 'sealed' && <SealedSyncTab />}
       {tab === 'sql' && <SqlTab />}
       {tab === 'catalog' && <CatalogTab />}
