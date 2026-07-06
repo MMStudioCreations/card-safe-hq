@@ -40,6 +40,7 @@ export interface User {
   email: string;
   username: string | null;
   created_at: string;
+  is_admin: number;
 }
 export interface Session {
   id: string;

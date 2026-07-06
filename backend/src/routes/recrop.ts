@@ -25,10 +25,8 @@ interface CollectionItemRow {
   bbox_height: number | null;
 }
 
-const ADMIN_EMAIL = 'michaelamarino16@gmail.com';
-
 export async function handleRecrop(env: Env, request: Request, user: User): Promise<Response> {
-  if (user.email !== ADMIN_EMAIL) {
+  if (user.is_admin !== 1) {
     return badRequest('Admin access required');
   }
 

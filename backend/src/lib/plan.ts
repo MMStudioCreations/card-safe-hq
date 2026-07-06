@@ -5,11 +5,8 @@ import { forbidden } from './json';
 export type MembershipTier = 'free' | 'pro';
 export type MembershipPlan = 'free' | 'monthly' | 'yearly';
 
-// Owner email always gets max (yearly Pro) access without payment
-const OWNER_EMAIL = 'michaelamarino16@gmail.com';
-
 function isOwner(user: User): boolean {
-  return user.email === OWNER_EMAIL || user.email === (process?.env?.ADMIN_EMAIL ?? '');
+  return user.is_admin === 1;
 }
 
 export async function ensureUserSubscription(env: Env, userId: number): Promise<void> {

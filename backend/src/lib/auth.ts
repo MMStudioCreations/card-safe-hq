@@ -30,7 +30,7 @@ export async function registerUser(env: Env, input: { email: string; password: s
     input.username ?? null,
   ]);
 
-  const user = await queryOne<User>(env.DB, 'SELECT id, email, username, created_at FROM users WHERE email = ?', [input.email]);
+  const user = await queryOne<User>(env.DB, 'SELECT id, email, username, created_at, is_admin FROM users WHERE email = ?', [input.email]);
   if (!user) {
     throw new Error('Unable to create user');
   }
@@ -86,7 +86,7 @@ export async function loginUser(env: Env, email: string, password: string) {
   await run(env.DB, 'INSERT INTO sessions (id, user_id, expires_at) VALUES (?, ?, ?)', [sessionId, user.id, expiresAt]);
 
   return {
-    user: { id: user.id, email: user.email, username: user.username, created_at: user.created_at },
+    user: { id: user.id, email: user.email, username: user.username, created_at: user.created_at, is_admin: user.is_admin },
     // Return both the cookie (for browser) and the raw token (for PWA/localStorage)
     cookie: makeSessionCookie(sessionId, expiresAt),
     token: sessionId,
@@ -109,7 +109,7 @@ export async function getCurrentUser(env: Env, request: Request): Promise<User |
 
   const user = await queryOne<User>(
     env.DB,
-    `SELECT u.id, u.email, u.username, u.created_at
+    `SELECT u.id, u.email, u.username, u.created_at, u.is_admin
      FROM sessions s
      JOIN users u ON u.id = s.user_id
      WHERE s.id = ? AND s.expires_at > CURRENT_TIMESTAMP`,

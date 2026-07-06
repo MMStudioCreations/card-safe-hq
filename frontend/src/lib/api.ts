@@ -7,6 +7,7 @@ export type User = {
   email: string
   username?: string | null
   created_at: string
+  is_admin?: number
 }
 
 export type Card = {

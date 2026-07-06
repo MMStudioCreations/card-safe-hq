@@ -3,10 +3,8 @@ import { queryAll, queryOne } from '../lib/db';
 import { badRequest, forbidden, ok, serverError } from '../lib/json';
 import { parseJsonBody } from '../lib/validation';
 
-const ADMIN_EMAIL = 'michaelamarino16@gmail.com';
-
 function requireAdmin(user: User): Response | null {
-  if (user.email !== ADMIN_EMAIL) {
+  if (user.is_admin !== 1) {
     return forbidden('Forbidden');
   }
   return null;
@@ -60,40 +58,49 @@ export async function handleAdminStats(env: Env, user: User): Promise<Response> 
   }
 }
 
-export async function handleAdminUsers(env: Env, user: User): Promise<Response> {
+export async function handleAdminUsers(env: Env, user: User, request: Request): Promise<Response> {
   const denied = requireAdmin(user);
   if (denied) return denied;
 
-  try {
-    const rows = await queryAll<{
-      id: number;
-      email: string;
-      username: string | null;
-      created_at: string;
-      collection_count: number;
-      plan: string | null;
-      status: string | null;
-      current_period_end: string | null;
-      stripe_customer_id: string | null;
-      stripe_subscription_id: string | null;
-    }>(
-      env.DB,
-      `SELECT u.id, u.email, u.username, u.created_at,
-              COUNT(ci.id) as collection_count,
-              s.plan,
-              s.status,
-              s.current_period_end,
-              s.stripe_customer_id,
-              s.stripe_subscription_id
-       FROM users u
-       LEFT JOIN collection_items ci ON ci.user_id = u.id
-       LEFT JOIN subscriptions s ON s.user_id = u.id
-       GROUP BY u.id
-       ORDER BY u.created_at DESC`,
-      [],
-    );
+  const url = new URL(request.url);
+  const page = Math.max(1, parseInt(url.searchParams.get('page') ?? '1', 10) || 1);
+  const limit = Math.min(500, Math.max(1, parseInt(url.searchParams.get('limit') ?? '100', 10) || 100));
+  const offset = (page - 1) * limit;
 
-    return ok(rows);
+  try {
+    const [countRow, rows] = await Promise.all([
+      queryOne<{ total: number }>(env.DB, 'SELECT COUNT(*) as total FROM users', []),
+      queryAll<{
+        id: number;
+        email: string;
+        username: string | null;
+        created_at: string;
+        collection_count: number;
+        plan: string | null;
+        status: string | null;
+        current_period_end: string | null;
+        stripe_customer_id: string | null;
+        stripe_subscription_id: string | null;
+      }>(
+        env.DB,
+        `SELECT u.id, u.email, u.username, u.created_at,
+                COUNT(ci.id) as collection_count,
+                s.plan,
+                s.status,
+                s.current_period_end,
+                s.stripe_customer_id,
+                s.stripe_subscription_id
+         FROM users u
+         LEFT JOIN collection_items ci ON ci.user_id = u.id
+         LEFT JOIN subscriptions s ON s.user_id = u.id
+         GROUP BY u.id
+         ORDER BY u.created_at DESC
+         LIMIT ? OFFSET ?`,
+        [limit, offset],
+      ),
+    ]);
+
+    return ok({ data: rows, total_count: countRow?.total ?? 0, page, limit });
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Users query failed';
     return serverError(message);

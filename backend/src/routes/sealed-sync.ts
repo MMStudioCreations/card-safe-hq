@@ -1,11 +1,8 @@
 import type { Env, User } from '../types';
 import { ok, serverError, forbidden } from '../lib/json';
 
-const ADMIN_EMAIL = 'michaelamarino16@gmail.com';
-
 function requireAdmin(user: User): Response | null {
-  const adminEmail = ADMIN_EMAIL;
-  if (user.email !== adminEmail) return forbidden('Forbidden');
+  if (user.is_admin !== 1) return forbidden('Forbidden');
   return null;
 }
 

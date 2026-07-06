@@ -13,7 +13,6 @@ import {
 } from 'recharts'
 import { getStoredToken } from '../lib/api'
 
-const ADMIN_EMAIL = 'michaelamarino16@gmail.com'
 const API_BASE = import.meta.env.VITE_API_URL ?? 'https://cardsafehq-api.michaelamarino16.workers.dev'
 
 async function adminFetch<T>(path: string, options?: RequestInit): Promise<T> {
@@ -118,39 +117,60 @@ function OverviewTab() {
   )
 }
 
+type PagedAdminUsers = {
+  data: AdminUser[]
+  total_count: number
+  page: number
+  limit: number
+}
+
 function UsersTab() {
-  const { data: users, isLoading, error } = useQuery({
-    queryKey: ['admin', 'users'],
-    queryFn: () => adminFetch<AdminUser[]>('/api/admin/users'),
+  const [page, setPage] = useState(1)
+  const LIMIT = 100
+  const { data: resp, isLoading, error } = useQuery({
+    queryKey: ['admin', 'users', page],
+    queryFn: () => adminFetch<PagedAdminUsers>(`/api/admin/users?page=${page}&limit=${LIMIT}`),
   })
 
+  const users = resp?.data ?? []
+  const totalCount = resp?.total_count ?? 0
+  const totalPages = Math.ceil(totalCount / LIMIT)
+
   if (isLoading) return <Loader2 className="h-6 w-6 animate-spin text-cv-secondary mx-auto mt-8" />
-  if (error || !users) return <p className="text-red-400 mt-4">Failed to load users.</p>
+  if (error || !resp) return <p className="text-red-400 mt-4">Failed to load users.</p>
 
   return (
-    <div className="overflow-x-auto rounded-[var(--radius-md)] bg-cv-surface">
-      <table className="w-full text-sm">
-        <thead>
-          <tr className="border-b border-cv-border text-cv-muted">
-            <th className="text-left px-4 py-3 font-medium">ID</th>
-            <th className="text-left px-4 py-3 font-medium">Email</th>
-            <th className="text-left px-4 py-3 font-medium">Username</th>
-            <th className="text-left px-4 py-3 font-medium">Created</th>
-            <th className="text-right px-4 py-3 font-medium">Items</th>
-          </tr>
-        </thead>
-        <tbody>
-          {users.map((u) => (
-            <tr key={u.id} className="border-b border-cv-border last:border-0 hover:bg-cv-hover">
-              <td className="px-4 py-3 text-cv-muted">{u.id}</td>
-              <td className="px-4 py-3 text-cv-text">{u.email}</td>
-              <td className="px-4 py-3 text-cv-muted">{u.username ?? '—'}</td>
-              <td className="px-4 py-3 text-cv-muted">{new Date(u.created_at).toLocaleDateString()}</td>
-              <td className="px-4 py-3 text-right text-cv-text font-medium">{u.collection_count}</td>
+    <div className="space-y-3">
+      <div className="overflow-x-auto rounded-[var(--radius-md)] bg-cv-surface">
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="border-b border-cv-border text-cv-muted">
+              <th className="text-left px-4 py-3 font-medium">ID</th>
+              <th className="text-left px-4 py-3 font-medium">Email</th>
+              <th className="text-left px-4 py-3 font-medium">Username</th>
+              <th className="text-left px-4 py-3 font-medium">Created</th>
+              <th className="text-right px-4 py-3 font-medium">Items</th>
             </tr>
-          ))}
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            {users.map((u) => (
+              <tr key={u.id} className="border-b border-cv-border last:border-0 hover:bg-cv-hover">
+                <td className="px-4 py-3 text-cv-muted">{u.id}</td>
+                <td className="px-4 py-3 text-cv-text">{u.email}</td>
+                <td className="px-4 py-3 text-cv-muted">{u.username ?? '—'}</td>
+                <td className="px-4 py-3 text-cv-muted">{new Date(u.created_at).toLocaleDateString()}</td>
+                <td className="px-4 py-3 text-right text-cv-text font-medium">{u.collection_count}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <Pagination
+        page={page}
+        totalPages={totalPages}
+        onPrev={() => setPage(p => p - 1)}
+        onNext={() => setPage(p => p + 1)}
+      />
     </div>
   )
 }
@@ -569,28 +589,67 @@ type CRMUser = {
   current_period_end: string | null
 }
 
+type PagedUsers = {
+  data: CRMUser[]
+  total_count: number
+  page: number
+  limit: number
+}
+
+function Pagination({
+  page, totalPages, onPrev, onNext,
+}: { page: number; totalPages: number; onPrev: () => void; onNext: () => void }) {
+  if (totalPages <= 1) return null
+  return (
+    <div className="flex items-center justify-between pt-3 border-t border-cv-border">
+      <button
+        onClick={onPrev}
+        disabled={page <= 1}
+        className="px-3 py-1.5 rounded text-sm text-cv-text bg-cv-surface border border-cv-border hover:bg-cv-hover disabled:opacity-40 disabled:cursor-not-allowed"
+        type="button"
+      >
+        ← Previous
+      </button>
+      <span className="text-sm text-cv-muted">Page {page} of {totalPages}</span>
+      <button
+        onClick={onNext}
+        disabled={page >= totalPages}
+        className="px-3 py-1.5 rounded text-sm text-cv-text bg-cv-surface border border-cv-border hover:bg-cv-hover disabled:opacity-40 disabled:cursor-not-allowed"
+        type="button"
+      >
+        Next →
+      </button>
+    </div>
+  )
+}
+
 function CRMTab() {
   const [search, setSearch] = useState('')
-  const { data: users, isLoading, error } = useQuery({
-    queryKey: ['admin', 'crm-users'],
-    queryFn: () => adminFetch<CRMUser[]>('/api/admin/users'),
+  const [page, setPage] = useState(1)
+  const LIMIT = 100
+  const { data: resp, isLoading, error } = useQuery({
+    queryKey: ['admin', 'crm-users', page],
+    queryFn: () => adminFetch<PagedUsers>(`/api/admin/users?page=${page}&limit=${LIMIT}`),
   })
 
-  const filtered = (users ?? []).filter(u =>
+  const pageUsers = resp?.data ?? []
+  const totalCount = resp?.total_count ?? 0
+  const totalPages = Math.ceil(totalCount / LIMIT)
+
+  const filtered = pageUsers.filter(u =>
     !search || u.email.toLowerCase().includes(search.toLowerCase()) ||
     (u.username ?? '').toLowerCase().includes(search.toLowerCase())
   )
 
-  const proUsers = (users ?? []).filter(u => u.status === 'active' && u.plan && u.plan !== 'free')
-  const monthlyUsers = (users ?? []).filter(u => u.plan === 'monthly' && u.status === 'active')
-  const yearlyUsers = (users ?? []).filter(u => u.plan === 'yearly' && u.status === 'active')
-  const freeUsers = (users ?? []).filter(u => !u.plan || u.plan === 'free' || u.status !== 'active')
+  const monthlyUsers = pageUsers.filter(u => u.plan === 'monthly' && u.status === 'active')
+  const yearlyUsers = pageUsers.filter(u => u.plan === 'yearly' && u.status === 'active')
+  const freeUsers = pageUsers.filter(u => !u.plan || u.plan === 'free')
   const mrr = monthlyUsers.length * 10 + yearlyUsers.length * (100 / 12)
 
   function getPlanLabel(u: CRMUser) {
-    if (!u.plan || u.plan === 'free' || u.status !== 'active') return 'Free'
-    if (u.plan === 'yearly') return 'Pro Yearly'
-    return 'Pro Monthly'
+    if (!u.plan || u.plan === 'free') return 'Free'
+    const planName = u.plan === 'yearly' ? 'Pro Yearly' : 'Pro Monthly'
+    return u.status === 'cancelled' ? `${planName} — Cancelled` : planName
   }
 
   if (isLoading) return <Loader2 className="h-6 w-6 animate-spin text-cv-secondary mx-auto mt-8" />
@@ -602,7 +661,7 @@ function CRMTab() {
       <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
         <div className="rounded-[var(--radius-md)] bg-cv-surface p-4">
           <p className="text-xs text-cv-muted uppercase tracking-wider">Total Users</p>
-          <p className="text-2xl font-bold mt-1">{users?.length ?? 0}</p>
+          <p className="text-2xl font-bold mt-1">{totalCount}</p>
         </div>
         <div className="rounded-[var(--radius-md)] bg-cv-surface p-4">
           <p className="text-xs text-cv-muted uppercase tracking-wider">Free</p>
@@ -647,7 +706,14 @@ function CRMTab() {
           <tbody>
             {filtered.map((u) => {
               const plan = getPlanLabel(u)
-              const isActive = u.subscription_status === 'active'
+              const isPro = u.status === 'active' && u.plan && u.plan !== 'free'
+              const isCancelled = u.status === 'cancelled'
+              const badgeBg = isPro
+                ? u.plan === 'yearly' ? 'rgba(201,168,76,0.15)' : 'rgba(212,175,55,0.10)'
+                : isCancelled ? 'rgba(239,68,68,0.10)' : 'rgba(255,255,255,0.06)'
+              const badgeColor = isPro
+                ? '#D4AF37'
+                : isCancelled ? '#f87171' : 'var(--cv-muted)'
               return (
                 <tr key={u.id} className="border-b border-cv-border last:border-0 hover:bg-cv-hover">
                   <td className="px-4 py-3">
@@ -657,16 +723,13 @@ function CRMTab() {
                   <td className="px-4 py-3">
                     <span
                       className="rounded-full px-2 py-0.5 text-xs font-medium"
-                      style={{
-                        background: plan === 'Pro Yearly' ? 'rgba(201,168,76,0.15)' : plan === 'Pro Monthly' ? 'rgba(212,175,55,0.10)' : 'rgba(255,255,255,0.06)',
-                        color: plan === 'Pro Yearly' ? '#D4AF37' : plan === 'Pro Monthly' ? '#D4AF37' : 'var(--cv-muted)',
-                      }}
+                      style={{ background: badgeBg, color: badgeColor }}
                     >
                       {plan}
                     </span>
                   </td>
                   <td className="px-4 py-3">
-                    <span className={`text-xs ${isActive ? 'text-green-400' : 'text-cv-muted'}`}>
+                    <span className={`text-xs ${u.status === 'active' ? 'text-green-400' : 'text-cv-muted'}`}>
                       {u.status ?? 'none'}
                     </span>
                   </td>
@@ -681,6 +744,12 @@ function CRMTab() {
           </tbody>
         </table>
       </div>
+      <Pagination
+        page={page}
+        totalPages={totalPages}
+        onPrev={() => { setSearch(''); setPage(p => p - 1) }}
+        onNext={() => { setSearch(''); setPage(p => p + 1) }}
+      />
     </div>
   )
 }
@@ -778,7 +847,7 @@ export default function AdminPage() {
     )
   }
 
-  if (!user || user.email !== ADMIN_EMAIL) {
+  if (!user || user.is_admin !== 1) {
     return <Navigate to="/" replace />
   }
 

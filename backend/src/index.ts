@@ -200,7 +200,7 @@ export default {
         return new Response(null, {
           status: 204,
           headers: {
-            'Access-Control-Allow-Origin': getAllowedOrigin(request, env),
+            'Access-Control-Allow-Origin': getAllowedOrigin(request, env) ?? '',
             'Access-Control-Allow-Methods': 'GET, POST, PATCH, DELETE, OPTIONS',
             'Access-Control-Allow-Headers': 'Content-Type, Authorization',
             'Access-Control-Allow-Credentials': 'true',
@@ -364,7 +364,7 @@ export default {
           headers: {
             'Content-Type': 'text/csv',
             'Content-Disposition': 'attachment; filename="card-safe-hq-collection.csv"',
-            'Access-Control-Allow-Origin': getAllowedOrigin(request, env),
+            'Access-Control-Allow-Origin': getAllowedOrigin(request, env) ?? '',
             'Access-Control-Allow-Credentials': 'true',
           },
         });
@@ -538,7 +538,7 @@ export default {
         const headers = new Headers();
         headers.set('Content-Type', object.httpMetadata?.contentType || 'image/jpeg');
         headers.set('Cache-Control', 'public, max-age=31536000, immutable');
-        headers.set('Access-Control-Allow-Origin', getAllowedOrigin(request, env));
+        headers.set('Access-Control-Allow-Origin', getAllowedOrigin(request, env) ?? '');
 
         return new Response(object.body, { headers });
       }
@@ -616,7 +616,7 @@ export default {
           return withCors(await handleAdminStats(env, user), request, env);
         }
         if (method === 'GET' && pathname === '/api/admin/users') {
-          return withCors(await handleAdminUsers(env, user), request, env);
+          return withCors(await handleAdminUsers(env, user, request), request, env);
         }
         if (method === 'GET' && pathname === '/api/admin/cards') {
           return withCors(await handleAdminCards(env, user), request, env);
@@ -879,6 +879,7 @@ export default {
   async scheduled(_event: ScheduledEvent, env: Env): Promise<void> {
     await env.DB.prepare("DELETE FROM sessions WHERE expires_at < datetime('now')").run();
     await env.DB.prepare("DELETE FROM rate_limits WHERE expires_at < datetime('now')").run();
+    await env.DB.prepare("INSERT INTO system_events (event_type) VALUES ('scheduled_run')").run();
     await runPriceSync(env);
   },
 };
