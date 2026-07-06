@@ -38,6 +38,18 @@ The Worker expects these binding names exactly:
 
 In Cloudflare dashboard (or `wrangler.toml`) ensure your Worker has these bindings attached.
 
+### Admin Health tab (R2 usage)
+
+`GET /api/admin/health` reports D1 table counts unconditionally. R2 object count and storage
+bytes additionally require a Cloudflare API token with R2 read access:
+
+```bash
+npx wrangler secret put CLOUDFLARE_API_TOKEN
+```
+
+`CLOUDFLARE_ACCOUNT_ID` is set in `wrangler.toml` `[vars]` (not sensitive). Without the token,
+the Health tab shows "Not configured" for R2 fields instead of failing the request.
+
 ## API routes
 
 ### Health

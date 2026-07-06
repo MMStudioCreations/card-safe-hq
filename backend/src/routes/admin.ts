@@ -562,6 +562,83 @@ export async function handleAdminBatchReassignCollection(env: Env, user: User, r
   }
 }
 
+const HEALTH_TABLES = [
+  'users', 'cards', 'collection_items', 'sessions', 'sales_comps',
+  'pending_identifications', 'grading_estimates', 'releases', 'rate_limits',
+];
+
+export async function handleAdminHealth(env: Env, user: User): Promise<Response> {
+  const denied = requireAdmin(user);
+  if (denied) return denied;
+
+  const tableCounts: Record<string, number> = {};
+  try {
+    const results = await env.DB.batch(
+      HEALTH_TABLES.map((table) => env.DB.prepare(`SELECT COUNT(*) as count FROM ${table}`)),
+    );
+    results.forEach((res, i) => {
+      const row = res.results?.[0] as { count: number } | undefined;
+      tableCounts[HEALTH_TABLES[i]] = row?.count ?? 0;
+    });
+  } catch (err) {
+    console.error('Health table counts failed', err);
+  }
+
+  let lastJobRun: string | null = null;
+  try {
+    const row = await queryOne<{ ran_at: string }>(env.DB, 'SELECT ran_at FROM system_events ORDER BY ran_at DESC LIMIT 1', []);
+    lastJobRun = row?.ran_at ?? null;
+  } catch (err) {
+    console.error('Health last job run query failed', err);
+  }
+
+  let rateLimitHits = 0;
+  try {
+    const row = await queryOne<{ total: number | null }>(
+      env.DB,
+      `SELECT SUM(count) as total FROM rate_limits WHERE expires_at > datetime('now')`,
+      [],
+    );
+    rateLimitHits = row?.total ?? 0;
+  } catch (err) {
+    console.error('Health rate limit query failed', err);
+  }
+
+  let r2: { object_count: number | null; storage_bytes: number | null; status: string } = {
+    object_count: null,
+    storage_bytes: null,
+    status: 'Not configured',
+  };
+  if (env.CLOUDFLARE_API_TOKEN && env.CLOUDFLARE_ACCOUNT_ID) {
+    try {
+      const res = await fetch(
+        `https://api.cloudflare.com/client/v4/accounts/${env.CLOUDFLARE_ACCOUNT_ID}/r2/buckets/varimg/usage`,
+        { headers: { Authorization: `Bearer ${env.CLOUDFLARE_API_TOKEN}` } },
+      );
+      if (res.ok) {
+        const data = await res.json() as { result?: { objectCount?: number; payloadSize?: number } };
+        r2 = {
+          object_count: data.result?.objectCount ?? null,
+          storage_bytes: data.result?.payloadSize ?? null,
+          status: 'ok',
+        };
+      } else {
+        r2 = { object_count: null, storage_bytes: null, status: 'Unavailable' };
+      }
+    } catch (err) {
+      console.error('R2 usage fetch failed', err);
+      r2 = { object_count: null, storage_bytes: null, status: 'Unavailable' };
+    }
+  }
+
+  return ok({
+    table_counts: tableCounts,
+    last_job_run: lastJobRun,
+    rate_limit_hits_last_hour: rateLimitHits,
+    r2,
+  });
+}
+
 export async function handleAdminQuery(env: Env, user: User, request: Request): Promise<Response> {
   const denied = requireAdmin(user);
   if (denied) return denied;

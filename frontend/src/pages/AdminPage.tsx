@@ -65,7 +65,7 @@ type ActivityRow = {
   scan_count: number
 }
 
-type Tab = 'overview' | 'users' | 'crm' | 'cards' | 'activity' | 'sql' | 'catalog' | 'sealed' | 'scans'
+type Tab = 'overview' | 'users' | 'crm' | 'cards' | 'activity' | 'sql' | 'catalog' | 'sealed' | 'scans' | 'health'
 
 function StatCard({ label, value }: { label: string; value: string | number }) {
   return (
@@ -1414,6 +1414,99 @@ function ScansTab() {
   )
 }
 
+// ── Health Tab ─────────────────────────────────────────────────────────────────
+type HealthData = {
+  table_counts: Record<string, number>
+  last_job_run: string | null
+  rate_limit_hits_last_hour: number
+  r2: { object_count: number | null; storage_bytes: number | null; status: string }
+}
+
+function formatBytes(bytes: number | null): string {
+  if (bytes == null) return '—'
+  const units = ['B', 'KB', 'MB', 'GB', 'TB']
+  let value = bytes
+  let unitIndex = 0
+  while (value >= 1024 && unitIndex < units.length - 1) {
+    value /= 1024
+    unitIndex += 1
+  }
+  return `${value.toFixed(1)} ${units[unitIndex]}`
+}
+
+function HealthTab() {
+  const { data: health, isLoading, error, refetch, isFetching } = useQuery({
+    queryKey: ['admin', 'health'],
+    queryFn: () => adminFetch<HealthData>('/api/admin/health'),
+  })
+
+  if (isLoading) return <Loader2 className="h-6 w-6 animate-spin text-cv-secondary mx-auto mt-8" />
+  if (error || !health) return <p className="text-red-400 mt-4">Failed to load system health.</p>
+
+  const rateLimitAmber = health.rate_limit_hits_last_hour > 500
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <h3 className="text-sm font-semibold text-cv-text">D1 Table Row Counts</h3>
+        <button
+          onClick={() => void refetch()}
+          disabled={isFetching}
+          type="button"
+          className="px-3 py-1.5 rounded text-xs font-medium text-cv-text bg-cv-surface border border-cv-border hover:bg-cv-hover flex items-center gap-1.5 disabled:opacity-50"
+        >
+          <RefreshCw className={`h-3.5 w-3.5 ${isFetching ? 'animate-spin' : ''}`} />
+          Refresh
+        </button>
+      </div>
+
+      <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+        {Object.entries(health.table_counts).map(([table, count]) => (
+          <div key={table} className="rounded-[var(--radius-md)] bg-cv-surface p-4">
+            <p className="text-xs text-cv-muted uppercase tracking-wider">{table}</p>
+            <p className="text-xl font-bold text-cv-text mt-1">{count.toLocaleString()}</p>
+          </div>
+        ))}
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+        <div className="rounded-[var(--radius-md)] bg-cv-surface p-4">
+          <p className="text-xs text-cv-muted uppercase tracking-wider">R2 Objects</p>
+          <p className="text-xl font-bold text-cv-text mt-1">
+            {health.r2.status === 'ok' ? (health.r2.object_count ?? 0).toLocaleString() : health.r2.status}
+          </p>
+        </div>
+        <div className="rounded-[var(--radius-md)] bg-cv-surface p-4">
+          <p className="text-xs text-cv-muted uppercase tracking-wider">R2 Storage</p>
+          <p className="text-xl font-bold text-cv-text mt-1">
+            {health.r2.status === 'ok' ? formatBytes(health.r2.storage_bytes) : health.r2.status}
+          </p>
+        </div>
+        <div className="rounded-[var(--radius-md)] bg-cv-surface p-4">
+          <p className="text-xs text-cv-muted uppercase tracking-wider">Last Job Run</p>
+          <p className="text-sm font-medium text-cv-text mt-1">
+            {health.last_job_run ? new Date(health.last_job_run).toLocaleString() : '—'}
+          </p>
+        </div>
+      </div>
+
+      <div
+        className={`rounded-[var(--radius-md)] p-4 ${rateLimitAmber ? '' : 'bg-cv-surface'}`}
+        style={rateLimitAmber
+          ? { background: 'rgba(245,158,11,0.10)', border: '1px solid rgba(245,158,11,0.3)' }
+          : undefined}
+      >
+        <p className="text-xs uppercase tracking-wider" style={{ color: rateLimitAmber ? '#f59e0b' : 'var(--cv-muted)' }}>
+          Rate-Limited Requests (active windows)
+        </p>
+        <p className="text-xl font-bold mt-1" style={{ color: rateLimitAmber ? '#f59e0b' : 'var(--cv-text)' }}>
+          {health.rate_limit_hits_last_hour.toLocaleString()}
+        </p>
+      </div>
+    </div>
+  )
+}
+
 // ── Sealed Sync Tab ────────────────────────────────────────────────────────────
 type SyncResult = {
   inserted: number
@@ -1491,6 +1584,7 @@ const TABS: { id: Tab; label: string }[] = [
   { id: 'cards', label: 'Cards' },
   { id: 'activity', label: 'Activity' },
   { id: 'scans', label: 'Scans' },
+  { id: 'health', label: 'Health' },
   { id: 'sealed', label: 'Sealed Sync' },
   { id: 'sql', label: 'SQL Runner' },
   { id: 'catalog', label: 'Pokémon Catalog' },
@@ -1541,6 +1635,7 @@ export default function AdminPage() {
       {tab === 'cards' && <CardsTab />}
       {tab === 'activity' && <ActivityTab />}
       {tab === 'scans' && <ScansTab />}
+      {tab === 'health' && <HealthTab />}
       {tab === 'sealed' && <SealedSyncTab />}
       {tab === 'sql' && <SqlTab />}
       {tab === 'catalog' && <CatalogTab />}

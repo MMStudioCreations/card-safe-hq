@@ -41,6 +41,7 @@ import {
   handleAdminUpdateCard,
   handleAdminBatchDeleteCollection,
   handleAdminBatchReassignCollection,
+  handleAdminHealth,
   handleAdminQuery,
 } from './routes/admin';
 import {
@@ -673,6 +674,9 @@ export default {
         }
         if (method === 'POST' && pathname === '/api/admin/collection/batch-reassign') {
           return withCors(await handleAdminBatchReassignCollection(env, user, request), request, env);
+        }
+        if (method === 'GET' && pathname === '/api/admin/health') {
+          return withCors(await handleAdminHealth(env, user), request, env);
         }
         // Pokémon catalog seeder
         if (method === 'POST' && pathname === '/api/admin/seed/pokemon') {

@@ -18,7 +18,9 @@ CORS_ORIGIN = "https://cardsafehq.com"
 MAIL_FROM = "Card Safe HQ <noreply@cardsafehq.com>"
 TCGFAST_BASE_URL = "https://api.tcgpricelookup.com/v1"
 PRICECHARTING_BASE_URL = "https://www.pricecharting.com/api"
+CLOUDFLARE_ACCOUNT_ID = "ba8de8decc22986f0cc7a0541902bc94"
 # Set RESEND_API_KEY as a secret via: wrangler secret put RESEND_API_KEY
+# Set CLOUDFLARE_API_TOKEN as a secret via: wrangler secret put CLOUDFLARE_API_TOKEN
 
 [triggers]
 crons = ["0 3 * * *", "0 4 * * *", "0 */12 * * *"]

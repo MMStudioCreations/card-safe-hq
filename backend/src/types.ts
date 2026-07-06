@@ -34,6 +34,9 @@ export interface Env {
   LOGIN_RATE_LIMITER: RateLimiter;
   REGISTER_RATE_LIMITER: RateLimiter;
   COMPS_RATE_LIMITER: RateLimiter;
+  // Admin health tab — R2 usage via Cloudflare API
+  CLOUDFLARE_API_TOKEN?: string;   // set as a Wrangler secret, never in [vars]
+  CLOUDFLARE_ACCOUNT_ID?: string;
 }
 export interface User {
   id: number;
