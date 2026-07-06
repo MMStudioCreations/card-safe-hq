@@ -158,10 +158,6 @@ a {
   --border: rgba(255,255,255,0.06);
 }
 
-@media (min-width: 768px) {
-  body { cursor: none; }
-}
-
 /* Nav link hover underline */
 .nav-link { position: relative; }
 .nav-link::after {

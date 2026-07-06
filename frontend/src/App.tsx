@@ -2,7 +2,6 @@ import { Navigate, Route, Routes } from 'react-router-dom'
 import Layout from './components/Layout'
 import ProtectedRoute from './components/ProtectedRoute'
 import SemiProtectedRoute from './components/SemiProtectedRoute'
-import CustomCursor from './components/CustomCursor'
 import ParticleCanvas from './components/ParticleCanvas'
 import AdminPage from './pages/AdminPage'
 import CardDetailPage from './pages/CardDetailPage'
@@ -45,7 +44,6 @@ function Public({ children }: { children: React.ReactNode }) {
 export default function App() {
   return (
     <>
-      <CustomCursor />
       <ParticleCanvas />
 
       <Routes>
