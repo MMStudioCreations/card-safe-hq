@@ -665,6 +665,7 @@ function CollectionPanel({
   userId, userEmail, onClose,
 }: { userId: number; userEmail: string; onClose: () => void }) {
   const [page, setPage] = useState(1)
+  const [editingItemId, setEditingItemId] = useState<number | null>(null)
   const LIMIT = 50
   const { data: resp, isLoading, error } = useQuery({
     queryKey: ['admin', 'user-collection', userId, page],
@@ -698,7 +699,11 @@ function CollectionPanel({
         ) : (
           <div className="space-y-2">
             {items.map((item) => (
-              <div key={item.id} className="flex items-center gap-3 rounded-[var(--radius-sm)] bg-cv-surface p-3">
+              <div
+                key={item.id}
+                onClick={() => setEditingItemId(item.id)}
+                className="flex items-center gap-3 rounded-[var(--radius-sm)] bg-cv-surface p-3 cursor-pointer hover:bg-cv-hover"
+              >
                 <AdminThumbnail imageKey={item.front_image_url} />
                 <div className="flex-1 min-w-0">
                   {item.card_id ? (
@@ -723,6 +728,249 @@ function CollectionPanel({
           onPrev={() => setPage(p => p - 1)}
           onNext={() => setPage(p => p + 1)}
         />
+      </div>
+      {editingItemId != null && (
+        <ItemEditSheet itemId={editingItemId} onClose={() => setEditingItemId(null)} />
+      )}
+    </div>
+  )
+}
+
+// ── Item edit sheet (Capability 4 — ID override) ────────────────────────────
+type AdminItemDetail = {
+  id: number
+  user_id: number
+  card_id: number | null
+  condition_note: string | null
+  estimated_grade: string | null
+  estimated_value_cents: number | null
+  front_image_url: string | null
+  back_image_url: string | null
+  created_at: string
+  user_email: string
+  card_name: string | null
+  set_name: string | null
+  game: string | null
+  card_number: string | null
+  rarity: string | null
+  image_url: string | null
+  external_ref: string | null
+  card_collection_count: number
+}
+
+function CardEditSection({
+  cardId, initialName, initialSet, initialCollectionCount,
+}: { cardId: number; initialName: string | null; initialSet: string | null; initialCollectionCount: number }) {
+  const [pendingBody, setPendingBody] = useState<Record<string, unknown> | null>(null)
+  const [formError, setFormError] = useState('')
+  const [affected, setAffected] = useState<number | null>(null)
+
+  const mutation = useMutation({
+    mutationFn: (body: Record<string, unknown>) =>
+      adminFetch<{ updated: boolean; affected_collections: number }>(`/api/admin/cards/${cardId}`, {
+        method: 'PATCH',
+        body: JSON.stringify(body),
+      }),
+    onSuccess: (res) => {
+      setFormError('')
+      setPendingBody(null)
+      setAffected(res.affected_collections)
+    },
+    onError: (e: Error) => setFormError(e.message),
+  })
+
+  function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault()
+    const form = new FormData(e.currentTarget)
+    const cardName = String(form.get('card_name') ?? '').trim()
+    const setName = String(form.get('set_name') ?? '').trim()
+    if (!cardName) {
+      setFormError('Card name is required')
+      return
+    }
+    setFormError('')
+    setPendingBody({ card_name: cardName, set_name: setName || null })
+  }
+
+  return (
+    <div className="rounded-[var(--radius-sm)] bg-cv-surface p-4 space-y-3 border border-cv-border">
+      <h3 className="text-xs font-semibold text-cv-text uppercase tracking-wider">Edit Shared Card</h3>
+      <p className="text-xs text-cv-muted">
+        This card is in {initialCollectionCount} collection{initialCollectionCount === 1 ? '' : 's'}. Changes affect all owners.
+      </p>
+      <form onSubmit={handleSubmit} className="space-y-3">
+        <input name="card_name" defaultValue={initialName ?? ''} className="input w-full" placeholder="Card name" />
+        <input name="set_name" defaultValue={initialSet ?? ''} className="input w-full" placeholder="Set name" />
+        <button
+          type="submit"
+          className="px-3 py-1.5 rounded text-xs font-medium text-cv-text bg-cv-bg border border-cv-border hover:bg-cv-hover"
+        >
+          Update Card
+        </button>
+      </form>
+      {formError && <p className="text-xs text-red-400">{formError}</p>}
+      {affected != null && (
+        <p className="text-xs text-green-400">Updated — affected {affected} collection{affected === 1 ? '' : 's'}.</p>
+      )}
+
+      {pendingBody && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 p-4">
+          <div className="bg-cv-bg border border-cv-border rounded-[var(--radius-md)] p-5 max-w-sm space-y-3">
+            <p className="text-sm text-cv-text">
+              This card is in {initialCollectionCount} collection{initialCollectionCount === 1 ? '' : 's'}.
+              Changes affect all owners. Continue?
+            </p>
+            <div className="flex justify-end gap-2">
+              <button onClick={() => setPendingBody(null)} type="button" className="px-3 py-1.5 rounded text-xs text-cv-muted hover:text-cv-text">
+                Cancel
+              </button>
+              <button
+                onClick={() => mutation.mutate(pendingBody)}
+                disabled={mutation.isPending}
+                type="button"
+                className="px-3 py-1.5 rounded text-xs font-medium bg-[var(--primary)] text-white disabled:opacity-50"
+              >
+                Confirm
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+function ItemEditSheet({ itemId, onClose }: { itemId: number; onClose: () => void }) {
+  const queryClient = useQueryClient()
+  const { data: item, isLoading, error } = useQuery({
+    queryKey: ['admin', 'item', itemId],
+    queryFn: () => adminFetch<AdminItemDetail>(`/api/admin/collection/${itemId}`),
+  })
+  const [saveError, setSaveError] = useState('')
+
+  const saveMutation = useMutation({
+    mutationFn: (body: Record<string, unknown>) => adminFetch(`/api/admin/collection/${itemId}`, {
+      method: 'PATCH',
+      body: JSON.stringify(body),
+    }),
+    onSuccess: () => {
+      setSaveError('')
+      void queryClient.invalidateQueries({ queryKey: ['admin', 'item', itemId] })
+      void queryClient.invalidateQueries({ queryKey: ['admin', 'user-collection'] })
+      void queryClient.invalidateQueries({ queryKey: ['admin', 'scans'] })
+    },
+    onError: (e: Error) => setSaveError(e.message),
+  })
+
+  function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault()
+    const form = new FormData(e.currentTarget)
+    const conditionNote = String(form.get('condition_note') ?? '').trim()
+    const estimatedGrade = String(form.get('estimated_grade') ?? '').trim()
+    const estimatedValueRaw = String(form.get('estimated_value') ?? '').trim()
+    const cardIdRaw = String(form.get('card_id') ?? '').trim()
+
+    const body: Record<string, unknown> = {
+      condition_note: conditionNote || null,
+      estimated_grade: estimatedGrade || null,
+      estimated_value_cents: estimatedValueRaw ? Math.round(parseFloat(estimatedValueRaw) * 100) : null,
+    }
+    if (cardIdRaw) {
+      const cardId = parseInt(cardIdRaw, 10)
+      if (Number.isInteger(cardId) && cardId > 0) body.card_id = cardId
+    }
+    saveMutation.mutate(body)
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex justify-end">
+      <div className="absolute inset-0 bg-black/50" onClick={onClose} />
+      <div className="relative w-full max-w-lg h-full bg-cv-bg border-l border-cv-border overflow-y-auto p-5 space-y-4">
+        <div className="flex items-center justify-between">
+          <h2 className="text-sm font-semibold text-cv-text">Edit Item #{itemId}</h2>
+          <button onClick={onClose} type="button" className="p-1.5 rounded hover:bg-cv-hover text-cv-muted">
+            <X className="h-5 w-5" />
+          </button>
+        </div>
+
+        {isLoading ? (
+          <Loader2 className="h-6 w-6 animate-spin text-cv-secondary mx-auto mt-8" />
+        ) : error || !item ? (
+          <p className="text-red-400 text-sm">Failed to load item.</p>
+        ) : (
+          <div className="space-y-4">
+            <form key={item.id} onSubmit={handleSubmit} className="space-y-4">
+              <div className="flex gap-3 items-center">
+                <AdminThumbnail imageKey={item.front_image_url} />
+                <div className="text-xs text-cv-muted">
+                  <p>{item.user_email}</p>
+                  <p>Added {new Date(item.created_at).toLocaleDateString()}</p>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs text-cv-muted uppercase tracking-wider mb-1">Card</label>
+                <p className="text-sm text-cv-text">
+                  {item.card_id ? `${item.card_name} — ${item.set_name ?? '—'}` : (
+                    <span style={{ color: '#f59e0b' }}>Unidentified</span>
+                  )}
+                </p>
+              </div>
+
+              <div>
+                <label className="block text-xs text-cv-muted uppercase tracking-wider mb-1">Reassign to card ID</label>
+                <input name="card_id" type="number" min={1} placeholder={item.card_id ? String(item.card_id) : 'e.g. 42'} className="input w-full" />
+                <p className="text-xs text-cv-muted mt-1">Leave blank to keep the current card.</p>
+              </div>
+
+              <div>
+                <label className="block text-xs text-cv-muted uppercase tracking-wider mb-1">Condition Note</label>
+                <input name="condition_note" defaultValue={item.condition_note ?? ''} className="input w-full" />
+              </div>
+
+              <div>
+                <label className="block text-xs text-cv-muted uppercase tracking-wider mb-1">Estimated Grade</label>
+                <input name="estimated_grade" defaultValue={item.estimated_grade ?? ''} className="input w-full" />
+              </div>
+
+              <div>
+                <label className="block text-xs text-cv-muted uppercase tracking-wider mb-1">Estimated Value (USD)</label>
+                <input
+                  name="estimated_value"
+                  type="number"
+                  step="0.01"
+                  defaultValue={item.estimated_value_cents != null ? (item.estimated_value_cents / 100).toFixed(2) : ''}
+                  className="input w-full"
+                />
+              </div>
+
+              {saveError && (
+                <div className="rounded-[var(--radius-sm)] bg-red-900/30 border border-red-700 text-red-300 text-sm p-3">{saveError}</div>
+              )}
+              {saveMutation.isSuccess && !saveError && (
+                <div className="rounded-[var(--radius-sm)] bg-green-900/20 border border-green-700 text-green-300 text-sm p-3">Saved.</div>
+              )}
+
+              <button
+                type="submit"
+                disabled={saveMutation.isPending}
+                className="px-4 py-2 rounded-[var(--radius-sm)] bg-[var(--primary)] text-white text-sm font-medium disabled:opacity-50 hover:opacity-90 transition flex items-center gap-2"
+              >
+                {saveMutation.isPending && <Loader2 className="h-4 w-4 animate-spin" />}
+                Save
+              </button>
+            </form>
+
+            {item.card_id && (
+              <CardEditSection
+                cardId={item.card_id}
+                initialName={item.card_name}
+                initialSet={item.set_name}
+                initialCollectionCount={item.card_collection_count}
+              />
+            )}
+          </div>
+        )}
       </div>
     </div>
   )
@@ -898,6 +1146,7 @@ function ScansTab() {
   const [status, setStatus] = useState<ScanStatus>('pending')
   const [page, setPage] = useState(1)
   const [discardError, setDiscardError] = useState('')
+  const [viewingItemId, setViewingItemId] = useState<number | null>(null)
   const queryClient = useQueryClient()
   const LIMIT = 50
 
@@ -994,7 +1243,14 @@ function ScansTab() {
                     </span>
                   </td>
                   <td className="px-4 py-3 text-cv-muted text-xs">{new Date(row.created_at).toLocaleDateString()}</td>
-                  <td className="px-4 py-3 text-right">
+                  <td className="px-4 py-3 text-right space-x-2 whitespace-nowrap">
+                    <button
+                      onClick={() => setViewingItemId(row.collection_item_id)}
+                      type="button"
+                      className="px-2 py-1 rounded text-xs font-medium text-cv-text border border-cv-border hover:bg-cv-hover"
+                    >
+                      View Item
+                    </button>
                     <button
                       onClick={() => handleDiscard(row)}
                       disabled={discardMutation.isPending}
@@ -1017,6 +1273,9 @@ function ScansTab() {
         onPrev={() => setPage(p => p - 1)}
         onNext={() => setPage(p => p + 1)}
       />
+      {viewingItemId != null && (
+        <ItemEditSheet itemId={viewingItemId} onClose={() => setViewingItemId(null)} />
+      )}
     </div>
   )
 }

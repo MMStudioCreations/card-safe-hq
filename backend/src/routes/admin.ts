@@ -1,7 +1,7 @@
 import type { Env, User } from '../types';
 import { queryAll, queryOne, run } from '../lib/db';
 import { badRequest, forbidden, notFound, ok, serverError } from '../lib/json';
-import { parseJsonBody } from '../lib/validation';
+import { asInt, asString, parseJsonBody } from '../lib/validation';
 
 function requireAdmin(user: User): Response | null {
   if (user.is_admin !== 1) {
@@ -317,6 +317,145 @@ export async function handleDeleteAdminScan(env: Env, user: User, pendingId: num
 
   await run(env.DB, 'DELETE FROM pending_identifications WHERE id = ?', [pendingId]);
   return ok({ deleted: true, collection_item_id: existing.collection_item_id });
+}
+
+export async function handleAdminGetCollectionItem(env: Env, user: User, itemId: number): Promise<Response> {
+  const denied = requireAdmin(user);
+  if (denied) return denied;
+
+  const item = await queryOne(
+    env.DB,
+    `SELECT ci.id, ci.user_id, ci.card_id, ci.condition_note, ci.estimated_grade, ci.estimated_value_cents,
+            ci.front_image_url, ci.back_image_url, ci.created_at,
+            u.email as user_email,
+            c.card_name, c.set_name, c.game, c.card_number, c.rarity, c.image_url, c.external_ref,
+            (SELECT COUNT(*) FROM collection_items WHERE card_id = ci.card_id) as card_collection_count
+     FROM collection_items ci
+     JOIN users u ON u.id = ci.user_id
+     LEFT JOIN cards c ON c.id = ci.card_id
+     WHERE ci.id = ?`,
+    [itemId],
+  );
+  if (!item) return notFound('Collection item not found');
+  return ok(item);
+}
+
+export async function handleAdminUpdateCollectionItem(
+  env: Env,
+  user: User,
+  itemId: number,
+  request: Request,
+): Promise<Response> {
+  const denied = requireAdmin(user);
+  if (denied) return denied;
+
+  const existing = await queryOne<{ id: number }>(env.DB, 'SELECT id FROM collection_items WHERE id = ?', [itemId]);
+  if (!existing) return notFound('Collection item not found');
+
+  const body = await parseJsonBody<Record<string, unknown>>(request);
+  if (body instanceof Response) return body;
+
+  try {
+    const updates: string[] = [];
+    const params: unknown[] = [];
+    let cardIdChanged = false;
+
+    if (body.condition_note !== undefined) {
+      updates.push('condition_note = ?');
+      params.push(asString(body.condition_note, 'condition_note', 500));
+    }
+    if (body.estimated_grade !== undefined) {
+      updates.push('estimated_grade = ?');
+      params.push(asString(body.estimated_grade, 'estimated_grade', 20));
+    }
+    if (body.estimated_value_cents !== undefined) {
+      updates.push('estimated_value_cents = ?');
+      params.push(asInt(body.estimated_value_cents, 'estimated_value_cents', 0, 10_000_000));
+    }
+    if (body.card_id !== undefined) {
+      const cardId = asInt(body.card_id, 'card_id', 1, 2_147_483_647);
+      if (cardId) {
+        const card = await queryOne(env.DB, 'SELECT id FROM cards WHERE id = ?', [cardId]);
+        if (!card) return badRequest('Card not found');
+      }
+      updates.push('card_id = ?');
+      params.push(cardId);
+      cardIdChanged = true;
+    }
+
+    if (updates.length > 0) {
+      updates.push('updated_at = CURRENT_TIMESTAMP');
+      params.push(itemId);
+      await run(env.DB, `UPDATE collection_items SET ${updates.join(', ')} WHERE id = ?`, params);
+    }
+
+    if (cardIdChanged) {
+      await run(env.DB, 'UPDATE pending_identifications SET confirmed = 1 WHERE collection_item_id = ?', [itemId]);
+    }
+
+    const updated = await queryOne(
+      env.DB,
+      `SELECT ci.*, c.card_name, c.set_name
+       FROM collection_items ci
+       LEFT JOIN cards c ON ci.card_id = c.id
+       WHERE ci.id = ?`,
+      [itemId],
+    );
+    return ok(updated);
+  } catch (err) {
+    return badRequest(err instanceof Error ? err.message : 'Invalid update payload');
+  }
+}
+
+export async function handleAdminUpdateCard(
+  env: Env,
+  user: User,
+  cardId: number,
+  request: Request,
+): Promise<Response> {
+  const denied = requireAdmin(user);
+  if (denied) return denied;
+
+  const existing = await queryOne<{
+    card_name: string;
+    set_name: string | null;
+    game: string;
+    card_number: string | null;
+    rarity: string | null;
+    image_url: string | null;
+    external_ref: string | null;
+  }>(env.DB, 'SELECT card_name, set_name, game, card_number, rarity, image_url, external_ref FROM cards WHERE id = ?', [cardId]);
+  if (!existing) return notFound('Card not found');
+
+  const body = await parseJsonBody<Record<string, unknown>>(request);
+  if (body instanceof Response) return body;
+
+  try {
+    const cardName = asString(body.card_name ?? existing.card_name, 'card_name', 100, true);
+    const setName = asString(body.set_name ?? existing.set_name, 'set_name', 100);
+    const game = asString(body.game ?? existing.game, 'game', 50, true);
+    const cardNumber = asString(body.card_number ?? existing.card_number, 'card_number', 20);
+    const rarity = asString(body.rarity ?? existing.rarity, 'rarity', 50);
+    const imageUrl = asString(body.image_url ?? existing.image_url, 'image_url', 500);
+    const externalRef = asString(body.external_ref ?? existing.external_ref, 'external_ref', 100);
+
+    await run(
+      env.DB,
+      `UPDATE cards SET card_name = ?, set_name = ?, game = ?, card_number = ?, rarity = ?, image_url = ?, external_ref = ?, updated_at = CURRENT_TIMESTAMP
+       WHERE id = ?`,
+      [cardName, setName, game, cardNumber, rarity, imageUrl, externalRef, cardId],
+    );
+
+    const affectedRow = await queryOne<{ count: number }>(
+      env.DB,
+      'SELECT COUNT(*) as count FROM collection_items WHERE card_id = ?',
+      [cardId],
+    );
+
+    return ok({ updated: true, affected_collections: affectedRow?.count ?? 0 });
+  } catch (err) {
+    return badRequest(err instanceof Error ? err.message : 'Invalid update payload');
+  }
 }
 
 export async function handleAdminQuery(env: Env, user: User, request: Request): Promise<Response> {

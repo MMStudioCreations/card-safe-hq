@@ -36,6 +36,9 @@ import {
   handleAdminActivity,
   handleAdminScans,
   handleDeleteAdminScan,
+  handleAdminGetCollectionItem,
+  handleAdminUpdateCollectionItem,
+  handleAdminUpdateCard,
   handleAdminQuery,
 } from './routes/admin';
 import {
@@ -647,6 +650,21 @@ export default {
         }
         if (method === 'POST' && pathname === '/api/admin/query') {
           return withCors(await handleAdminQuery(env, user, request), request, env);
+        }
+        if (method === 'GET' && pathname.startsWith('/api/admin/collection/')) {
+          const itemId = parseId(pathname);
+          if (!itemId) return withCors(badRequest('Invalid item id'), request, env);
+          return withCors(await handleAdminGetCollectionItem(env, user, itemId), request, env);
+        }
+        if (method === 'PATCH' && pathname.startsWith('/api/admin/collection/')) {
+          const itemId = parseId(pathname);
+          if (!itemId) return withCors(badRequest('Invalid item id'), request, env);
+          return withCors(await handleAdminUpdateCollectionItem(env, user, itemId, request), request, env);
+        }
+        if (method === 'PATCH' && pathname.startsWith('/api/admin/cards/')) {
+          const cardId = parseId(pathname);
+          if (!cardId) return withCors(badRequest('Invalid card id'), request, env);
+          return withCors(await handleAdminUpdateCard(env, user, cardId, request), request, env);
         }
         // Pokémon catalog seeder
         if (method === 'POST' && pathname === '/api/admin/seed/pokemon') {
