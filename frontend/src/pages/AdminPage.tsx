@@ -383,6 +383,365 @@ type SeedResult = {
   results: Array<{ set_id: string; set_name: string; cards: number }>
 }
 
+// ── Card catalog CRUD ────────────────────────────────────────────────────────
+type AdminCatalogCard = {
+  id: number
+  game: string
+  set_name: string | null
+  card_name: string
+  card_number: string | null
+  rarity: string | null
+  image_url: string | null
+  external_ref: string | null
+  collection_count: number
+}
+
+function CardFormModal({
+  initial, onClose, onSaved,
+}: { initial: AdminCatalogCard | null; onClose: () => void; onSaved: () => void }) {
+  const [formError, setFormError] = useState('')
+  const mutation = useMutation({
+    mutationFn: (body: Record<string, unknown>) => (
+      initial
+        ? adminFetch(`/api/cards/${initial.id}`, { method: 'PATCH', body: JSON.stringify(body) })
+        : adminFetch('/api/cards', { method: 'POST', body: JSON.stringify(body) })
+    ),
+    onSuccess: () => { setFormError(''); onSaved() },
+    onError: (e: Error) => setFormError(e.message),
+  })
+
+  function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault()
+    const form = new FormData(e.currentTarget)
+    const game = String(form.get('game') ?? '').trim()
+    const cardName = String(form.get('card_name') ?? '').trim()
+    if (!game || !cardName) {
+      setFormError('Game and card name are required')
+      return
+    }
+    mutation.mutate({
+      game,
+      card_name: cardName,
+      set_name: String(form.get('set_name') ?? '').trim() || null,
+      card_number: String(form.get('card_number') ?? '').trim() || null,
+      rarity: String(form.get('rarity') ?? '').trim() || null,
+      image_url: String(form.get('image_url') ?? '').trim() || null,
+      external_ref: String(form.get('external_ref') ?? '').trim() || null,
+    })
+  }
+
+  return (
+    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 p-4">
+      <div className="bg-cv-bg border border-cv-border rounded-[var(--radius-md)] p-5 max-w-md w-full space-y-3 max-h-[85vh] overflow-y-auto">
+        <div className="flex items-center justify-between">
+          <h3 className="text-sm font-semibold text-cv-text">{initial ? 'Edit Card' : 'New Card'}</h3>
+          <button onClick={onClose} type="button" className="p-1 rounded hover:bg-cv-hover text-cv-muted">
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+        <form onSubmit={handleSubmit} className="space-y-2">
+          <input name="game" defaultValue={initial?.game ?? ''} placeholder="Game *" className="input w-full" required />
+          <input name="card_name" defaultValue={initial?.card_name ?? ''} placeholder="Card name *" className="input w-full" required />
+          <input name="set_name" defaultValue={initial?.set_name ?? ''} placeholder="Set name" className="input w-full" />
+          <input name="card_number" defaultValue={initial?.card_number ?? ''} placeholder="Card number" className="input w-full" />
+          <input name="rarity" defaultValue={initial?.rarity ?? ''} placeholder="Rarity" className="input w-full" />
+          <input name="image_url" defaultValue={initial?.image_url ?? ''} placeholder="Image URL" className="input w-full" />
+          <input name="external_ref" defaultValue={initial?.external_ref ?? ''} placeholder="External ref" className="input w-full" />
+          {formError && <p className="text-xs text-red-400">{formError}</p>}
+          <button
+            type="submit"
+            disabled={mutation.isPending}
+            className="px-4 py-2 rounded-[var(--radius-sm)] bg-[var(--primary)] text-white text-sm font-medium disabled:opacity-50"
+          >
+            {initial ? 'Save' : 'Create'}
+          </button>
+        </form>
+      </div>
+    </div>
+  )
+}
+
+function CardCatalogCrud() {
+  const [search, setSearch] = useState('')
+  const [showForm, setShowForm] = useState(false)
+  const [editingCard, setEditingCard] = useState<AdminCatalogCard | null>(null)
+  const [deleteTarget, setDeleteTarget] = useState<AdminCatalogCard | null>(null)
+  const [actionError, setActionError] = useState('')
+  const queryClient = useQueryClient()
+
+  const { data: cards, isLoading } = useQuery({
+    queryKey: ['admin', 'catalog-cards', search],
+    queryFn: () => adminFetch<AdminCatalogCard[]>(`/api/cards${search ? `?card_name=${encodeURIComponent(search)}` : ''}`),
+  })
+
+  const deleteMutation = useMutation({
+    mutationFn: (id: number) => adminFetch(`/api/cards/${id}`, { method: 'DELETE' }),
+    onSuccess: () => {
+      setActionError('')
+      setDeleteTarget(null)
+      void queryClient.invalidateQueries({ queryKey: ['admin', 'catalog-cards'] })
+    },
+    onError: (e: Error) => setActionError(e.message),
+  })
+
+  function refresh() {
+    setShowForm(false)
+    setEditingCard(null)
+    void queryClient.invalidateQueries({ queryKey: ['admin', 'catalog-cards'] })
+  }
+
+  function handleDeleteClick(card: AdminCatalogCard) {
+    if (card.collection_count > 0) {
+      setDeleteTarget(card)
+    } else {
+      deleteMutation.mutate(card.id)
+    }
+  }
+
+  return (
+    <div className="rounded-[var(--radius-md)] bg-cv-surface p-5 space-y-4">
+      <div className="flex items-center justify-between">
+        <h3 className="text-sm font-semibold text-cv-text">Card Catalog</h3>
+        <button
+          onClick={() => setShowForm(true)}
+          type="button"
+          className="px-3 py-1.5 rounded text-xs font-medium bg-[var(--primary)] text-white"
+        >
+          New Card
+        </button>
+      </div>
+      <input
+        value={search}
+        onChange={(e) => setSearch(e.target.value)}
+        placeholder="Search by card name..."
+        className="input w-full"
+      />
+      {actionError && <p className="text-xs text-red-400">{actionError}</p>}
+      {isLoading ? (
+        <Loader2 className="h-5 w-5 animate-spin text-cv-secondary" />
+      ) : (
+        <div className="overflow-x-auto">
+          <table className="w-full text-xs">
+            <thead>
+              <tr className="border-b border-cv-border text-cv-muted">
+                <th className="text-left px-3 py-2">Card</th>
+                <th className="text-left px-3 py-2">Set</th>
+                <th className="text-left px-3 py-2">Game</th>
+                <th className="text-right px-3 py-2">In Collections</th>
+                <th className="text-right px-3 py-2">Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {(cards ?? []).map((c) => (
+                <tr key={c.id} className="border-b border-cv-border last:border-0">
+                  <td className="px-3 py-2 text-cv-text">{c.card_name}</td>
+                  <td className="px-3 py-2 text-cv-muted">{c.set_name ?? '—'}</td>
+                  <td className="px-3 py-2 text-cv-muted">{c.game}</td>
+                  <td className="px-3 py-2 text-right text-cv-muted">{c.collection_count}</td>
+                  <td className="px-3 py-2 text-right space-x-2 whitespace-nowrap">
+                    <button onClick={() => setEditingCard(c)} type="button" className="text-cv-text hover:underline">Edit</button>
+                    <button onClick={() => handleDeleteClick(c)} type="button" className="text-red-300 hover:underline">Delete</button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {(showForm || editingCard) && (
+        <CardFormModal
+          initial={editingCard}
+          onClose={() => { setShowForm(false); setEditingCard(null) }}
+          onSaved={refresh}
+        />
+      )}
+
+      {deleteTarget && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 p-4">
+          <div className="bg-cv-bg border border-cv-border rounded-[var(--radius-md)] p-5 max-w-sm space-y-3">
+            <p className="text-sm text-cv-text">
+              This card is in {deleteTarget.collection_count} user collection{deleteTarget.collection_count === 1 ? '' : 's'}.
+              Deleting it will set card_id to NULL for those items. Continue?
+            </p>
+            <div className="flex justify-end gap-2">
+              <button onClick={() => setDeleteTarget(null)} type="button" className="px-3 py-1.5 rounded text-xs text-cv-muted hover:text-cv-text">
+                Cancel
+              </button>
+              <button
+                onClick={() => deleteMutation.mutate(deleteTarget.id)}
+                disabled={deleteMutation.isPending}
+                type="button"
+                className="px-3 py-1.5 rounded text-xs font-medium bg-red-600 text-white disabled:opacity-50"
+              >
+                Delete
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ── Releases CRUD ────────────────────────────────────────────────────────────
+type AdminRelease = {
+  id: number
+  game: string
+  release_name: string
+  product_type: string | null
+  release_date: string
+  source_url: string | null
+}
+
+function ReleaseFormModal({
+  initial, onClose, onSaved,
+}: { initial: AdminRelease | null; onClose: () => void; onSaved: () => void }) {
+  const [formError, setFormError] = useState('')
+  const mutation = useMutation({
+    mutationFn: (body: Record<string, unknown>) => (
+      initial
+        ? adminFetch(`/api/releases/${initial.id}`, { method: 'PATCH', body: JSON.stringify(body) })
+        : adminFetch('/api/releases', { method: 'POST', body: JSON.stringify(body) })
+    ),
+    onSuccess: () => { setFormError(''); onSaved() },
+    onError: (e: Error) => setFormError(e.message),
+  })
+
+  function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault()
+    const form = new FormData(e.currentTarget)
+    const game = String(form.get('game') ?? '').trim()
+    const releaseName = String(form.get('release_name') ?? '').trim()
+    const releaseDate = String(form.get('release_date') ?? '').trim()
+    if (!game || !releaseName) {
+      setFormError('Game and release name are required')
+      return
+    }
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(releaseDate)) {
+      setFormError('Invalid date format. Use YYYY-MM-DD')
+      return
+    }
+    mutation.mutate({
+      game,
+      release_name: releaseName,
+      product_type: String(form.get('product_type') ?? '').trim() || null,
+      release_date: releaseDate,
+      source_url: String(form.get('source_url') ?? '').trim() || null,
+    })
+  }
+
+  return (
+    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 p-4">
+      <div className="bg-cv-bg border border-cv-border rounded-[var(--radius-md)] p-5 max-w-md w-full space-y-3">
+        <div className="flex items-center justify-between">
+          <h3 className="text-sm font-semibold text-cv-text">{initial ? 'Edit Release' : 'New Release'}</h3>
+          <button onClick={onClose} type="button" className="p-1 rounded hover:bg-cv-hover text-cv-muted">
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+        <form onSubmit={handleSubmit} className="space-y-2">
+          <input name="game" defaultValue={initial?.game ?? ''} placeholder="Game *" className="input w-full" required />
+          <input name="release_name" defaultValue={initial?.release_name ?? ''} placeholder="Release name *" className="input w-full" required />
+          <input name="product_type" defaultValue={initial?.product_type ?? ''} placeholder="Product type" className="input w-full" />
+          <input name="release_date" type="date" defaultValue={initial?.release_date ?? ''} className="input w-full" required />
+          <input name="source_url" defaultValue={initial?.source_url ?? ''} placeholder="Source URL" className="input w-full" />
+          {formError && <p className="text-xs text-red-400">{formError}</p>}
+          <button
+            type="submit"
+            disabled={mutation.isPending}
+            className="px-4 py-2 rounded-[var(--radius-sm)] bg-[var(--primary)] text-white text-sm font-medium disabled:opacity-50"
+          >
+            {initial ? 'Save' : 'Create'}
+          </button>
+        </form>
+      </div>
+    </div>
+  )
+}
+
+function ReleasesCrud() {
+  const [showForm, setShowForm] = useState(false)
+  const [editingRelease, setEditingRelease] = useState<AdminRelease | null>(null)
+  const [actionError, setActionError] = useState('')
+  const queryClient = useQueryClient()
+
+  const { data: releases, isLoading } = useQuery({
+    queryKey: ['admin', 'releases'],
+    queryFn: () => adminFetch<AdminRelease[]>('/api/releases'),
+  })
+
+  const deleteMutation = useMutation({
+    mutationFn: (id: number) => adminFetch(`/api/releases/${id}`, { method: 'DELETE' }),
+    onSuccess: () => {
+      setActionError('')
+      void queryClient.invalidateQueries({ queryKey: ['admin', 'releases'] })
+    },
+    onError: (e: Error) => setActionError(e.message),
+  })
+
+  function refresh() {
+    setShowForm(false)
+    setEditingRelease(null)
+    void queryClient.invalidateQueries({ queryKey: ['admin', 'releases'] })
+  }
+
+  return (
+    <div className="rounded-[var(--radius-md)] bg-cv-surface p-5 space-y-4">
+      <div className="flex items-center justify-between">
+        <h3 className="text-sm font-semibold text-cv-text">Releases</h3>
+        <button
+          onClick={() => setShowForm(true)}
+          type="button"
+          className="px-3 py-1.5 rounded text-xs font-medium bg-[var(--primary)] text-white"
+        >
+          New Release
+        </button>
+      </div>
+      {actionError && <p className="text-xs text-red-400">{actionError}</p>}
+      {isLoading ? (
+        <Loader2 className="h-5 w-5 animate-spin text-cv-secondary" />
+      ) : (
+        <div className="overflow-x-auto">
+          <table className="w-full text-xs">
+            <thead>
+              <tr className="border-b border-cv-border text-cv-muted">
+                <th className="text-left px-3 py-2">Release</th>
+                <th className="text-left px-3 py-2">Game</th>
+                <th className="text-left px-3 py-2">Type</th>
+                <th className="text-left px-3 py-2">Date</th>
+                <th className="text-right px-3 py-2">Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {(releases ?? []).map((r) => (
+                <tr key={r.id} className="border-b border-cv-border last:border-0">
+                  <td className="px-3 py-2 text-cv-text">{r.release_name}</td>
+                  <td className="px-3 py-2 text-cv-muted">{r.game}</td>
+                  <td className="px-3 py-2 text-cv-muted">{r.product_type ?? '—'}</td>
+                  <td className="px-3 py-2 text-cv-muted">{r.release_date}</td>
+                  <td className="px-3 py-2 text-right space-x-2 whitespace-nowrap">
+                    <button onClick={() => setEditingRelease(r)} type="button" className="text-cv-text hover:underline">Edit</button>
+                    <button onClick={() => deleteMutation.mutate(r.id)} type="button" className="text-red-300 hover:underline">Delete</button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {(showForm || editingRelease) && (
+        <ReleaseFormModal
+          initial={editingRelease}
+          onClose={() => { setShowForm(false); setEditingRelease(null) }}
+          onSaved={refresh}
+        />
+      )}
+    </div>
+  )
+}
+
 function CatalogTab() {
   const [seeding, setSeeding] = useState(false)
   const [seedResult, setSeedResult] = useState<SeedResult | null>(null)
@@ -414,6 +773,8 @@ function CatalogTab() {
 
   return (
     <div className="space-y-4">
+      <CardCatalogCrud />
+      <ReleasesCrud />
       <div className="rounded-[var(--radius-md)] bg-cv-surface p-5 space-y-4">
         <div>
           <h3 className="text-sm font-semibold text-cv-text">Pokémon Card Catalog</h3>

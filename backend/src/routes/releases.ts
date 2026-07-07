@@ -1,6 +1,6 @@
-import type { Env } from '../types';
+import type { Env, User } from '../types';
 import { queryAll, queryOne, run } from '../lib/db';
-import { badRequest, notFound, ok } from '../lib/json';
+import { badRequest, forbidden, notFound, ok } from '../lib/json';
 import { asString, parseJsonBody } from '../lib/validation';
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
@@ -39,7 +39,9 @@ export async function listReleases(env: Env, request: Request): Promise<Response
   return ok(rows);
 }
 
-export async function createRelease(env: Env, request: Request): Promise<Response> {
+export async function createRelease(env: Env, request: Request, user: User): Promise<Response> {
+  if (user.is_admin !== 1) return forbidden('Forbidden');
+
   const body = await parseJsonBody<Record<string, unknown>>(request);
   if (body instanceof Response) return body;
 
@@ -72,4 +74,57 @@ export async function getRelease(env: Env, id: number): Promise<Response> {
   const row = await queryOne(env.DB, 'SELECT * FROM releases WHERE id = ?', [id]);
   if (!row) return notFound('Release not found');
   return ok(row);
+}
+
+interface ReleaseRow {
+  id: number;
+  game: string;
+  release_name: string;
+  product_type: string | null;
+  release_date: string;
+  source_url: string | null;
+}
+
+export async function updateRelease(env: Env, request: Request, id: number, user: User): Promise<Response> {
+  if (user.is_admin !== 1) return forbidden('Forbidden');
+
+  const existing = await queryOne<ReleaseRow>(env.DB, 'SELECT * FROM releases WHERE id = ?', [id]);
+  if (!existing) return notFound('Release not found');
+
+  const body = await parseJsonBody<Record<string, unknown>>(request);
+  if (body instanceof Response) return body;
+
+  try {
+    const game = asString(body.game ?? existing.game, 'game', 50, true);
+    const releaseName = asString(body.release_name ?? existing.release_name, 'release_name', 120, true);
+    const productType = asString(body.product_type ?? existing.product_type, 'product_type', 50);
+    const releaseDate = asString(body.release_date ?? existing.release_date, 'release_date', 10, true);
+    const sourceUrl = asString(body.source_url ?? existing.source_url, 'source_url', 500);
+
+    if (!releaseDate || !DATE_RE.test(releaseDate)) {
+      return badRequest('Invalid date format. Use YYYY-MM-DD');
+    }
+
+    await run(
+      env.DB,
+      `UPDATE releases SET game = ?, release_name = ?, product_type = ?, release_date = ?, source_url = ?
+       WHERE id = ?`,
+      [game, releaseName, productType, releaseDate, sourceUrl, id],
+    );
+
+    const updated = await queryOne(env.DB, 'SELECT * FROM releases WHERE id = ?', [id]);
+    return ok(updated);
+  } catch (err) {
+    return badRequest(err instanceof Error ? err.message : 'Invalid update payload');
+  }
+}
+
+export async function deleteRelease(env: Env, id: number, user: User): Promise<Response> {
+  if (user.is_admin !== 1) return forbidden('Forbidden');
+
+  const existing = await queryOne(env.DB, 'SELECT id FROM releases WHERE id = ?', [id]);
+  if (!existing) return notFound('Release not found');
+
+  await run(env.DB, 'DELETE FROM releases WHERE id = ?', [id]);
+  return ok({ deleted: true });
 }

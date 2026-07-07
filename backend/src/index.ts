@@ -16,7 +16,7 @@ import {
 } from './routes/collection';
 import { getComps, getCompsHistory, refreshComps, searchComps } from './routes/comps';
 import { estimateGrade, getLatestGrade } from './routes/grading';
-import { createRelease, getRelease, listReleases } from './routes/releases';
+import { createRelease, deleteRelease, getRelease, listReleases, updateRelease } from './routes/releases';
 import { uploadDirect } from './routes/uploads';
 import { confirmIdentification, identifyCollectionItem } from './routes/vision';
 import { handleSheetScan } from './routes/scan';
@@ -294,7 +294,7 @@ export default {
       if (method === 'POST' && pathname === '/api/cards') {
         const user = await requireAuth(env, request);
         if (user instanceof Response) return withCors(user, request, env);
-        return withCors(await createCard(env, request), request, env);
+        return withCors(await createCard(env, request, user), request, env);
       }
 
       if (pathname.startsWith('/api/cards/')) {
@@ -304,12 +304,12 @@ export default {
         if (method === 'PATCH') {
           const user = await requireAuth(env, request);
           if (user instanceof Response) return withCors(user, request, env);
-          return withCors(await updateCard(env, request, id), request, env);
+          return withCors(await updateCard(env, request, id, user), request, env);
         }
         if (method === 'DELETE') {
           const user = await requireAuth(env, request);
           if (user instanceof Response) return withCors(user, request, env);
-          return withCors(await deleteCard(env, id), request, env);
+          return withCors(await deleteCard(env, id, user), request, env);
         }
       }
 
@@ -450,7 +450,7 @@ export default {
         if (method === 'POST') {
           const user = await requireAuth(env, request);
           if (user instanceof Response) return withCors(user, request, env);
-          return withCors(await createRelease(env, request), request, env);
+          return withCors(await createRelease(env, request, user), request, env);
         }
       }
 
@@ -458,6 +458,16 @@ export default {
         const id = parseId(pathname);
         if (!id) return withCors(badRequest('Invalid release id'), request, env);
         if (method === 'GET') return withCors(await getRelease(env, id), request, env);
+        if (method === 'PATCH') {
+          const user = await requireAuth(env, request);
+          if (user instanceof Response) return withCors(user, request, env);
+          return withCors(await updateRelease(env, request, id, user), request, env);
+        }
+        if (method === 'DELETE') {
+          const user = await requireAuth(env, request);
+          if (user instanceof Response) return withCors(user, request, env);
+          return withCors(await deleteRelease(env, id, user), request, env);
+        }
       }
 
       if (method === 'GET' && pathname === '/api/comps/search') {

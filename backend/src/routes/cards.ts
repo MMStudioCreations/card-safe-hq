@@ -1,6 +1,6 @@
-import type { Card, Env } from '../types';
+import type { Card, Env, User } from '../types';
 import { queryAll, queryOne, run } from '../lib/db';
-import { badRequest, notFound, ok } from '../lib/json';
+import { badRequest, forbidden, notFound, ok } from '../lib/json';
 import { asString, parseJsonBody } from '../lib/validation';
 
 type CardRow = Card;
@@ -15,25 +15,32 @@ export async function listCards(env: Env, request: Request): Promise<Response> {
   const params: unknown[] = [];
 
   if (game) {
-    where.push('game = ?');
+    where.push('c.game = ?');
     params.push(game);
   }
   if (setName) {
-    where.push('set_name LIKE ?');
+    where.push('c.set_name LIKE ?');
     params.push(`%${setName}%`);
   }
   if (cardName) {
-    where.push('card_name LIKE ?');
+    where.push('c.card_name LIKE ?');
     params.push(`%${cardName}%`);
   }
 
   // Future enhancement: integrate external card catalogs and sync into this table.
-  const sql = `SELECT * FROM cards ${where.length ? `WHERE ${where.join(' AND ')}` : ''} ORDER BY created_at DESC LIMIT 200`;
-  const cards = await queryAll<CardRow>(env.DB, sql, params);
+  const sql = `SELECT c.*, COUNT(ci.id) as collection_count
+               FROM cards c
+               LEFT JOIN collection_items ci ON ci.card_id = c.id
+               ${where.length ? `WHERE ${where.join(' AND ')}` : ''}
+               GROUP BY c.id
+               ORDER BY c.created_at DESC LIMIT 200`;
+  const cards = await queryAll<CardRow & { collection_count: number }>(env.DB, sql, params);
   return ok(cards);
 }
 
-export async function createCard(env: Env, request: Request): Promise<Response> {
+export async function createCard(env: Env, request: Request, user: User): Promise<Response> {
+  if (user.is_admin !== 1) return forbidden('Forbidden');
+
   const body = await parseJsonBody<Record<string, unknown>>(request);
   if (body instanceof Response) return body;
 
@@ -66,7 +73,9 @@ export async function getCard(env: Env, id: number): Promise<Response> {
   return ok(card);
 }
 
-export async function updateCard(env: Env, request: Request, id: number): Promise<Response> {
+export async function updateCard(env: Env, request: Request, id: number, user: User): Promise<Response> {
+  if (user.is_admin !== 1) return forbidden('Forbidden');
+
   const existing = await queryOne<CardRow>(env.DB, 'SELECT * FROM cards WHERE id = ?', [id]);
   if (!existing) return notFound('Card not found');
 
@@ -96,7 +105,9 @@ export async function updateCard(env: Env, request: Request, id: number): Promis
   }
 }
 
-export async function deleteCard(env: Env, id: number): Promise<Response> {
+export async function deleteCard(env: Env, id: number, user: User): Promise<Response> {
+  if (user.is_admin !== 1) return forbidden('Forbidden');
+
   const existing = await queryOne(env.DB, 'SELECT id FROM cards WHERE id = ?', [id]);
   if (!existing) return notFound('Card not found');
 
