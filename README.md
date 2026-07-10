@@ -1,9 +1,6 @@
 # Card Safe HQ
 
-A mobile-first sports and trading card collection manager. Upload card photos, let Claude Vision identify them, review AI suggestions, and track eBay market prices — all in one place.
-
-**Stack:** React + Vite (frontend) · Cloudflare Workers + D1 + R2 (backend) · Claude claude-sonnet-4-5 Vision (card identification) · eBay HTML scraping (comps)
-
+TCG and sports card protection products. Acrylic display cases, card sleeves, and sealed product storage. Selling on eBay.
 ---
 
 ## Local dev setup
