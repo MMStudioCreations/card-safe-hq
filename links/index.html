@@ -1,0 +1,326 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Card Safe HQ — Links</title>
+<meta name="description" content="Shop the Card Safe HQ eBay store, follow on Instagram, or book card restoration services.">
+<meta name="robots" content="noindex">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Marcellus&family=Sora:wght@300;400;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --ink: #0B0F14;
+    --ink-raised: #11161D;
+    --line: #1D242E;
+    --gold: #C9A34E;
+    --gold-bright: #E8C877;
+    --text: #EDEAE2;
+    --text-dim: #8B929C;
+    --holo-1: #7FDBCA;
+    --holo-2: #C9A34E;
+    --holo-3: #B98BD4;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: var(--ink);
+    color: var(--text);
+    font-family: 'Sora', system-ui, sans-serif;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 48px 20px 40px;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .page {
+    width: 100%;
+    max-width: 420px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+  }
+
+  /* ---------- Mark ---------- */
+  .mark {
+    width: 64px;
+    height: 88px;
+    border: 1px solid var(--gold);
+    border-radius: 6px;
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-bottom: 20px;
+    background:
+      linear-gradient(160deg, rgba(201,163,78,0.10), transparent 55%),
+      var(--ink-raised);
+  }
+  .mark::after {
+    content: "";
+    position: absolute;
+    inset: 5px;
+    border: 1px solid rgba(201,163,78,0.35);
+    border-radius: 3px;
+  }
+  .mark span {
+    font-family: 'Marcellus', serif;
+    font-size: 22px;
+    color: var(--gold-bright);
+    letter-spacing: 0.05em;
+  }
+
+  h1 {
+    font-family: 'Marcellus', serif;
+    font-weight: 400;
+    font-size: 30px;
+    letter-spacing: 0.09em;
+    text-transform: uppercase;
+    text-align: center;
+  }
+  h1 .hq { color: var(--gold); }
+
+  .tag {
+    margin-top: 8px;
+    font-size: 12.5px;
+    font-weight: 300;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    color: var(--text-dim);
+    text-align: center;
+  }
+
+  .rule {
+    width: 42px;
+    height: 1px;
+    background: var(--gold);
+    opacity: 0.6;
+    margin: 26px 0;
+  }
+
+  /* ---------- Links ---------- */
+  .links {
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    list-style: none;
+  }
+
+  .card {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    padding: 18px 20px;
+    min-height: 64px;
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    background: var(--ink-raised);
+    color: var(--text);
+    text-decoration: none;
+    transition: border-color 160ms ease, transform 160ms ease;
+  }
+  .card:active { transform: scale(0.985); }
+  @media (hover: hover) {
+    .card:hover { border-color: var(--gold); }
+  }
+
+  .card .label { flex: 1; }
+  .card .label strong {
+    display: block;
+    font-size: 16px;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+  }
+  .card .label small {
+    display: block;
+    margin-top: 3px;
+    font-size: 12px;
+    font-weight: 300;
+    color: var(--text-dim);
+    letter-spacing: 0.04em;
+  }
+  .card .arrow {
+    color: var(--gold);
+    font-size: 18px;
+    line-height: 1;
+  }
+  .card .icon {
+    width: 22px;
+    text-align: center;
+    color: var(--gold);
+    flex-shrink: 0;
+  }
+  .card .icon svg { display: block; width: 20px; height: 20px; }
+
+  /* ---------- Signature: holo foil on the primary card ---------- */
+  .card.primary {
+    position: relative;
+    border: 1px solid transparent;
+    background:
+      linear-gradient(var(--ink-raised), var(--ink-raised)) padding-box,
+      linear-gradient(120deg, var(--holo-1), var(--holo-2) 45%, var(--holo-3) 80%, var(--holo-1)) border-box;
+    background-size: 100% 100%, 300% 300%;
+    animation: foil 7s linear infinite;
+    overflow: hidden;
+  }
+  .card.primary::before {
+    content: "";
+    position: absolute;
+    top: 0; bottom: 0;
+    width: 60px;
+    left: -80px;
+    background: linear-gradient(100deg, transparent, rgba(232,200,119,0.14), transparent);
+    animation: sheen 5.5s ease-in-out infinite;
+    pointer-events: none;
+  }
+  @keyframes foil {
+    0%   { background-position: 0 0, 0% 50%; }
+    100% { background-position: 0 0, 300% 50%; }
+  }
+  @keyframes sheen {
+    0%, 55%  { left: -80px; }
+    85%, 100% { left: 120%; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .card.primary { animation: none; }
+    .card.primary::before { display: none; }
+  }
+
+  .card:focus-visible {
+    outline: 2px solid var(--gold-bright);
+    outline-offset: 3px;
+  }
+
+  /* ---------- Coming soon state ---------- */
+  .card.soon {
+    opacity: 0.55;
+    cursor: default;
+  }
+  .badge {
+    font-size: 10px;
+    font-weight: 400;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--gold-bright);
+    border: 1px solid var(--line);
+    border-radius: 999px;
+    padding: 4px 10px;
+    white-space: nowrap;
+    flex-shrink: 0;
+  }
+
+  /* ---------- Footer ---------- */
+  footer {
+    margin-top: 40px;
+    text-align: center;
+  }
+  footer .show {
+    font-size: 12px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--gold);
+    font-weight: 300;
+  }
+  footer .fine {
+    margin-top: 10px;
+    font-size: 11px;
+    font-weight: 300;
+    color: var(--text-dim);
+    letter-spacing: 0.05em;
+  }
+</style>
+</head>
+<body>
+<div class="page">
+
+  <div class="mark"><span>CS</span></div>
+  <h1>Card Safe <span class="hq">HQ</span></h1>
+  <p class="tag">Graded singles · Sealed · Restoration</p>
+  <div class="rule"></div>
+
+  <ul class="links" id="links"></ul>
+
+  <footer>
+    <p class="show" id="show-line"></p>
+    <p class="fine">cardsafehq.com</p>
+  </footer>
+</div>
+
+<script>
+/* ============================================================
+   CONFIG — the only block you need to edit.
+   ============================================================ */
+const CONFIG = {
+  // Shown under the links, e.g. "Thanks for stopping by the table".
+  showLine: "Thanks for stopping by the table",
+
+  // Appended to every outbound URL for attribution (set to "" to disable).
+  tracking: "utm_source=qr&utm_medium=show&utm_campaign=vending",
+
+  links: [
+    {
+      primary: true,
+      icon: "cart",
+      title: "Shop the eBay Store",
+      subtitle: "Graded slabs, raw singles & sealed product",
+      url: "https://www.ebay.com/str/cardsafehq"        // ← replace with your store URL
+    },
+    {
+      icon: "wrench",
+      title: "Card Restoration Services",
+      subtitle: "Cleaning, pressing & pre-grade prep",
+      comingSoon: true                                   // ← set false + add url when live
+    },
+    {
+      icon: "camera",
+      title: "Follow on Instagram",
+      subtitle: "@cardsafe.hq — pickups, breaks & restorations",
+      url: "https://www.instagram.com/cardsafe.hq"
+    },
+    {
+      icon: "globe",
+      title: "cardsafehq.com",
+      subtitle: "Full site launching soon",
+      comingSoon: true                                   // ← set false + add url when live
+    }
+  ]
+};
+/* ============================================================ */
+
+const ICONS = {
+  cart:   '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="21" r="1.4"/><circle cx="19" cy="21" r="1.4"/><path d="M2 3h3l2.6 12.6a1.5 1.5 0 0 0 1.5 1.2h9.5a1.5 1.5 0 0 0 1.5-1.2L22 7H6"/></svg>',
+  wrench: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a4.5 4.5 0 0 0-6 6L3 18l3 3 5.7-5.7a4.5 4.5 0 0 0 6-6L14 13l-3-3 3.7-3.7z"/></svg>',
+  camera: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="5"/><circle cx="12" cy="12" r="4"/><circle cx="17.2" cy="6.8" r="0.6" fill="currentColor"/></svg>',
+  globe:  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18"/></svg>'
+};
+
+function withTracking(url) {
+  if (!CONFIG.tracking || url.startsWith("mailto:")) return url;
+  return url + (url.includes("?") ? "&" : "?") + CONFIG.tracking;
+}
+
+document.getElementById("show-line").textContent = CONFIG.showLine;
+
+document.getElementById("links").innerHTML = CONFIG.links.map(l => {
+  const inner = `
+      <span class="icon">${ICONS[l.icon] || ""}</span>
+      <span class="label">
+        <strong>${l.title}</strong>
+        <small>${l.subtitle}</small>
+      </span>`;
+  if (l.comingSoon) {
+    return `<li><div class="card soon" aria-disabled="true">${inner}<span class="badge">Coming soon</span></div></li>`;
+  }
+  return `<li>
+    <a class="card${l.primary ? " primary" : ""}" href="${withTracking(l.url)}" ${l.url.startsWith("mailto:") ? "" : 'target="_blank" rel="noopener"'}>${inner}<span class="arrow">→</span>
+    </a>
+  </li>`;
+}).join("");
+</script>
+</body>
+</html>
