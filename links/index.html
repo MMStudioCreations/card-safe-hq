@@ -3,9 +3,16 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Card Safe HQ — Links</title>
-<meta name="description" content="Shop the Card Safe HQ eBay store, follow on Instagram, or book card restoration services.">
-<meta name="robots" content="noindex">
+<title>Card Safe HQ</title>
+<meta name="description" content="Shop the Card Safe HQ eBay store, catch live breaks on Whatnot, or follow along on Instagram.">
+<meta property="og:title" content="Card Safe HQ">
+<meta property="og:description" content="Shop the eBay store, catch live breaks on Whatnot, or follow along on Instagram.">
+<meta property="og:url" content="https://cardsafehq.com">
+<meta property="og:site_name" content="Card Safe HQ">
+<link rel="canonical" href="https://cardsafehq.com">
+<link rel="icon" type="image/x-icon" href="/favicon.ico">
+<link rel="icon" type="image/png" sizes="32x32" href="/icon-32x32.png">
+<link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Marcellus&family=Sora:wght@300;400;600&display=swap" rel="stylesheet">
@@ -196,24 +203,6 @@
     outline-offset: 3px;
   }
 
-  /* ---------- Coming soon state ---------- */
-  .card.soon {
-    opacity: 0.55;
-    cursor: default;
-  }
-  .badge {
-    font-size: 10px;
-    font-weight: 400;
-    letter-spacing: 0.14em;
-    text-transform: uppercase;
-    color: var(--gold-bright);
-    border: 1px solid var(--line);
-    border-radius: 999px;
-    padding: 4px 10px;
-    white-space: nowrap;
-    flex-shrink: 0;
-  }
-
   /* ---------- Footer ---------- */
   footer {
     margin-top: 40px;
@@ -256,11 +245,11 @@
    CONFIG — the only block you need to edit.
    ============================================================ */
 const CONFIG = {
-  // Shown under the links, e.g. "Thanks for stopping by the table".
-  showLine: "Thanks for stopping by the table",
+  // Shown under the links.
+  showLine: "Graded singles, sealed product & live breaks",
 
   // Appended to every outbound URL for attribution (set to "" to disable).
-  tracking: "utm_source=qr&utm_medium=show&utm_campaign=vending",
+  tracking: "utm_source=cardsafehq.com",
 
   links: [
     {
@@ -268,25 +257,19 @@ const CONFIG = {
       icon: "cart",
       title: "Shop the eBay Store",
       subtitle: "Graded slabs, raw singles & sealed product",
-      url: "https://www.ebay.com/str/cardsafehq"        // ← replace with your store URL
+      url: "https://www.ebay.com/str/cardsafehq"
     },
     {
-      icon: "wrench",
-      title: "Card Restoration Services",
-      subtitle: "Cleaning, pressing & pre-grade prep",
-      comingSoon: true                                   // ← set false + add url when live
+      icon: "live",
+      title: "Watch on Whatnot",
+      subtitle: "Live breaks & auctions",
+      url: "https://www.whatnot.com/user/cardsafehq"
     },
     {
       icon: "camera",
       title: "Follow on Instagram",
       subtitle: "@cardsafe.hq — pickups, breaks & restorations",
       url: "https://www.instagram.com/cardsafe.hq"
-    },
-    {
-      icon: "globe",
-      title: "cardsafehq.com",
-      subtitle: "Full site launching soon",
-      comingSoon: true                                   // ← set false + add url when live
     }
   ]
 };
@@ -296,7 +279,7 @@ const ICONS = {
   cart:   '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="21" r="1.4"/><circle cx="19" cy="21" r="1.4"/><path d="M2 3h3l2.6 12.6a1.5 1.5 0 0 0 1.5 1.2h9.5a1.5 1.5 0 0 0 1.5-1.2L22 7H6"/></svg>',
   wrench: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a4.5 4.5 0 0 0-6 6L3 18l3 3 5.7-5.7a4.5 4.5 0 0 0 6-6L14 13l-3-3 3.7-3.7z"/></svg>',
   camera: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="5"/><circle cx="12" cy="12" r="4"/><circle cx="17.2" cy="6.8" r="0.6" fill="currentColor"/></svg>',
-  globe:  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18"/></svg>'
+  live:   '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3.2"/><path d="M6.5 6.5a8 8 0 0 0 0 11M17.5 6.5a8 8 0 0 1 0 11M3.5 3.5a12.5 12.5 0 0 0 0 17M20.5 3.5a12.5 12.5 0 0 1 0 17"/></svg>'
 };
 
 function withTracking(url) {
@@ -313,9 +296,6 @@ document.getElementById("links").innerHTML = CONFIG.links.map(l => {
         <strong>${l.title}</strong>
         <small>${l.subtitle}</small>
       </span>`;
-  if (l.comingSoon) {
-    return `<li><div class="card soon" aria-disabled="true">${inner}<span class="badge">Coming soon</span></div></li>`;
-  }
   return `<li>
     <a class="card${l.primary ? " primary" : ""}" href="${withTracking(l.url)}" ${l.url.startsWith("mailto:") ? "" : 'target="_blank" rel="noopener"'}>${inner}<span class="arrow">→</span>
     </a>
