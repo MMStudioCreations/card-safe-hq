@@ -24,6 +24,7 @@ const assetsToCopy = [
   "icon-32x32.png",
   "icon-192x192.png",
   "apple-touch-icon.png",
+  "logo.png",
   "_redirects",
 ];
 for (const asset of assetsToCopy) {
