@@ -25,9 +25,15 @@ const assetsToCopy = [
   "icon-192x192.png",
   "apple-touch-icon.png",
   "logo.png",
+  "logo.webp",
+  "robots.txt",
+  "sitemap.xml",
+  "llms.txt",
+  "404.html",
   "_redirects",
 ];
 for (const asset of assetsToCopy) {
   const src = join(publicDir, asset);
-  if (existsSync(src)) copyFileSync(src, join(dist, asset));
+  if (!existsSync(src)) throw new Error(`build-landing: missing public/${asset}`);
+  copyFileSync(src, join(dist, asset));
 }

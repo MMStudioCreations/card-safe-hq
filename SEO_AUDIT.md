@@ -5,7 +5,7 @@ Date: 2026-10-05. Method: read-only `curl` of the live site with browser, search
 ## What is actually live
 
 - **cardsafehq.com does not serve the React app in `frontend/src`.** It serves a static link-in-bio page: a logo, the tagline "Graded singles · Sealed · Restoration", and links to the eBay store, Whatnot, Instagram, TikTok and Staten News.
-- That page comes from `origin/main` (commits `b377029`..`92177db`: `links/index.html` + `frontend/scripts/build-landing.mjs`, "Replace SaaS frontend with link-landing homepage"). **Local `main` is 5 commits behind `origin/main`**, and this `seo-aeo` branch was cut from local `main`.
+- That page comes from `origin/main` (commits `b377029`..`92177db`: `links/index.html` + `frontend/scripts/build-landing.mjs`, "Replace SaaS frontend with link-landing homepage"). This `seo-aeo` branch is based on `origin/main` (`92177db`), so it changes the page that is live.
 - Hosting: Cloudflare Pages (`card-safe-hq` project) behind the Cloudflare proxy. API: Cloudflare Worker `cardsafehq-api`.
 - SPA vs SSR: not an issue now. The live page is a single static HTML file, so **prerendering/SSG is not needed**. The React SPA (client-rendered, empty `<div id="root">`) is retired.
 
@@ -81,57 +81,6 @@ Pick one description and use it on the site, the eBay store "About" page, and th
 - `README.md` and `CLAUDE.md` on local `main` still describe the retired SaaS.
 - The SPA `frontend/index.html` meta (slab guards, deck builder) is stale. It doesn't affect the live site.
 
-## Spec: landing-page changes (`links/index.html` on origin/main)
-
-These could not be committed here: this branch was cut from the stale local `main`, which doesn't contain `links/index.html`. Apply them after this branch is rebased onto `origin/main`.
-
-1. `<head>`:
-   ```html
-   <title>Card Safe HQ | Graded Cards, Sealed Product & Live Breaks</title>
-   <meta name="description" content="Card Safe HQ sells graded singles, raw singles and sealed trading card product on eBay, runs live breaks on Whatnot, and shares pickups and restorations on Instagram and TikTok.">
-   <meta name="robots" content="index,follow,max-image-preview:large">
-   <link rel="canonical" href="https://cardsafehq.com/">
-   <meta property="og:type" content="website">
-   <meta property="og:image" content="https://cardsafehq.com/logo.png"> <!-- better: a 1200x630 og-image.png [PLACEHOLDER] -->
-   <meta name="twitter:card" content="summary_large_image">
-   <meta name="twitter:title" content="Card Safe HQ">
-   <meta name="twitter:description" content="Graded singles, sealed product and live breaks.">
-   <meta name="twitter:image" content="https://cardsafehq.com/logo.png">
-   ```
-2. JSON-LD:
-   ```html
-   <script type="application/ld+json">
-   {"@context":"https://schema.org","@graph":[
-    {"@type":"Organization","@id":"https://cardsafehq.com/#org","name":"Card Safe HQ",
-     "alternateName":["CardSafe HQ","cardsafehq"],"url":"https://cardsafehq.com/",
-     "logo":"https://cardsafehq.com/logo.png",
-     "description":"Online seller of graded singles, raw singles and sealed trading card product, with live breaks on Whatnot.",
-     "sameAs":["https://www.ebay.com/str/cardsafehq","https://www.whatnot.com/user/cardsafehq",
-               "https://www.instagram.com/cardsafe.hq","https://www.tiktok.com/@cardsafe.hq"]},
-    {"@type":"WebSite","@id":"https://cardsafehq.com/#site","url":"https://cardsafehq.com/",
-     "name":"Card Safe HQ","publisher":{"@id":"https://cardsafehq.com/#org"}}
-   ]}
-   </script>
-   ```
-   Add a `FAQPage` node with the same Q&A text as the visible FAQ once the placeholders below are filled. Don't publish FAQ schema that contains placeholders.
-3. Body:
-   - Wrap the logo in `<h1>` (`<h1 class="mark"><img src="/logo.png" alt="Card Safe HQ" ...></h1>`).
-   - Replace the JS-rendered `<ul id="links">` with static `<li><a class="card" href="https://www.ebay.com/str/cardsafehq?utm_source=cardsafehq.com" target="_blank" rel="noopener">...` items. Keep the `CONFIG` only as a comment, or delete the script.
-   - Write the show line as static text.
-4. About and FAQ below the links, in the same visual style:
-   - About: "Card Safe HQ is an online trading card shop selling graded singles, raw singles and sealed product on eBay, with live breaks and auctions on Whatnot. [PLACEHOLDER: games/sports covered, where you ship from, since when]."
-   - FAQ (answers in brackets need Michael):
-     - Where can I buy from Card Safe HQ? "On our eBay store (ebay.com/str/cardsafehq) and during live shows on Whatnot."
-     - What do you sell? "Graded slabs, raw singles and sealed product. [PLACEHOLDER: which games/sports]."
-     - Do you ship internationally? "[PLACEHOLDER]"
-     - What does 'restoration' mean? "[PLACEHOLDER: describe the restoration service, or remove it]"
-     - How do I contact you? "[PLACEHOLDER: email or eBay messages]"
-5. `frontend/scripts/build-landing.mjs`: add `robots.txt`, `sitemap.xml`, `llms.txt` and `404.html` to `assetsToCopy`.
-6. `frontend/public/_redirects`:
-   - Remove `/* /index.html 200`.
-   - Add `301` lines for `/protection`, `/builder`, `/membership`, `/billing`, `/search`, `/sealed`, `/trades`, `/portfolio`, `/login` and `/register` to `/`.
-   - Keep `/links` (it already canonicalizes to `/`).
-
 ## Off-site work (biggest AEO lever after #1)
 
 AI assistants recommend businesses that other sites mention.
@@ -139,9 +88,37 @@ AI assistants recommend businesses that other sites mention.
 - Get mentioned or linked from Staten News TCG articles, Reddit and Discord communities, and break or collector directories.
 - Collect eBay feedback. It is often quoted in answers.
 
-## Done on this branch
+## Status (branch `seo-aeo`, local commits only, not deployed)
 
-- `frontend/public/robots.txt`: allows all crawlers, explicitly allows the AI search bots, and points to the sitemap.
-- `frontend/public/sitemap.xml`: the homepage.
-- `frontend/public/llms.txt`: describes the business, its storefronts and its socials. Only facts already on the live page; [PLACEHOLDER] for the rest.
-- This audit.
+### Done in code
+
+- **Static content (fixes 2 and 5):**
+  - `links/index.html` now ships its five link cards (eBay, Whatnot, Instagram, TikTok, Staten News) and the show line as plain HTML. The cards use the same classes, icons, `utm_source` tracking and design as before. The page has no JavaScript left except the JSON-LD.
+  - The logo is now the page's `<h1>`.
+  - Added an About section and a 5-question FAQ (collapsible `<details>`) in the page's existing style.
+- **Head (fix 4):**
+  - Descriptive `<title>` and meta description.
+  - `robots` meta and trailing-slash canonical.
+  - Full Open Graph and Twitter card tags, using `logo.png` as the image.
+  - JSON-LD: `Organization` (with `sameAs` for eBay, Whatnot, Instagram and TikTok), `WebSite`, and a `FAQPage` holding only the two fully factual Q&As.
+- **Crawler files and routing (fix 3):**
+  - `frontend/public/robots.txt`, `sitemap.xml` and `llms.txt` added.
+  - `frontend/scripts/build-landing.mjs` now copies them, plus `logo.webp` and `404.html`. The build fails if any of them is missing.
+  - `frontend/public/_redirects` no longer has the `/* /index.html 200` catch-all. The retired SaaS routes now return a `301` to `/`.
+  - Unknown paths are served `404.html` (noindex) with a real 404 status. That is Cloudflare Pages' default once a `404.html` exists.
+- **Performance (fix 7):** new `logo.webp` (1080x360, about 72 KB, versus 855 KB for the PNG) is preloaded and used on the page. `logo.png` is kept for social previews.
+
+**Verified:**
+- `npm run build --workspace=frontend` produces `dist/` with `index.html`, `links/index.html`, `404.html`, `robots.txt`, `sitemap.xml`, `llms.txt` and `logo.webp`.
+- The built HTML contains the `<h1>`, all 5 links, and parseable JSON-LD.
+- A headless-browser screenshot matches the old page above the new About/FAQ section.
+- Wrangler parsed `_redirects` without errors, but I couldn't run its local server (a pre-existing esbuild target error). Check routing on a Pages preview deploy before going live.
+
+### Michael must do
+
+1. **Cloudflare bot settings (fix 1).** This decides whether AI assistants can read the site at all. Settings are listed under finding 1.
+2. **Fill every `[PLACEHOLDER]`** in `links/index.html` (About text, 4 FAQ answers) and `frontend/public/llms.txt`, or delete those lines. They are visible to visitors, so don't deploy them unfilled. Once an answer is real, add it to the `FAQPage` JSON-LD as well.
+3. **Pick one brand description (fix 6)** and use it in the eBay "About" page and all social bios.
+4. **Optional:** a 1200x630 `og-image.png` for nicer link previews (then update `og:image` / `twitter:image`).
+5. **DNS:** add `www` (fix 8).
+6. **Merge and deploy.** Pushing to `main` triggers `.github/workflows/deploy.yml`. Then submit `https://cardsafehq.com/sitemap.xml` in Google Search Console and Bing Webmaster Tools, and run URL Inspection.

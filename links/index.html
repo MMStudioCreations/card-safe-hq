@@ -3,13 +3,80 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Card Safe HQ</title>
-<meta name="description" content="Shop the Card Safe HQ eBay store, catch live breaks on Whatnot, or follow along on Instagram.">
-<meta property="og:title" content="Card Safe HQ">
-<meta property="og:description" content="Shop the eBay store, catch live breaks on Whatnot, or follow along on Instagram.">
-<meta property="og:url" content="https://cardsafehq.com">
+<title>Card Safe HQ | Graded Cards, Sealed Product &amp; Live Breaks</title>
+<meta name="description" content="Card Safe HQ sells graded singles, raw singles and sealed trading card product on eBay, runs live breaks and auctions on Whatnot, and shares pickups, breaks and restorations on Instagram and TikTok.">
+<meta name="robots" content="index,follow,max-image-preview:large">
+<link rel="canonical" href="https://cardsafehq.com/">
+<meta property="og:type" content="website">
 <meta property="og:site_name" content="Card Safe HQ">
-<link rel="canonical" href="https://cardsafehq.com">
+<meta property="og:title" content="Card Safe HQ | Graded Cards, Sealed Product &amp; Live Breaks">
+<meta property="og:description" content="Shop graded singles and sealed product on eBay, catch live breaks on Whatnot, and follow along on Instagram and TikTok.">
+<meta property="og:url" content="https://cardsafehq.com/">
+<meta property="og:image" content="https://cardsafehq.com/logo.png">
+<meta property="og:image:width" content="1568">
+<meta property="og:image:height" content="523">
+<meta property="og:image:alt" content="Card Safe HQ logo">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Card Safe HQ | Graded Cards, Sealed Product &amp; Live Breaks">
+<meta name="twitter:description" content="Graded singles, sealed product and live breaks from Card Safe HQ.">
+<meta name="twitter:image" content="https://cardsafehq.com/logo.png">
+<link rel="preload" as="image" href="/logo.webp" type="image/webp" fetchpriority="high">
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@graph": [
+    {
+      "@type": "Organization",
+      "@id": "https://cardsafehq.com/#org",
+      "name": "Card Safe HQ",
+      "alternateName": [
+        "CardSafe HQ",
+        "cardsafehq"
+      ],
+      "url": "https://cardsafehq.com/",
+      "logo": "https://cardsafehq.com/logo.png",
+      "description": "Online seller of graded singles, raw singles and sealed trading card product, with live breaks and auctions on Whatnot.",
+      "sameAs": [
+        "https://www.ebay.com/str/cardsafehq",
+        "https://www.whatnot.com/user/cardsafehq",
+        "https://www.instagram.com/cardsafe.hq",
+        "https://www.tiktok.com/@cardsafe.hq"
+      ]
+    },
+    {
+      "@type": "WebSite",
+      "@id": "https://cardsafehq.com/#website",
+      "url": "https://cardsafehq.com/",
+      "name": "Card Safe HQ",
+      "publisher": {
+        "@id": "https://cardsafehq.com/#org"
+      }
+    },
+    {
+      "@type": "FAQPage",
+      "@id": "https://cardsafehq.com/#faq",
+      "mainEntity": [
+        {
+          "@type": "Question",
+          "name": "Where can I buy from Card Safe HQ?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "Card Safe HQ sells through its eBay store (ebay.com/str/cardsafehq) and during live breaks and auctions on Whatnot (whatnot.com/user/cardsafehq)."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "What does Card Safe HQ sell?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "Graded slabs, raw singles and sealed trading card product."
+          }
+        }
+      ]
+    }
+  ]
+}
+</script>
 <link rel="icon" type="image/x-icon" href="/favicon.ico">
 <link rel="icon" type="image/png" sizes="32x32" href="/icon-32x32.png">
 <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
@@ -177,6 +244,41 @@
     outline-offset: 3px;
   }
 
+  /* ---------- About / FAQ ---------- */
+  h1.mark { font-size: inherit; font-weight: inherit; }
+  .info {
+    width: 100%;
+    margin-top: 40px;
+    color: var(--text-dim);
+    font-size: 13px;
+    font-weight: 300;
+    line-height: 1.6;
+    letter-spacing: 0.02em;
+  }
+  .info h2 {
+    font-family: 'Marcellus', serif;
+    font-weight: 400;
+    font-size: 15px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--gold);
+    margin: 28px 0 10px;
+  }
+  .info p { margin-bottom: 10px; }
+  .info details {
+    border-top: 1px solid var(--line);
+    padding: 12px 0;
+  }
+  .info details:last-of-type { border-bottom: 1px solid var(--line); }
+  .info summary {
+    cursor: pointer;
+    color: var(--text);
+    font-weight: 400;
+    list-style-position: outside;
+  }
+  .info details p { margin: 8px 0 0; }
+  .info a { color: var(--gold-bright); }
+
   /* ---------- Footer ---------- */
   footer {
     margin-top: 40px;
@@ -201,93 +303,85 @@
 <body>
 <div class="page">
 
-  <div class="mark"><img src="/logo.png" alt="Card Safe HQ" width="1568" height="523"></div>
+  <h1 class="mark"><img src="/logo.webp" alt="Card Safe HQ" width="1080" height="360" fetchpriority="high"></h1>
   <p class="tag">Graded singles · Sealed · Restoration</p>
   <div class="rule"></div>
 
-  <ul class="links" id="links"></ul>
+  <ul class="links" id="links"><li>
+    <a class="card primary" href="https://www.ebay.com/str/cardsafehq?utm_source=cardsafehq.com" target="_blank" rel="noopener">
+      <span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="21" r="1.4"/><circle cx="19" cy="21" r="1.4"/><path d="M2 3h3l2.6 12.6a1.5 1.5 0 0 0 1.5 1.2h9.5a1.5 1.5 0 0 0 1.5-1.2L22 7H6"/></svg></span>
+      <span class="label">
+        <strong>Shop the eBay Store</strong>
+        <small>Graded slabs, raw singles &amp; sealed product</small>
+      </span><span class="arrow" aria-hidden="true">→</span>
+    </a>
+  </li><li>
+    <a class="card" href="https://www.whatnot.com/user/cardsafehq?utm_source=cardsafehq.com" target="_blank" rel="noopener">
+      <span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3.2"/><path d="M6.5 6.5a8 8 0 0 0 0 11M17.5 6.5a8 8 0 0 1 0 11M3.5 3.5a12.5 12.5 0 0 0 0 17M20.5 3.5a12.5 12.5 0 0 1 0 17"/></svg></span>
+      <span class="label">
+        <strong>Watch on Whatnot</strong>
+        <small>Live breaks &amp; auctions</small>
+      </span><span class="arrow" aria-hidden="true">→</span>
+    </a>
+  </li><li>
+    <a class="card" href="https://www.instagram.com/cardsafe.hq?utm_source=cardsafehq.com" target="_blank" rel="noopener">
+      <span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="5"/><circle cx="12" cy="12" r="4"/><circle cx="17.2" cy="6.8" r="0.6" fill="currentColor"/></svg></span>
+      <span class="label">
+        <strong>Follow on Instagram</strong>
+        <small>@cardsafe.hq — pickups, breaks &amp; restorations</small>
+      </span><span class="arrow" aria-hidden="true">→</span>
+    </a>
+  </li><li>
+    <a class="card" href="https://www.tiktok.com/@cardsafe.hq?utm_source=cardsafehq.com" target="_blank" rel="noopener">
+      <span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M15 3v11.6a4 4 0 1 1-4-4c.35 0 .68.05 1 .14"/><path d="M15 3c.5 2.3 2.3 4 4.7 4.2"/></svg></span>
+      <span class="label">
+        <strong>Follow on TikTok</strong>
+        <small>@cardsafe.hq — pickups, breaks &amp; restorations</small>
+      </span><span class="arrow" aria-hidden="true">→</span>
+    </a>
+  </li><li>
+    <a class="card" href="https://statennews.com?utm_source=cardsafehq.com" target="_blank" rel="noopener">
+      <span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3h13a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2V3z"/><path d="M2 7v12a2 2 0 0 0 2 2h2"/><path d="M9.5 8h7M9.5 12h7M9.5 16h4"/></svg></span>
+      <span class="label">
+        <strong>Read on Staten News</strong>
+        <small>TCG market coverage &amp; articles</small>
+      </span><span class="arrow" aria-hidden="true">→</span>
+    </a>
+  </li></ul>
+
+  <section class="info" aria-labelledby="about-heading">
+    <h2 id="about-heading">About Card Safe HQ</h2>
+    <p>Card Safe HQ is an online trading card shop. We sell graded slabs, raw singles and sealed product through our <a href="https://www.ebay.com/str/cardsafehq?utm_source=cardsafehq.com" target="_blank" rel="noopener">eBay store</a>, and run live breaks and auctions on <a href="https://www.whatnot.com/user/cardsafehq?utm_source=cardsafehq.com" target="_blank" rel="noopener">Whatnot</a>. Pickups, breaks and card restorations go up on Instagram and TikTok as @cardsafe.hq.</p>
+    <p>[PLACEHOLDER: games and sports covered, where orders ship from, and when Card Safe HQ started.]</p>
+
+    <h2 id="faq-heading">FAQ</h2>
+    <details>
+      <summary>Where can I buy from Card Safe HQ?</summary>
+      <p>Card Safe HQ sells through its eBay store (ebay.com/str/cardsafehq) and during live breaks and auctions on Whatnot (whatnot.com/user/cardsafehq).</p>
+    </details>
+    <details>
+      <summary>What does Card Safe HQ sell?</summary>
+      <p>Graded slabs, raw singles and sealed trading card product. [PLACEHOLDER: which games/sports.]</p>
+    </details>
+    <details>
+      <summary>Do you ship internationally?</summary>
+      <p>[PLACEHOLDER: shipping regions and how orders are packed.]</p>
+    </details>
+    <details>
+      <summary>What is card restoration?</summary>
+      <p>[PLACEHOLDER: describe the restoration work, or remove this question.]</p>
+    </details>
+    <details>
+      <summary>How do I contact Card Safe HQ?</summary>
+      <p>[PLACEHOLDER: public contact email, or "message us on eBay or Instagram".]</p>
+    </details>
+  </section>
 
   <footer>
-    <p class="show" id="show-line"></p>
+    <p class="show" id="show-line">Graded singles, sealed product &amp; live breaks</p>
     <p class="fine">cardsafehq.com</p>
   </footer>
 </div>
 
-<script>
-/* ============================================================
-   CONFIG — the only block you need to edit.
-   ============================================================ */
-const CONFIG = {
-  // Shown under the links.
-  showLine: "Graded singles, sealed product & live breaks",
-
-  // Appended to every outbound URL for attribution (set to "" to disable).
-  tracking: "utm_source=cardsafehq.com",
-
-  links: [
-    {
-      primary: true,
-      icon: "cart",
-      title: "Shop the eBay Store",
-      subtitle: "Graded slabs, raw singles & sealed product",
-      url: "https://www.ebay.com/str/cardsafehq"
-    },
-    {
-      icon: "live",
-      title: "Watch on Whatnot",
-      subtitle: "Live breaks & auctions",
-      url: "https://www.whatnot.com/user/cardsafehq"
-    },
-    {
-      icon: "camera",
-      title: "Follow on Instagram",
-      subtitle: "@cardsafe.hq — pickups, breaks & restorations",
-      url: "https://www.instagram.com/cardsafe.hq"
-    },
-    {
-      icon: "tiktok",
-      title: "Follow on TikTok",
-      subtitle: "@cardsafe.hq — pickups, breaks & restorations",
-      url: "https://www.tiktok.com/@cardsafe.hq"
-    },
-    {
-      icon: "article",
-      title: "Read on Staten News",
-      subtitle: "TCG market coverage & articles",
-      url: "https://statennews.com"
-    }
-  ]
-};
-/* ============================================================ */
-
-const ICONS = {
-  cart:   '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="21" r="1.4"/><circle cx="19" cy="21" r="1.4"/><path d="M2 3h3l2.6 12.6a1.5 1.5 0 0 0 1.5 1.2h9.5a1.5 1.5 0 0 0 1.5-1.2L22 7H6"/></svg>',
-  wrench: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a4.5 4.5 0 0 0-6 6L3 18l3 3 5.7-5.7a4.5 4.5 0 0 0 6-6L14 13l-3-3 3.7-3.7z"/></svg>',
-  camera: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="5"/><circle cx="12" cy="12" r="4"/><circle cx="17.2" cy="6.8" r="0.6" fill="currentColor"/></svg>',
-  live:   '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3.2"/><path d="M6.5 6.5a8 8 0 0 0 0 11M17.5 6.5a8 8 0 0 1 0 11M3.5 3.5a12.5 12.5 0 0 0 0 17M20.5 3.5a12.5 12.5 0 0 1 0 17"/></svg>',
-  tiktok: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M15 3v11.6a4 4 0 1 1-4-4c.35 0 .68.05 1 .14"/><path d="M15 3c.5 2.3 2.3 4 4.7 4.2"/></svg>',
-  article: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3h13a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2V3z"/><path d="M2 7v12a2 2 0 0 0 2 2h2"/><path d="M9.5 8h7M9.5 12h7M9.5 16h4"/></svg>'
-};
-
-function withTracking(url) {
-  if (!CONFIG.tracking || url.startsWith("mailto:")) return url;
-  return url + (url.includes("?") ? "&" : "?") + CONFIG.tracking;
-}
-
-document.getElementById("show-line").textContent = CONFIG.showLine;
-
-document.getElementById("links").innerHTML = CONFIG.links.map(l => {
-  const inner = `
-      <span class="icon">${ICONS[l.icon] || ""}</span>
-      <span class="label">
-        <strong>${l.title}</strong>
-        <small>${l.subtitle}</small>
-      </span>`;
-  return `<li>
-    <a class="card${l.primary ? " primary" : ""}" href="${withTracking(l.url)}" ${l.url.startsWith("mailto:") ? "" : 'target="_blank" rel="noopener"'}>${inner}<span class="arrow">→</span>
-    </a>
-  </li>`;
-}).join("");
-</script>
 </body>
 </html>
