@@ -1,3 +1,32 @@
 /links /links/index.html 200
 /links/ /links/index.html 200
-/* /index.html 200
+
+# Retired SaaS app routes: send them home with a permanent redirect.
+/home /  301
+/protection /  301
+/builder /  301
+/deck /  301
+/deck-builder /  301
+/shop /  301
+/membership /  301
+/billing /  301
+/search /  301
+/sealed /  301
+/portfolio /  301
+/collection /  301
+/scan /  301
+/upload /  301
+/review /  301
+/trades /  301
+/account /  301
+/admin /  301
+/login /  301
+/register /  301
+/forgot-password /  301
+/reset-password /  301
+/verify-email /  301
+
+/trades/* /  301
+/card/* /  301
+
+# No catch-all: unknown paths get /404.html with a real 404 status.
